@@ -1,0 +1,16 @@
+{
+  "name": "Fitness Global",
+  "short_name": "Fitness",
+  "description": "Registro de academias, exercícios, séries e progressão de carga",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#141110",
+  "theme_color": "#141110",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
