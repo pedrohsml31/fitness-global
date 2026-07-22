@@ -7,7 +7,34 @@ Chrome/Edge e faz a sincronização Firebase funcionar igual à do celular.
 
 > Esta pasta **já é um repositório Git pronto e commitado** — só falta enviar (push).
 
-### Passo a passo
+### Modo fácil (com o `gh`, já instalado nesta máquina)
+
+1. Abra uma **janela NOVA do PowerShell** nesta pasta (para o `gh` entrar no PATH).
+2. Faça login (só na primeira vez) — abre o navegador:
+
+   ```powershell
+   gh auth login
+   ```
+   Escolha: **GitHub.com** → **HTTPS** → **Login with a web browser** → copie o
+   código mostrado e cole no navegador.
+3. Crie o repositório e publique de uma vez:
+
+   ```powershell
+   gh repo create fitness-global --public --source . --remote origin --push
+   ```
+4. Ligue o GitHub Pages:
+
+   ```powershell
+   gh api --method POST "repos/$(gh api user --jq .login)/fitness-global/pages" -f "source[branch]=main" -f "source[path]=/"
+   ```
+   (ou pelo site: **Settings → Pages → branch `main` / `(root)` → Save**)
+5. Pronto: `https://SEU-USUARIO.github.io/fitness-global/` (leva ~1 min no ar).
+
+Para **atualizar** depois de editar: `git add -A; git commit -m "atualiza"; git push`.
+
+---
+
+### Passo a passo manual (sem o `gh`)
 
 1. Crie uma conta em **github.com** (se não tiver).
 2. Em github.com, clique em **New repository**: nome `fitness-global`, pode ser
