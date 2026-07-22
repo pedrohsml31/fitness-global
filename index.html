@@ -211,9 +211,18 @@ input[type=number]{font-variant-numeric:tabular-nums;}
 
 <script>
 "use strict";
+/* ===================== config ===================== */
+/* Preenchido automaticamente ao configurar a sincronização (Firebase).
+   Se estiver aqui, o app já conecta na nuvem e você só define um "código". */
+const FIREBASE_CONFIG = null;
+
+/* padrões de vibração (duração/pulsos em ms) */
+const VIBE = { suave:[230], media:[400,140,400], forte:[600,130,600,130,600] };
+function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
+
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], logs:[], settings:{sound:false, autoRest:true, wake:false, sync:null}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], logs:[], settings:{sound:false, autoRest:true, wake:false, vibe:"media", sync:null}, updatedAt:0}; }
 let db;
 try{ db = Object.assign(seed(), JSON.parse(localStorage.getItem(LS)) || {}); }
 catch(e){ db = seed(); }
@@ -572,6 +581,8 @@ function star(cx, cy){
 function renderSettings(){
   const s = db.settings;
   const notifState = ("Notification" in window) ? Notification.permission : "unsupported";
+  const syncOn = Sync.enabled();
+  const embedded = !!FIREBASE_CONFIG;
   view.innerHTML = `
     <div class="topbar">
       <button class="iconbtn" data-action="go" data-h="#/" aria-label="Voltar">‹</button>
@@ -581,14 +592,14 @@ function renderSettings(){
     <div class="section"><h2>Sincronização em nuvem</h2><div class="card">
       <div class="setline">
         <div class="grow"><div class="t">Estado</div><div class="d" id="syncstate">${Sync.stateText()}</div></div>
-        ${s.sync ? '<button class="btn ghost sm" style="width:auto" data-action="sync-now">Sincronizar</button>' : ""}
+        ${syncOn ? '<button class="btn ghost sm" style="width:auto" data-action="sync-now">Sincronizar</button>' : ""}
       </div>
       <div class="setline">
-        <div class="grow"><div class="t">${s.sync ? "Reconfigurar" : "Ativar sincronização"}</div>
-        <div class="d">Salva seus treinos na nuvem e mantém celular e PC iguais</div></div>
-        <button class="btn ghost sm" style="width:auto" data-action="sync-config">${s.sync ? "Editar" : "Configurar"}</button>
+        <div class="grow"><div class="t">${syncOn ? "Reconfigurar" : "Ativar sincronização"}</div>
+        <div class="d">${embedded ? "Já vem configurado neste app — só defina o mesmo código nos dois aparelhos" : "Salva seus treinos na nuvem e mantém celular e PC iguais"}</div></div>
+        <button class="btn ghost sm" style="width:auto" data-action="sync-config">${syncOn ? "Editar" : (embedded ? "Definir código" : "Configurar")}</button>
       </div>
-      ${s.sync ? `<div class="setline"><div class="grow"><div class="t">Desativar</div><div class="d">Para de sincronizar (dados continuam neste aparelho)</div></div>
+      ${syncOn ? `<div class="setline"><div class="grow"><div class="t">Desativar</div><div class="d">Para de sincronizar (dados continuam neste aparelho)</div></div>
         <button class="btn danger sm" style="width:auto" data-action="sync-off">Desativar</button></div>` : ""}
     </div></div>
 
@@ -599,9 +610,18 @@ function renderSettings(){
         <button class="switch${s.autoRest?" on":""}" data-action="tg" data-k="autoRest" role="switch" aria-checked="${s.autoRest}" aria-label="Descanso automático"></button>
       </div>
       <div class="setline">
-        <div class="grow"><div class="t">Som ao terminar</div>
-        <div class="d">Desligado por padrão — ligue quando estiver de fone</div></div>
-        <button class="switch${s.sound?" on":""}" data-action="tg" data-k="sound" role="switch" aria-checked="${s.sound}" aria-label="Som ao terminar"></button>
+        <div class="grow"><div class="t">Tocar som ao terminar</div>
+        <div class="d">${native.isNative ? "Só toca se houver <b>fone conectado</b> (com/sem fio). Sempre vibra." : "No navegador toca sempre que ligado (sem detecção de fone). Sempre vibra."}</div></div>
+        <button class="switch${s.sound?" on":""}" data-action="tg" data-k="sound" role="switch" aria-checked="${s.sound}" aria-label="Tocar som ao terminar"></button>
+      </div>
+      <div class="setline">
+        <div class="grow"><div class="t">Intensidade da vibração</div>
+        <div class="d">Toque para testar. ${native.isNative ? "A força depende do aparelho; ajusta a duração/pulsos." : "Duração/pulsos da vibração."}</div>
+        <div class="seg" style="margin-top:10px; max-width:280px">
+          <button data-action="set-vibe" data-v="suave" class="${s.vibe==="suave"?"on":""}">Suave</button>
+          <button data-action="set-vibe" data-v="media" class="${s.vibe==="media"?"on":""}">Média</button>
+          <button data-action="set-vibe" data-v="forte" class="${s.vibe==="forte"?"on":""}">Forte</button>
+        </div></div>
       </div>
       <div class="setline">
         <div class="grow"><div class="t">Manter tela ligada</div>
@@ -612,10 +632,6 @@ function renderSettings(){
         <div class="grow"><div class="t">Notificação ao fim do descanso</div>
         <div class="d">${native.isNative ? "Ativa (app) — vibra mesmo com a tela apagada ✓" : notifState === "granted" ? "Ativada ✓" : notifState === "denied" ? "Bloqueada no navegador" : notifState === "unsupported" ? "Não suportada" : "Toque para permitir"}</div></div>
         ${!native.isNative && notifState === "default" ? '<button class="btn ghost sm" style="width:auto" data-action="ask-notif">Permitir</button>' : ""}
-      </div>
-      <div class="setline">
-        <div class="grow"><div class="t">Testar vibração</div><div class="d">Confere se este aparelho vibra</div></div>
-        <button class="btn ghost sm" style="width:auto" data-action="test-vibe">Testar</button>
       </div>
     </div></div>
 
@@ -670,21 +686,19 @@ function exForm(gymId, e){
 }
 function syncForm(){
   const cur = db.settings.sync || {};
+  const embedded = !!FIREBASE_CONFIG;
   openModal(`<h2>Sincronização em nuvem</h2>
-    <p class="sub" style="margin-bottom:14px">Use o mesmo <b>código</b> e a mesma configuração nos dois aparelhos. Assim os treinos ficam iguais no celular e no PC. Precisa de um projeto gratuito no Firebase (eu te explico como criar).</p>
-    <div class="field"><label for="f-fb">Configuração do Firebase</label>
-    <textarea id="f-fb" placeholder='Cole aqui o objeto firebaseConfig, ex.:
-{
-  "apiKey": "...",
-  "projectId": "...",
-  "appId": "..."
-}'>${cur.config ? esc(JSON.stringify(cur.config, null, 2)) : ""}</textarea>
-    <div class="hint">Cole o trecho firebaseConfig que o Firebase mostra ao criar um app Web.</div></div>
+    <p class="sub" style="margin-bottom:14px">${embedded
+      ? "Defina um <b>código</b> secreto e use o <b>mesmo</b> no celular e no PC — seus treinos ficam iguais nos dois. Quem não souber o código não acessa seus dados."
+      : "Use o mesmo <b>código</b> e a mesma configuração nos dois aparelhos. Precisa de um projeto gratuito no Firebase."}</p>
+    ${embedded ? "" : `<div class="field"><label for="f-fb">Configuração do Firebase</label>
+    <textarea id="f-fb" placeholder='Cole o objeto firebaseConfig'>${cur.config ? esc(JSON.stringify(cur.config, null, 2)) : ""}</textarea>
+    <div class="hint">Cole o trecho firebaseConfig que o Firebase mostra ao criar um app Web.</div></div>`}
     <div class="field"><label for="f-code">Código de sincronização</label>
-    <input id="f-code" value="${cur.code ? esc(cur.code) : ""}" placeholder="uma senha só sua, ex.: pedro-treino-2026" maxlength="80">
+    <input id="f-code" value="${cur.code ? esc(cur.code) : ""}" placeholder="uma senha só sua, ex.: pedro-treino-8x2k9q" maxlength="80">
     <div class="hint">Invente um código difícil de adivinhar. O MESMO nos dois aparelhos.</div></div>
-    <button class="btn" data-action="sync-save">Conectar e sincronizar</button>`);
-  setTimeout(() => document.getElementById("f-fb").focus(), 50);
+    <button class="btn" data-action="sync-save">${embedded ? "Ativar sincronização" : "Conectar e sincronizar"}</button>`);
+  setTimeout(() => { const el = document.getElementById("f-fb") || document.getElementById("f-code"); if(el) el.focus(); }, 50);
 }
 
 /* ===================== descanso ===================== */
@@ -724,26 +738,29 @@ function finishRest(){
   const wasRunning = !!rest.end;
   stopRest();
   if(!wasRunning) return;
-  native.vibrate();
-  if(!native.isNative){
-    try{ if(navigator.vibrate) navigator.vibrate([400,150,400,150,600]); }catch(e){}
-    if("Notification" in window && Notification.permission === "granted"){
-      try{ new Notification("Descanso concluído 💪", {body:"Hora da próxima série!", silent:!db.settings.sound, tag:"fitglobal-rest"}); }catch(e){}
-    }
+  doVibrate(vibePattern());
+  if(!native.isNative && "Notification" in window && Notification.permission === "granted"){
+    try{ new Notification("Descanso concluído 💪", {body:"Hora da próxima série!", silent:true, tag:"fitglobal-rest"}); }catch(e){}
   }
-  if(db.settings.sound && audioCtx){
-    try{
-      audioCtx.resume();
-      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.frequency.value = 880; o.type = "sine";
-      g.gain.setValueAtTime(0.001, audioCtx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.9);
-      o.connect(g); g.connect(audioCtx.destination);
-      o.start(); o.stop(audioCtx.currentTime + 0.95);
-    }catch(e){}
-  }
+  maybeBeep();
   toast("Descanso concluído — próxima série! 💪");
+}
+async function maybeBeep(){
+  if(!db.settings.sound || !audioCtx) return;
+  if(native.isNative && !(await native.headsetConnected())) return;   // som só com fone
+  playBeep();
+}
+function playBeep(){
+  try{
+    audioCtx.resume();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.frequency.value = 880; o.type = "sine";
+    g.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.9);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + 0.95);
+  }catch(e){}
 }
 document.addEventListener("visibilitychange", () => { if(!document.hidden) tickRest(); });
 
@@ -810,42 +827,53 @@ const native = {
     const LN = this.plugin("LocalNotifications"); if(!LN) return;
     try{ await LN.cancel({ notifications:[{id:7001}] }); }catch(e){}
   },
-  async vibrate(){
-    const H = this.plugin("Haptics");
-    if(H){ try{ await H.vibrate({duration:600}); return; }catch(e){} }
-    try{ if(navigator.vibrate) navigator.vibrate([400,150,400,150,600]); }catch(e){}
+  async headsetConnected(){
+    const P = this.plugin("Headset");
+    if(!P) return false;
+    try{ const r = await P.isConnected(); return !!(r && r.connected); }catch(e){ return false; }
   }
 };
+/* vibração com padrão escolhido (funciona no navegador e na WebView do app) */
+function doVibrate(pattern){
+  pattern = pattern || vibePattern();
+  let ok = false;
+  try{ if(navigator.vibrate){ ok = navigator.vibrate(pattern); } }catch(e){}
+  if(!ok){ const H = native.plugin("Haptics"); if(H){ try{ H.vibrate({duration: pattern.reduce((a,b)=>a+b,0)}); }catch(e){} } }
+  return ok;
+}
 
 /* ===================== sincronização (Firebase) ===================== */
 const Sync = {
   app:null, dbfs:null, unsub:null, state:"off", last:0, applying:false,
   cfg(){ return db.settings.sync; },
+  activeConfig(){ return (this.cfg() && this.cfg().config) || FIREBASE_CONFIG; },
+  activeCode(){ return this.cfg() && this.cfg().code; },
+  enabled(){ return !!(this.activeConfig() && this.activeCode()); },
   badge(){
-    if(!this.cfg()) return "";
+    if(!this.enabled()) return "";
     const map = {ok:'<span class="cloud" style="color:var(--good)">☁︎ sincronizado</span>',
       connecting:'<span class="cloud">☁︎ conectando…</span>', error:'<span class="cloud" style="color:var(--bad)">☁︎ erro</span>',
       off:""};
     return map[this.state] || "";
   },
   stateText(){
-    if(!this.cfg()) return "Desativada — cada aparelho guarda seus próprios dados";
+    if(!this.enabled()) return "Desativada — cada aparelho guarda seus próprios dados";
     if(this.state === "ok") return "Sincronizado" + (this.last ? " às " + new Date(this.last).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "");
     if(this.state === "connecting") return "Conectando…";
     if(this.state === "error") return "Erro ao conectar — confira a configuração e o código";
     return "Ativando…";
   },
   async start(){
-    const c = this.cfg();
-    if(!c || !c.config || !c.code){ this.state = "off"; return; }
+    const config = this.activeConfig(), code = this.activeCode();
+    if(!config || !code){ this.state = "off"; return; }
     this.state = "connecting"; this._reflect();
     try{
       const appMod = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js");
       const fs = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js");
       this.fs = fs;
-      this.app = appMod.initializeApp(c.config, "fitsync-" + Math.random().toString(36).slice(2,6));
+      this.app = appMod.initializeApp(config, "fitsync-" + Math.random().toString(36).slice(2,6));
       this.dbfs = fs.getFirestore(this.app);
-      const ref = fs.doc(this.dbfs, "vaults", c.code);
+      const ref = fs.doc(this.dbfs, "vaults", code);
       // puxa uma vez e resolve conflito por updatedAt
       const snap = await fs.getDoc(ref);
       if(snap.exists()){
@@ -874,10 +902,9 @@ const Sync = {
     setTimeout(() => this.applying = false, 300);
   },
   async push(force){
-    const c = this.cfg();
-    if(!c || !this.dbfs || !this.fs || this.applying){ return; }
+    if(!this.enabled() || !this.dbfs || !this.fs || this.applying){ return; }
     try{
-      const ref = this.fs.doc(this.dbfs, "vaults", c.code);
+      const ref = this.fs.doc(this.dbfs, "vaults", this.activeCode());
       const payload = { gyms:db.gyms, exercises:db.exercises, logs:db.logs,
         settings:Object.assign({}, db.settings, {sync:null}), updatedAt:db.updatedAt };
       await this.fs.setDoc(ref, payload);
@@ -911,8 +938,7 @@ function celebratePR(kind, value, unit){
     <div class="val">${value} ${unit}</div>
     <button data-action="close-pr">Boraa! 💪</button>`;
   prBox.classList.add("on");
-  native.vibrate();
-  try{ if(navigator.vibrate) navigator.vibrate([80,60,80,60,200]); }catch(e){}
+  doVibrate([90,60,90,60,320]);
 }
 prBox.addEventListener("click", ev => { if(ev.target === prBox) prBox.classList.remove("on"); });
 
@@ -1070,22 +1096,27 @@ document.addEventListener("click", ev => {
     save(); applyWake(); if(k === "sound") native.init(); render();
   }
   else if(a === "ask-notif"){ Notification.requestPermission().then(() => render()); }
+  else if(a === "set-vibe"){ db.settings.vibe = el.dataset.v; save(); doVibrate(vibePattern()); render(); }
   else if(a === "test-vibe"){
-    native.vibrate();
-    const ok = navigator.vibrate && navigator.vibrate([400,150,400]);
+    const ok = doVibrate(vibePattern());
     toast(native.isNative || ok ? "Vibrando! 📳" : "Este aparelho/navegador não vibra (normal no PC).");
   }
 
   else if(a === "sync-config") syncForm();
   else if(a === "sync-save"){
-    const raw = document.getElementById("f-fb").value.trim();
     const code = document.getElementById("f-code").value.trim();
     if(!code){ toast("Defina um código de sincronização."); return; }
-    let config;
-    try{ config = JSON.parse(raw); }
-    catch(e){ try{ config = Function("return (" + raw + ")")(); }catch(e2){ config = null; } }
-    if(!config || !config.apiKey || !config.projectId){ toast("Configuração do Firebase inválida — precisa ter apiKey e projectId."); return; }
-    db.settings.sync = {config, code};
+    const fbEl = document.getElementById("f-fb");
+    if(fbEl){
+      const raw = fbEl.value.trim();
+      let config;
+      try{ config = JSON.parse(raw); }
+      catch(e){ try{ config = Function("return (" + raw + ")")(); }catch(e2){ config = null; } }
+      if(!config || !config.apiKey || !config.projectId){ toast("Configuração do Firebase inválida — precisa ter apiKey e projectId."); return; }
+      db.settings.sync = {config, code};
+    } else {
+      db.settings.sync = {code};   // usa a configuração embutida no app
+    }
     save(); closeModal(); render();
     toast("Conectando à nuvem…");
     Sync.restart();
