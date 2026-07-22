@@ -55,6 +55,10 @@ input[type=number]{font-variant-numeric:tabular-nums;}
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .chev{color:var(--faint); font-size:1.2rem; flex:none;}
 .trendmini{font-size:1.25rem; flex:none;}
+.reord{display:flex; gap:6px; flex:none;}
+.ordbtn{width:42px; height:42px; border-radius:10px; background:var(--surface2); border:1px solid var(--border); font-size:1.15rem; font-weight:800; color:var(--ink);}
+.ordbtn:disabled{opacity:.3;}
+.ordbtn:active:not(:disabled){background:var(--accent); color:var(--on-accent);}
 
 .pill{display:inline-flex; align-items:center; gap:5px; background:var(--surface2); border:1px solid var(--border);
   color:var(--muted); border-radius:999px; padding:3px 10px; font-size:.76rem; font-weight:600; white-space:nowrap;}
@@ -236,7 +240,15 @@ const gymById = id => db.gyms.find(g => g.id === id);
 const exById  = id => db.exercises.find(e => e.id === id);
 function gymExercises(gymId){
   return db.exercises.filter(e => e.gymId === gymId || e.gymId === null)
-    .sort((a,b) => a.name.localeCompare(b.name, "pt-BR"));
+    .sort((a,b) => (a.order ?? 1e9) - (b.order ?? 1e9) || a.name.localeCompare(b.name, "pt-BR"));
+}
+function nextOrder(){ return db.exercises.reduce((m,e) => (typeof e.order === "number" && e.order > m) ? e.order : m, 0) + 10; }
+function normalizeOrders(){
+  const missing = db.exercises.filter(e => typeof e.order !== "number");
+  if(!missing.length) return;
+  let base = db.exercises.reduce((m,e) => (typeof e.order === "number" && e.order > m) ? e.order : m, 0);
+  missing.sort((a,b) => a.name.localeCompare(b.name, "pt-BR")).forEach((e,i) => e.order = base + (i+1)*10);
+  save();
 }
 function exLogs(exId){
   return db.logs.filter(l => l.exerciseId === exId && l.sets.length)
@@ -274,6 +286,7 @@ function records(exId){
 
 /* ===================== rotas ===================== */
 let pendingExtra = 0;
+let reorderMode = false;
 function route(){
   const p = location.hash.replace(/^#\/?/, "").split("/");
   if(p[0] === "gym" && p[1]) return {name:"gym", gymId:p[1]};
@@ -281,7 +294,7 @@ function route(){
   if(p[0] === "settings") return {name:"settings"};
   return {name:"home"};
 }
-window.addEventListener("hashchange", () => { pendingExtra = 0; closeModal(); render(); });
+window.addEventListener("hashchange", () => { pendingExtra = 0; reorderMode = false; closeModal(); render(); });
 
 /* ===================== telas ===================== */
 const view = document.getElementById("view");
@@ -331,7 +344,15 @@ function summaryLine(exId){
 
 function renderGym(g){
   const exs = gymExercises(g.id);
-  const items = exs.map(e => {
+  const items = exs.map((e, idx) => {
+    if(reorderMode){
+      return `<div class="card row">
+        <div class="grow"><h3>${esc(e.name)}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}</h3></div>
+        <div class="reord">
+          <button class="ordbtn" data-action="move-ex" data-gym="${g.id}" data-id="${e.id}" data-dir="-1" ${idx===0?"disabled":""} aria-label="Mover para cima">↑</button>
+          <button class="ordbtn" data-action="move-ex" data-gym="${g.id}" data-id="${e.id}" data-dir="1" ${idx===exs.length-1?"disabled":""} aria-label="Mover para baixo">↓</button>
+        </div></div>`;
+    }
     const t = computeTrend(e.id);
     const mini = t ? `<span class="trendmini" title="${TREND[t.dir].t}">${TREND[t.dir].em}</span>` : "";
     return `<div class="card tap row" data-action="open-ex" data-gym="${g.id}" data-id="${e.id}">
@@ -339,15 +360,21 @@ function renderGym(g){
       <div class="sub">${e.targetSets} séries · descanso ${e.restSec}s · ${summaryLine(e.id)}</div></div>
       ${mini}<span class="chev">›</span></div>`;
   }).join("");
+  const canReorder = exs.length > 1;
   view.innerHTML = `
     <div class="topbar">
-      <button class="iconbtn" data-action="go" data-h="#/" aria-label="Voltar">‹</button>
-      <h1>${esc(g.name)}</h1>
-      <button class="iconbtn" data-action="gym-menu" data-id="${g.id}" aria-label="Opções da academia">⋮</button>
+      <button class="iconbtn" data-action="${reorderMode?"reorder-done":"go"}" data-h="#/" aria-label="${reorderMode?"Concluir":"Voltar"}">${reorderMode?"✓":"‹"}</button>
+      <h1>${esc(g.name)}${reorderMode?" · ordem":""}</h1>
+      ${reorderMode
+        ? `<button class="iconbtn" data-action="reorder-done" aria-label="Concluir">✓</button>`
+        : `<button class="iconbtn" data-action="gym-menu" data-id="${g.id}" aria-label="Opções da academia">⋮</button>`}
     </div>
     <div class="section"><h2>Exercícios</h2>
       ${items || `<div class="empty">Nenhum exercício nesta academia ainda.</div>`}
-      <button class="btn" data-action="add-ex" data-gym="${g.id}">＋ Adicionar exercício</button>
+      ${reorderMode
+        ? `<p class="sub" style="margin-top:8px">Use ↑ ↓ para mudar a ordem. Toque em ✓ quando terminar.</p>`
+        : `<button class="btn" data-action="add-ex" data-gym="${g.id}">＋ Adicionar exercício</button>
+           ${canReorder ? `<button class="btn ghost sm" data-action="reorder-on" style="margin-top:8px">⇅ Reordenar exercícios</button>` : ""}`}
     </div>`;
 }
 
@@ -950,7 +977,7 @@ document.addEventListener("click", ev => {
       const e = exById(el.dataset.id);
       e.name = name; e.targetSets = sets; e.restSec = restS; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
     } else {
-      db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, targetSets:sets, restSec:restS});
+      db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, targetSets:sets, restSec:restS, order: nextOrder()});
     }
     save(); closeModal(); render();
   }
@@ -973,7 +1000,7 @@ document.addEventListener("click", ev => {
   }
   else if(a === "do-copy"){
     const e = exById(el.dataset.id), g = gymById(el.dataset.gym);
-    db.exercises.push({id:uid(), gymId:g.id, name:e.name, targetSets:e.targetSets, restSec:e.restSec});
+    db.exercises.push({id:uid(), gymId:g.id, name:e.name, targetSets:e.targetSets, restSec:e.restSec, order: nextOrder()});
     save(); closeModal(); toast(`Copiado para ${g.name} ✓`);
   }
   else if(a === "toggle-global"){
@@ -1015,6 +1042,20 @@ document.addEventListener("click", ev => {
     save(); render();
   }
   else if(a === "extra-set"){ pendingExtra++; render(); }
+
+  else if(a === "reorder-on"){ reorderMode = true; render(); }
+  else if(a === "reorder-done"){ reorderMode = false; render(); }
+  else if(a === "move-ex"){
+    const gymId = el.dataset.gym, id = el.dataset.id, dir = +el.dataset.dir;
+    const list = gymExercises(gymId);
+    const i = list.findIndex(x => x.id === id), j = i + dir;
+    if(i < 0 || j < 0 || j >= list.length) return;
+    const A = list[i], B = list[j];
+    const ao = A.order, bo = B.order;
+    A.order = bo; B.order = ao;
+    if(A.order === B.order) A.order = dir > 0 ? bo + 1 : bo - 1;
+    save(); render();
+  }
 
   else if(a === "metric"){ exUI.metric = el.dataset.m; renderProg(exById(route().exId), records(route().exId)); }
 
@@ -1104,6 +1145,7 @@ if("serviceWorker" in navigator && location.protocol.startsWith("http")){
   navigator.serviceWorker.register("./sw.js").catch(() => {});
 }
 native.init();
+normalizeOrders();
 applyWake();
 render();
 Sync.start();

@@ -15,8 +15,11 @@ $env:ANDROID_SDK_ROOT = "$dev\android"
 $env:ANDROID_HOME = "$dev\android"
 
 Write-Host "1/3  Copiando arquivos web para o projeto..." -ForegroundColor Cyan
-Copy-Item "$src\index.html","$src\manifest.webmanifest","$src\sw.js","$src\icon.svg" "$native\www\" -Force
-& "$nodeDir\npx.cmd" cap copy android | Out-Host
+$assets = "$native\android\app\src\main\assets\public"
+foreach ($f in @("index.html","manifest.webmanifest","sw.js","icon.svg")) {
+    Copy-Item "$src\$f" "$native\www\$f" -Force
+    Copy-Item "$src\$f" "$assets\$f" -Force
+}
 
 Write-Host "2/3  Compilando o APK (pode levar alguns minutos)..." -ForegroundColor Cyan
 Set-Location "$native\android"
