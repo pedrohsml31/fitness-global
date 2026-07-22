@@ -8,18 +8,22 @@ e no **PC (navegador / PWA)**, com **sincronização em nuvem** entre os dois.
 
 ## 1. Instalar no celular (APK Android)
 
-O app instalável fica em:
+**Jeito mais fácil (baixar direto no celular):** abra no navegador do celular:
 
-    Fitness Global\dist\fitness-global.apk
+    https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk
+
+O download começa. Depois toque no arquivo baixado e siga do passo 3.
+
+Ou copie o arquivo `dist\fitness-global.apk` do PC para o celular (WhatsApp para
+você mesmo, cabo USB, Google Drive, OneDrive).
 
 Como instalar:
 
-1. Copie o arquivo `fitness-global.apk` para o celular (WhatsApp para você mesmo,
-   cabo USB, Google Drive, ou a pasta do OneDrive no celular).
-2. No celular, toque no arquivo `.apk`.
-3. O Android vai pedir para permitir "instalar apps de fontes desconhecidas" —
-   confirme (é normal para apps fora da Play Store).
-4. Instale e abra. O ícone "Fitness Global" 💪 aparece na gaveta de apps.
+1. Toque no arquivo `fitness-global.apk` baixado.
+2. O Android vai pedir para permitir "instalar apps de fontes desconhecidas" —
+   confirme (é normal para apps fora da Play Store; pode aparecer como
+   "permitir desta fonte" para o navegador ou gerenciador de arquivos).
+3. Instale e abra. O ícone "Fitness Global" 💪 aparece na gaveta de apps.
 
 Na primeira vez que iniciar um descanso, o app pede permissão de **notificações** —
 aceite. É isso que faz o celular **vibrar e notificar mesmo com a tela apagada**.
@@ -101,6 +105,8 @@ Duas opções:
   você ligar nos Ajustes — pensado para quando estiver de fone).
 - **Exercício global 🌐:** marque no formulário para ele aparecer em **todas** as
   academias. Também dá para **copiar** um exercício para outra academia.
+- **Reordenar:** dentro de uma academia, toque em **⇅ Reordenar exercícios**, use as
+  setas ↑ ↓ para colocar na ordem que quiser e toque em ✓.
 - **Progressão:** o app diz de forma direta se sua **força está subindo, estável ou
   caindo** (com %), mostra sua **força atual** e seu **recorde**. Ao bater um recorde,
   aparece a comemoração **🎉 na hora**. Gráfico com **Força / Peso máx / Volume**.
