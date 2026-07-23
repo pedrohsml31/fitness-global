@@ -90,9 +90,40 @@ Duas opções:
   aparece a comemoração **🎉 na hora**. Gráfico com **Força / Peso máx / Volume**.
 - **Backup:** Ajustes → Exportar/Importar (arquivo `.json`).
 
+O app tem **3 abas** na barra inferior:
+
+### 🏋️ Treino
+Tudo acima (academias, exercícios, séries, descanso, progressão).
+
+### 🍽️ Alimentação
+- **Adicionar alimento** um a um; cada um puxa o **horário** (editável) e entra numa
+  **refeição** (nomeada). Refeições e **lanches** ficam marcados diferente.
+- **Planejar** (🗓): monte refeições planejadas com horário; marque como **fixa 📌**
+  (todo dia) ou só do dia; **copiar de ontem**; editar/excluir.
+- No dia, **marque ✓ o que consumiu** do plano — o que ficar sem marcar conta como
+  **não consumido**. Aderência (**% da dieta seguida**) aparece no topo.
+- Em cada alimento: marcar **binge 🔴** ou **fora do planejado ⚠️**; editar/excluir.
+- **Urges** (vontade de comer): registre a **intensidade (0–10)** e se **cedeu**.
+- **Relatório (📊, 7 dias):** aderência, nº de urges, binges que cedeu, intensidade
+  média/máxima, alimentos fora do plano, itens em refeições/lanches, e comparação
+  com a semana anterior.
+
+### 📊 Evolução
+- **Peso** (registre todo dia), **BF %** (bioimpedância) e **medidas** (cintura,
+  quadril, peitoral, ombros, bíceps, antebraço, coxa, panturrilha, pescoço).
+- **Gráfico de peso**, **média semanal** comparando com semanas anteriores, e
+  variação das medidas.
+- **Editar qualquer dia** pelo histórico.
+
 ---
 
-## 5. Atualizar o app depois de mudanças
+## 5. Atualizar o app
 
-O código-fonte é o `index.html` (mais `manifest.webmanifest`, `sw.js`, `icon.svg`).
-Para gerar um novo APK depois de editar, veja `HOSPEDAR.md` (seção "Recompilar o APK").
+- **Automático:** quando eu publico uma versão nova, o app mostra um aviso
+  **"Atualização disponível"** — toque em **Atualizar**. No celular ele baixa o APK
+  novo (você só confirma a instalação, exigência do Android). No PC/PWA, recarrega
+  sozinho.
+- **Recompilar você mesmo** depois de editar o `index.html`: rode `recompilar-apk.ps1`.
+  Para o aviso automático aparecer nos aparelhos, aumente o número em **duas** partes:
+  `APP_VERSION` no `index.html` e `"version"` no `version.json` (o mesmo número), e
+  publique. Veja `HOSPEDAR.md`.

@@ -16,9 +16,11 @@ $env:ANDROID_HOME = "$dev\android"
 
 Write-Host "1/3  Copiando arquivos web para o projeto..." -ForegroundColor Cyan
 $assets = "$native\android\app\src\main\assets\public"
-foreach ($f in @("index.html","manifest.webmanifest","sw.js","icon.svg")) {
-    Copy-Item "$src\$f" "$native\www\$f" -Force
-    Copy-Item "$src\$f" "$assets\$f" -Force
+foreach ($f in @("index.html","manifest.webmanifest","sw.js","icon.svg","version.json")) {
+    if (Test-Path "$src\$f") {
+        Copy-Item "$src\$f" "$native\www\$f" -Force
+        Copy-Item "$src\$f" "$assets\$f" -Force
+    }
 }
 
 Write-Host "2/3  Compilando o APK (pode levar alguns minutos)..." -ForegroundColor Cyan

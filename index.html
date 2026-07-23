@@ -191,9 +191,68 @@ input[type=number]{font-variant-numeric:tabular-nums;}
 .prcard button{background:var(--gold); color:#2a1c00; font-weight:800; border-radius:12px; padding:12px; width:100%;}
 
 @media (prefers-reduced-motion: reduce){*{transition:none !important; animation:none !important;}}
+
+/* ===== barra de abas ===== */
+#tabbar{position:fixed; left:0; right:0; bottom:0; z-index:35; display:flex;
+  background:color-mix(in srgb, var(--surface) 96%, black); border-top:1px solid var(--border);
+  padding-bottom:env(safe-area-inset-bottom);}
+#tabbar button{flex:1; padding:8px 4px 7px; display:flex; flex-direction:column; align-items:center; gap:2px;
+  color:var(--faint); font-size:.66rem; font-weight:700;}
+#tabbar button .ic{font-size:1.35rem; line-height:1;}
+#tabbar button.on{color:var(--accent);}
+#app{padding-bottom:150px;}
+
+/* ===== alimentação ===== */
+.daynav{display:flex; align-items:center; gap:8px; margin:2px 0 4px;}
+.daynav .d{flex:1; text-align:center; font-weight:800; font-size:1.02rem;}
+.daynav .navb{width:38px; height:38px; border-radius:11px; background:var(--surface); border:1px solid var(--border); font-size:1.1rem; flex:none;}
+.mealcard{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:10px; overflow:hidden;}
+.mealhead{display:flex; align-items:center; gap:8px; padding:11px 14px; border-bottom:1px solid var(--border);}
+.mealhead .mt{font-weight:800; font-size:1rem; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.mealhead .tm{color:var(--muted); font-size:.82rem; font-variant-numeric:tabular-nums; flex:none;}
+.kindtag{font-size:.68rem; font-weight:800; padding:2px 8px; border-radius:999px; flex:none;}
+.kindtag.refeicao{background:color-mix(in srgb, var(--line) 22%, var(--surface)); color:var(--line);}
+.kindtag.lanche{background:color-mix(in srgb, var(--gold) 20%, var(--surface)); color:var(--gold);}
+.fooditem{display:flex; align-items:center; gap:10px; padding:9px 14px; border-bottom:1px solid var(--border); font-size:.94rem;}
+.fooditem:last-child{border-bottom:none;}
+.fooditem .fn{flex:1; min-width:0;}
+.fooditem.eaten .fn{color:var(--ink);}
+.fooditem.pending .fn{color:var(--muted);}
+.fchip{font-size:.64rem; font-weight:800; padding:2px 7px; border-radius:999px; flex:none;}
+.fchip.binge{background:color-mix(in srgb, var(--bad) 24%, var(--surface)); color:var(--bad);}
+.fchip.outside{background:color-mix(in srgb, var(--gold) 22%, var(--surface)); color:var(--gold);}
+.fchip.skip{background:var(--surface2); color:var(--faint);}
+.ftick{width:34px; height:34px; border-radius:9px; background:var(--surface2); border:1px solid var(--border); flex:none; font-size:1rem; color:var(--muted);}
+.ftick.on{background:color-mix(in srgb, var(--good) 22%, var(--surface)); border-color:var(--good); color:var(--good);}
+.xbtn{width:32px;height:32px;border-radius:9px;background:none;border:1px solid var(--border);color:var(--bad);flex:none;font-size:.95rem;}
+.urgebtn{background:color-mix(in srgb, var(--bad) 14%, var(--surface)); border:1px solid color-mix(in srgb,var(--bad) 45%, var(--border)); color:var(--bad); font-weight:800;}
+.rangewrap{display:flex; align-items:center; gap:12px;}
+input[type=range]{accent-color:var(--accent);}
+.bignumv{font-size:1.5rem; font-weight:800; font-variant-numeric:tabular-nums;}
+
+/* estatísticas / relatório */
+.statgrid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.statbox{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:13px 14px;}
+.statbox .v{font-size:1.5rem; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-.01em;}
+.statbox .k{color:var(--muted); font-size:.78rem; font-weight:600; margin-top:2px;}
+.statbox.good .v{color:var(--good);} .statbox.bad .v{color:var(--bad);} .statbox.warn .v{color:var(--gold);}
+.bar{height:9px; border-radius:6px; background:var(--surface2); overflow:hidden; margin-top:8px;}
+.bar>span{display:block; height:100%; background:var(--good); border-radius:6px;}
+
+/* medidas / evolução */
+.measgrid{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+.measgrid .field{margin-bottom:0;}
+.wkrow{display:flex; align-items:center; gap:10px; padding:9px 2px; border-bottom:1px solid var(--border); font-variant-numeric:tabular-nums;}
+.wkrow:last-child{border-bottom:none;}
+.wkrow .wd{color:var(--muted); font-size:.82rem; flex:1;}
+.wkrow .wv{font-weight:800;}
+.wkrow .wdelta{font-size:.82rem; font-weight:700; flex:none;}
+.up{color:var(--good);} .down{color:var(--bad);}
+.updbanner{position:sticky; top:0; z-index:6; background:color-mix(in srgb,var(--accent) 16%,var(--surface)); border:1px solid var(--accent); border-radius:12px; padding:10px 14px; margin-bottom:10px; display:flex; align-items:center; gap:10px;}
+.updbanner .grow{flex:1;}
 </style>
 
-<div id="app"><div id="view"></div></div>
+<div id="app"><div id="updslot"></div><div id="view"></div></div>
 
 <div id="restbar">
   <div id="restprog"></div>
@@ -205,6 +264,12 @@ input[type=number]{font-variant-numeric:tabular-nums;}
     <button class="restbtn skip" data-action="rest-skip" aria-label="Encerrar descanso">✕</button>
   </div>
 </div>
+
+<nav id="tabbar">
+  <button data-action="tab" data-t="treino"><span class="ic">🏋️</span>Treino</button>
+  <button data-action="tab" data-t="food"><span class="ic">🍽️</span>Alimentação</button>
+  <button data-action="tab" data-t="progress"><span class="ic">📊</span>Evolução</button>
+</nav>
 
 <div id="modal"><div class="sheet" id="sheet"></div></div>
 <div id="pr"><div class="prcard" id="prcard"></div></div>
@@ -224,13 +289,35 @@ const FIREBASE_CONFIG = {
   appId: "1:882333150773:web:79880305549b1975bc8b7c"
 };
 
+/* versão do app (bump a cada release; version.json no site guarda a última) */
+const APP_VERSION = 1;
+const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
+const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
+async function checkUpdate(){
+  try{
+    const r = await fetch(VERSION_URL + "?cb=" + Date.now(), {cache:"no-store"});
+    if(!r.ok) return;
+    const j = await r.json();
+    if(j && Number(j.version) > APP_VERSION) showUpdate(j);
+  }catch(e){}
+}
+function showUpdate(j){
+  const slot = document.getElementById("updslot"); if(!slot) return;
+  slot.innerHTML = `<div class="updbanner">
+    <span style="font-size:1.3rem">⬆️</span>
+    <div class="grow"><b>Atualização disponível</b>
+      <div class="sub">${j.notes ? esc(j.notes) : "Nova versão do app."}</div></div>
+    <button class="btn sm" style="width:auto" data-action="do-update">Atualizar</button>
+    <button class="xbtn" data-action="dismiss-update" aria-label="Dispensar">✕</button></div>`;
+}
+
 /* padrões de vibração (duração/pulsos em ms) */
 const VIBE = { suave:[230], media:[400,140,400], forte:[600,130,600,130,600] };
 function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
 
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], logs:[], settings:{sound:false, autoRest:true, wake:false, vibe:"media", sync:null}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], logs:[], food:[], urges:[], plan:[], body:[], settings:{sound:false, autoRest:true, wake:false, vibe:"media", sync:null}, updatedAt:0}; }
 let db;
 try{ db = Object.assign(seed(), JSON.parse(localStorage.getItem(LS)) || {}); }
 catch(e){ db = seed(); }
@@ -311,6 +398,10 @@ function route(){
   if(p[0] === "gym" && p[1]) return {name:"gym", gymId:p[1]};
   if(p[0] === "ex" && p[1] && p[2]) return {name:"ex", gymId:p[1], exId:p[2]};
   if(p[0] === "settings") return {name:"settings"};
+  if(p[0] === "food") return {name:"food"};
+  if(p[0] === "foodplan") return {name:"foodplan"};
+  if(p[0] === "foodreport") return {name:"foodreport"};
+  if(p[0] === "progress") return {name:"progress"};
   return {name:"home"};
 }
 window.addEventListener("hashchange", () => { pendingExtra = 0; reorderMode = false; closeModal(); render(); });
@@ -328,8 +419,18 @@ function render(){
     renderEx(g, e);
   }
   else if(r.name === "settings") renderSettings();
+  else if(r.name === "food") renderFood();
+  else if(r.name === "foodplan") renderFoodPlan();
+  else if(r.name === "foodreport") renderFoodReport();
+  else if(r.name === "progress") renderProgress();
   else renderHome();
+  updateTabs(r.name);
   window.scrollTo(0,0);
+}
+function updateTabs(name){
+  const tab = (name === "food" || name === "foodplan" || name === "foodreport") ? "food"
+    : name === "progress" ? "progress" : "treino";
+  document.querySelectorAll("#tabbar button").forEach(b => b.classList.toggle("on", b.dataset.t === tab));
 }
 
 function renderHome(){
@@ -909,6 +1010,7 @@ const Sync = {
     this.applying = true;
     const keepSync = db.settings.sync;
     db.gyms = remote.gyms || []; db.exercises = remote.exercises || []; db.logs = remote.logs || [];
+    db.food = remote.food || []; db.urges = remote.urges || []; db.plan = remote.plan || []; db.body = remote.body || [];
     db.settings = Object.assign(seed().settings, remote.settings || {}, {sync:keepSync});
     db.updatedAt = remote.updatedAt || Date.now();
     localStorage.setItem(LS, JSON.stringify(db));
@@ -921,6 +1023,7 @@ const Sync = {
     try{
       const ref = this.fs.doc(this.dbfs, "vaults", this.activeCode());
       const payload = { gyms:db.gyms, exercises:db.exercises, logs:db.logs,
+        food:db.food, urges:db.urges, plan:db.plan, body:db.body,
         settings:Object.assign({}, db.settings, {sync:null}), updatedAt:db.updatedAt };
       await this.fs.setDoc(ref, payload);
       this.state = "ok"; this.last = Date.now(); this._reflect();
@@ -1191,11 +1294,481 @@ sheet.addEventListener("keydown", ev => {
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
   navigator.serviceWorker.register("./sw.js").catch(() => {});
 }
+/* ===================== ALIMENTAÇÃO & EVOLUÇÃO ===================== */
+let foodDay = todayStr();
+let bodyDay = todayStr();
+const MEAS = [
+  {k:"cintura",l:"Cintura"},{k:"quadril",l:"Quadril"},{k:"peitoral",l:"Peitoral"},
+  {k:"ombros",l:"Ombros"},{k:"biceps",l:"Bíceps"},{k:"antebraco",l:"Antebraço"},
+  {k:"coxa",l:"Coxa"},{k:"panturrilha",l:"Panturrilha"},{k:"pescoco",l:"Pescoço"}
+];
+function pad2(n){ return String(n).padStart(2,"0"); }
+function fmtTime(ts){ const d=new Date(ts); return pad2(d.getHours())+":"+pad2(d.getMinutes()); }
+function nowHM(){ const d=new Date(); return pad2(d.getHours())+":"+pad2(d.getMinutes()); }
+function tsFor(date,hm){ const [y,m,dd]=date.split("-").map(Number); const [h,mi]=(hm||"12:00").split(":").map(Number); return new Date(y,m-1,dd,h,mi).getTime(); }
+function shiftDay(date,n){ const [y,m,d]=date.split("-").map(Number); const dt=new Date(y,m-1,d); dt.setDate(dt.getDate()+n); return dt.getFullYear()+"-"+pad2(dt.getMonth()+1)+"-"+pad2(dt.getDate()); }
+function dayLabel(date){ if(date===todayStr())return "Hoje · "+fmtDate(date); if(date===shiftDay(todayStr(),-1))return "Ontem · "+fmtDate(date); const wd=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][new Date(date+"T00:00").getDay()]; return wd+" · "+fmtDate(date); }
+function plannedForDay(date){ return db.plan.filter(m => m.fixed || m.date === date).sort((a,b)=>(a.time||"").localeCompare(b.time||"")); }
+function adherence(date){ let t=0,d=0; plannedForDay(date).forEach(m=>m.items.forEach(it=>{ t++; if(it.done&&it.done[date]) d++; })); return {t,d,pct:t?Math.round(d/t*100):null}; }
+
+/* ---------- Alimentação: diário ---------- */
+function renderFood(){
+  const day = foodDay;
+  const foods = db.food.filter(f=>f.date===day).sort((a,b)=>a.ts-b.ts);
+  const planned = plannedForDay(day);
+  const groups = {}; foods.forEach(f=>{ (groups[f.meal]=groups[f.meal]||[]).push(f); });
+  const mealNames = Object.keys(groups);
+  const urgesToday = db.urges.filter(u=>u.date===day).sort((a,b)=>a.ts-b.ts);
+  const adh = adherence(day);
+
+  view.innerHTML = `
+    <div class="topbar">
+      <h1>🍽️ Alimentação</h1>
+      <button class="iconbtn" data-action="go" data-h="#/foodreport" aria-label="Relatório">📊</button>
+      <button class="iconbtn" data-action="go" data-h="#/settings" aria-label="Ajustes">⚙️</button>
+    </div>
+    <div class="daynav">
+      <button class="navb" data-action="food-day" data-d="-1">‹</button>
+      <div class="d">${dayLabel(day)}</div>
+      <button class="navb" data-action="food-day" data-d="1">›</button>
+    </div>
+
+    <div class="section"><h2>Plano do dia ${adh.t?`· ${adh.pct}% seguido`:""}</h2>
+      ${planned.length ? planned.map(m=>plannedMealHtml(m,day)).join("")
+        : `<div class="empty">Nada planejado para este dia.</div>`}
+      <button class="btn ghost sm" data-action="go" data-h="#/foodplan" style="margin-top:2px">🗓 Planejar alimentação</button>
+    </div>
+
+    <div class="section"><h2>O que eu comi</h2>
+      ${mealNames.length ? mealNames.map(mn=>consumedMealHtml(mn,groups[mn],day)).join("")
+        : `<div class="empty">Nenhum alimento registrado neste dia.</div>`}
+      <button class="btn" data-action="add-food">＋ Adicionar alimento</button>
+    </div>
+
+    <div class="section"><h2>Vontade de comer / binge</h2>
+      <div class="card">
+        <div class="row" style="gap:16px; flex-wrap:wrap">
+          <div><div class="sub">Urges hoje</div><div class="bignumv">${urgesToday.length}</div></div>
+          <div><div class="sub">Cedi (binge)</div><div class="bignumv" style="color:var(--bad)">${urgesToday.filter(u=>u.gaveIn).length}</div></div>
+          <div class="grow"></div>
+          <button class="btn sm urgebtn" style="width:auto" data-action="add-urge">⚡ Registrar urge</button>
+        </div>
+        ${urgesToday.length?`<div class="pills" style="margin-top:12px">${urgesToday.map(u=>`<span class="pill" style="cursor:pointer${u.gaveIn?';color:var(--bad);border-color:var(--bad)':''}" data-action="del-urge" data-id="${u.id}" title="Toque para remover">${fmtTime(u.ts)} · intens. ${u.intensity}${u.gaveIn?" · cedi 🔴":""} ✕</span>`).join("")}</div>`:""}
+      </div>
+    </div>`;
+}
+function plannedMealHtml(m,day){
+  return `<div class="mealcard">
+    <div class="mealhead">
+      <span class="kindtag ${m.kind}">${m.kind==="lanche"?"Lanche":"Refeição"}</span>
+      <span class="mt">${esc(m.name)}${m.fixed?" 📌":""}</span>
+      <span class="tm">${m.time||""}</span>
+    </div>
+    ${m.items.map(it=>{ const done=it.done&&it.done[day];
+      return `<div class="fooditem ${done?"eaten":"pending"}">
+        <button class="ftick ${done?"on":""}" data-action="plan-tick" data-m="${m.id}" data-i="${it.id}" aria-label="Marcar consumido">${done?"✓":""}</button>
+        <span class="fn">${esc(it.name)}</span>
+        ${done?"":`<span class="fchip skip">não consumido</span>`}
+      </div>`; }).join("")}
+  </div>`;
+}
+function consumedMealHtml(mealName,foods,day){
+  const kind = foods[0].kind || "refeicao";
+  const t0 = fmtTime(Math.min(...foods.map(f=>f.ts)));
+  return `<div class="mealcard">
+    <div class="mealhead">
+      <span class="kindtag ${kind}">${kind==="lanche"?"Lanche":"Refeição"}</span>
+      <span class="mt">${esc(mealName)}</span>
+      <span class="tm">${t0}</span>
+    </div>
+    ${foods.map(f=>`<div class="fooditem eaten">
+      <span class="tm" style="width:42px">${fmtTime(f.ts)}</span>
+      <span class="fn">${esc(f.name)}</span>
+      ${f.binge?`<span class="fchip binge">binge</span>`:""}
+      ${!f.planned?`<span class="fchip outside">fora do plano</span>`:""}
+      <button class="xbtn" data-action="edit-food" data-id="${f.id}" aria-label="Editar" style="color:var(--muted)">✎</button>
+      <button class="xbtn" data-action="del-food" data-id="${f.id}" aria-label="Excluir">✕</button>
+    </div>`).join("")}
+  </div>`;
+}
+function mealSuggestions(day){
+  const s = new Set();
+  plannedForDay(day).forEach(m=>s.add(m.name));
+  db.food.filter(f=>f.date===day).forEach(f=>s.add(f.meal));
+  db.food.slice(-40).forEach(f=>s.add(f.meal));
+  return [...s].filter(Boolean);
+}
+function foodForm(food){
+  const day = foodDay;
+  const isEdit = !!food;
+  const meals = mealSuggestions(day);
+  const kind = food?food.kind:"refeicao";
+  openModal(`<h2>${isEdit?"Editar alimento":"Adicionar alimento"}</h2>
+    <div class="field"><label for="ff-name">Alimento</label>
+    <input id="ff-name" value="${food?esc(food.name):""}" placeholder="Ex.: 100g de arroz, 2 ovos…" maxlength="80"></div>
+    <div class="btnrow">
+      <div class="field" style="flex:2"><label for="ff-meal">Refeição / lanche (nome)</label>
+      <input id="ff-meal" list="ff-meals" value="${food?esc(food.meal):""}" placeholder="Ex.: Almoço, Café, Lanche da tarde" maxlength="40">
+      <datalist id="ff-meals">${meals.map(m=>`<option value="${esc(m)}">`).join("")}</datalist></div>
+      <div class="field" style="flex:1"><label for="ff-time">Horário</label>
+      <input id="ff-time" type="time" value="${food?fmtTime(food.ts):nowHM()}"></div>
+    </div>
+    <div class="field"><label>Tipo</label>
+      <div class="seg">
+        <button type="button" data-seg="kind" data-v="refeicao" class="${kind==="refeicao"?"on":""}">Refeição</button>
+        <button type="button" data-seg="kind" data-v="lanche" class="${kind==="lanche"?"on":""}">Lanche</button>
+      </div>
+    </div>
+    <label class="check"><input type="checkbox" id="ff-binge" ${food&&food.binge?"checked":""}>
+      <div class="grow"><div class="t">🔴 Foi um binge</div><div class="d">Comido em compulsão</div></div></label>
+    <label class="check"><input type="checkbox" id="ff-outside" ${food&&!food.planned?"checked":""}>
+      <div class="grow"><div class="t">⚠️ Fora do planejado</div><div class="d">Não estava na dieta do dia</div></div></label>
+    <input type="hidden" id="ff-kind" value="${kind}">
+    <button class="btn" data-action="save-food" data-id="${food?food.id:""}">${isEdit?"Salvar":"Adicionar"}</button>`);
+  setTimeout(()=>document.getElementById("ff-name").focus(),50);
+}
+function urgeForm(){
+  openModal(`<h2>⚡ Registrar vontade (urge)</h2>
+    <div class="field"><label>Intensidade da vontade: <b id="u-val">5</b>/10</label>
+      <input type="range" id="u-int" min="0" max="10" step="1" value="5" oninput="document.getElementById('u-val').textContent=this.value"></div>
+    <div class="field"><label for="u-time">Horário</label>
+      <input id="u-time" type="time" value="${nowHM()}"></div>
+    <label class="check"><input type="checkbox" id="u-gave">
+      <div class="grow"><div class="t">🔴 Cedi — foi um binge</div><div class="d">Marque se você comeu por causa dessa vontade</div></div></label>
+    <button class="btn" data-action="save-urge">Registrar</button>`);
+}
+
+/* ---------- Alimentação: planejamento ---------- */
+function renderFoodPlan(){
+  const day = foodDay;
+  const fixed = db.plan.filter(m=>m.fixed).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+  const daily = db.plan.filter(m=>!m.fixed && m.date===day).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+  const mealBlock = m => `<div class="mealcard">
+      <div class="mealhead">
+        <span class="kindtag ${m.kind}">${m.kind==="lanche"?"Lanche":"Refeição"}</span>
+        <span class="mt">${esc(m.name)}</span><span class="tm">${m.time||""}</span>
+        <button class="xbtn" data-action="edit-plan" data-id="${m.id}" style="color:var(--muted)">✎</button>
+        <button class="xbtn" data-action="del-plan" data-id="${m.id}">✕</button>
+      </div>
+      ${m.items.map(it=>`<div class="fooditem eaten"><span class="fn">${esc(it.name)}</span></div>`).join("") || `<div class="fooditem pending"><span class="fn">— sem itens —</span></div>`}
+    </div>`;
+  view.innerHTML = `
+    <div class="topbar">
+      <button class="iconbtn" data-action="go" data-h="#/food" aria-label="Voltar">‹</button>
+      <h1>Planejar</h1>
+    </div>
+    <div class="daynav">
+      <button class="navb" data-action="food-day" data-d="-1">‹</button>
+      <div class="d">${dayLabel(day)}</div>
+      <button class="navb" data-action="food-day" data-d="1">›</button>
+    </div>
+    <div class="section"><h2>📌 Refeições fixas (todo dia)</h2>
+      ${fixed.length?fixed.map(mealBlock).join(""):`<div class="empty">Nenhuma refeição fixa.</div>`}
+    </div>
+    <div class="section"><h2>Só neste dia</h2>
+      ${daily.length?daily.map(mealBlock).join(""):`<div class="empty">Nada específico para ${fmtDate(day)}.</div>`}
+      <div class="btnrow" style="margin-top:2px">
+        <button class="btn" data-action="add-plan">＋ Nova refeição</button>
+        <button class="btn ghost" data-action="copy-plan" style="flex:none;width:auto" title="Copiar refeições do dia anterior">📋 Copiar ontem</button>
+      </div>
+    </div>`;
+}
+function planForm(meal){
+  const day = foodDay;
+  const kind = meal?meal.kind:"refeicao";
+  const fixed = meal?meal.fixed:false;
+  openModal(`<h2>${meal?"Editar refeição planejada":"Nova refeição planejada"}</h2>
+    <div class="btnrow">
+      <div class="field" style="flex:2"><label for="pf-name">Nome</label>
+      <input id="pf-name" value="${meal?esc(meal.name):""}" placeholder="Ex.: Almoço" maxlength="40"></div>
+      <div class="field" style="flex:1"><label for="pf-time">Horário</label>
+      <input id="pf-time" type="time" value="${meal?meal.time||"":"12:00"}"></div>
+    </div>
+    <div class="field"><label>Tipo</label>
+      <div class="seg">
+        <button type="button" data-seg="pkind" data-v="refeicao" class="${kind==="refeicao"?"on":""}">Refeição</button>
+        <button type="button" data-seg="pkind" data-v="lanche" class="${kind==="lanche"?"on":""}">Lanche</button>
+      </div><input type="hidden" id="pf-kind" value="${kind}"></div>
+    <div class="field"><label for="pf-items">Alimentos (um por linha)</label>
+    <textarea id="pf-items" placeholder="100g arroz\n150g frango\nsalada">${meal?esc(meal.items.map(i=>i.name).join("\n")):""}</textarea></div>
+    <label class="check"><input type="checkbox" id="pf-fixed" ${fixed?"checked":""}>
+      <div class="grow"><div class="t">📌 Refeição fixa</div><div class="d">Aparece todos os dias (senão, só em ${fmtDate(day)})</div></div></label>
+    <button class="btn" data-action="save-plan" data-id="${meal?meal.id:""}">Salvar</button>`);
+  setTimeout(()=>document.getElementById("pf-name").focus(),50);
+}
+
+/* ---------- Alimentação: relatório ---------- */
+function periodFoodStats(days, endDay){
+  endDay = endDay || todayStr();
+  const from = shiftDay(endDay,-(days-1));
+  const inRange = d => d>=from && d<=endDay;
+  const foods = db.food.filter(f=>inRange(f.date));
+  const urges = db.urges.filter(u=>inRange(u.date));
+  let totPlan=0, donePlan=0;
+  for(let i=0;i<days;i++){ const d=shiftDay(endDay,-i); plannedForDay(d).forEach(m=>m.items.forEach(it=>{ totPlan++; if(it.done&&it.done[d]) donePlan++; })); }
+  const intens = urges.map(u=>u.intensity);
+  return {
+    urges: urges.length,
+    binges: urges.filter(u=>u.gaveIn).length,
+    avgInt: intens.length ? (intens.reduce((a,b)=>a+b,0)/intens.length) : null,
+    maxInt: intens.length ? Math.max(...intens) : null,
+    outside: foods.filter(f=>!f.planned).length,
+    bingeFoods: foods.filter(f=>f.binge).length,
+    refeicoes: foods.filter(f=>f.kind==="refeicao").length,
+    lanches: foods.filter(f=>f.kind==="lanche").length,
+    adherence: totPlan?Math.round(donePlan/totPlan*100):null,
+    planTot: totPlan, planDone: donePlan, notEaten: totPlan-donePlan
+  };
+}
+function renderFoodReport(){
+  const w = periodFoodStats(7);
+  const prev = periodFoodStats(7, shiftDay(todayStr(),-7));
+  const arrow = (cur,old,goodDown) => { if(old==null||cur==null||cur===old) return ""; const up=cur>old; const good = goodDown?!up:up; return `<span class="${good?"up":"down"}" style="font-size:.8rem"> ${up?"▲":"▼"}${Math.abs(cur-old)}</span>`; };
+  view.innerHTML = `
+    <div class="topbar">
+      <button class="iconbtn" data-action="go" data-h="#/food" aria-label="Voltar">‹</button>
+      <h1>Relatório · 7 dias</h1>
+    </div>
+    <div class="section"><h2>Precisão da dieta</h2>
+      <div class="card">
+        <div class="row"><div class="grow"><div class="sub">Aderência ao plano (7 dias)</div>
+          <div class="bignumv">${w.adherence!=null?w.adherence+"%":"—"}${arrow(w.adherence,prev.adherence,false)}</div></div></div>
+        <div class="bar"><span style="width:${w.adherence||0}%"></span></div>
+        <div class="sub" style="margin-top:8px">${w.planDone} de ${w.planTot} itens planejados consumidos · ${w.notEaten} não consumidos</div>
+      </div>
+    </div>
+    <div class="section"><h2>Compulsão (binge / urges)</h2>
+      <div class="statgrid">
+        <div class="statbox"><div class="v">${w.urges}${arrow(w.urges,prev.urges,true)}</div><div class="k">Urges na semana</div></div>
+        <div class="statbox bad"><div class="v">${w.binges}${arrow(w.binges,prev.binges,true)}</div><div class="k">Binges (cedi)</div></div>
+        <div class="statbox"><div class="v">${w.avgInt!=null?w.avgInt.toFixed(1):"—"}</div><div class="k">Intensidade média do urge</div></div>
+        <div class="statbox warn"><div class="v">${w.maxInt!=null?w.maxInt:"—"}</div><div class="k">Urge mais forte</div></div>
+      </div>
+      <p class="sub" style="margin-top:8px">Resistência: ${w.urges?Math.round((w.urges-w.binges)/w.urges*100):"—"}% dos urges você NÃO cedeu.</p>
+    </div>
+    <div class="section"><h2>Alimentos</h2>
+      <div class="statgrid">
+        <div class="statbox warn"><div class="v">${w.outside}</div><div class="k">Comidos fora do plano</div></div>
+        <div class="statbox bad"><div class="v">${w.bingeFoods}</div><div class="k">Marcados como binge</div></div>
+        <div class="statbox"><div class="v">${w.refeicoes}</div><div class="k">Itens em refeições</div></div>
+        <div class="statbox"><div class="v">${w.lanches}</div><div class="k">Itens em lanches</div></div>
+      </div>
+    </div>
+    <p class="sub" style="text-align:center; margin-top:6px">Comparado com os 7 dias anteriores (▲▼).</p>`;
+}
+
+/* ---------- Evolução (peso, BF, medidas) ---------- */
+function bodyByDate(date){ return db.body.find(b=>b.date===date); }
+function bodySorted(){ return db.body.filter(b=>typeof b.kg==="number").sort((a,b)=>a.date<b.date?-1:1); }
+function weekKeyOf(date){ const d=new Date(date+"T00:00"); const off=(d.getDay()+6)%7; d.setDate(d.getDate()-off); return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
+function weeklyWeight(){
+  const map={}; bodySorted().forEach(b=>{ const k=weekKeyOf(b.date); (map[k]=map[k]||[]).push(b.kg); });
+  return Object.keys(map).sort().map(k=>({week:k, avg:map[k].reduce((a,b)=>a+b,0)/map[k].length, n:map[k].length}));
+}
+function renderProgress(){
+  const series = bodySorted();
+  const latest = series[series.length-1];
+  const weeks = weeklyWeight();
+  const latestMeas = [...db.body].filter(b=>b.m && Object.values(b.m).some(v=>typeof v==="number")).sort((a,b)=>a.date<b.date?-1:1).pop();
+  let trendHtml="";
+  if(series.length>=2){
+    const cur=latest.kg; let base=series[0];
+    for(let i=series.length-2;i>=0;i--){ if(daysBetween(series[i].date, latest.date)>=7){ base=series[i]; break; } }
+    const diff=cur-base.kg; const dcls=diff<-0.05?"down":diff>0.05?"up":"";
+    trendHtml=`<span class="wdelta ${dcls}">${diff>0?"+":""}${fmtW(diff)} kg vs ${fmtDate(base.date)}</span>`;
+  }
+  view.innerHTML = `
+    <div class="topbar">
+      <h1>📊 Evolução</h1>
+      <button class="iconbtn" data-action="go" data-h="#/settings" aria-label="Ajustes">⚙️</button>
+    </div>
+    <div class="section"><h2>Peso</h2>
+      <div class="card">
+        ${latest?`<div class="row" style="gap:18px; flex-wrap:wrap">
+          <div><div class="sub">Último peso (${fmtDate(latest.date)})</div><div class="bignumv">${fmtW(latest.kg)} <small style="font-size:.8rem;color:var(--muted)">kg</small></div></div>
+          ${typeof latest.bf==="number"?`<div><div class="sub">BF</div><div class="bignumv">${fmtW(latest.bf)}<small style="font-size:.8rem;color:var(--muted)">%</small></div></div>`:""}
+          <div class="grow" style="text-align:right">${trendHtml}</div>
+        </div>
+        <div class="chartwrap" id="wchart" style="margin-top:12px"></div>`
+        : `<div class="empty">Registre seu peso para ver a evolução.</div>`}
+      </div>
+      <button class="btn" data-action="body-entry" data-d="${todayStr()}">＋ Registrar hoje (peso, BF, medidas)</button>
+    </div>
+    ${weeks.length>=2?`<div class="section"><h2>Média semanal</h2><div class="card">
+      ${weeks.slice(-8).reverse().map((w,i,arr)=>{ const prev=arr[i+1]; const diff=prev?w.avg-prev.avg:null;
+        return `<div class="wkrow"><span class="wd">Semana de ${fmtDate(w.week)}</span>
+          <span class="wv">${fmtW(w.avg)} kg</span>
+          <span class="wdelta ${diff==null?"":diff<0?"down":diff>0?"up":""}">${diff==null?"":(diff>0?"+":"")+fmtW(diff)}</span></div>`;}).join("")}
+    </div></div>`:""}
+    ${latestMeas?`<div class="section"><h2>Medidas corporais</h2><div class="card">
+      <div class="sub" style="margin-bottom:8px">Últimas medidas · ${fmtDate(latestMeas.date)} (cm)</div>
+      <div class="measgrid">${MEAS.filter(m=>typeof latestMeas.m[m.k]==="number").map(m=>`<div class="statbox"><div class="v">${fmtW(latestMeas.m[m.k])}</div><div class="k">${m.l}${measDelta(m.k,latestMeas)}</div></div>`).join("")}</div>
+    </div></div>`:""}
+    <div class="section"><h2>Histórico</h2><div class="card">
+      ${db.body.length?[...db.body].sort((a,b)=>a.date<b.date?1:-1).slice(0,60).map(b=>`
+        <div class="wkrow" style="cursor:pointer" data-action="body-entry" data-d="${b.date}">
+          <span class="wd">${fmtDate(b.date)}</span>
+          <span class="wv">${typeof b.kg==="number"?fmtW(b.kg)+" kg":"—"}</span>
+          <span class="wdelta" style="color:var(--muted)">${typeof b.bf==="number"?"BF "+fmtW(b.bf)+"%":""} ✎</span></div>`).join("")
+        : `<div class="empty">Sem registros ainda.</div>`}
+    </div></div>`;
+  if(latest) drawWeightChart(series);
+}
+function measDelta(k,cur){
+  const prev=[...db.body].filter(b=>b.date<cur.date && b.m && typeof b.m[k]==="number").sort((a,b)=>a.date<b.date?-1:1).pop();
+  if(!prev) return "";
+  const d=cur.m[k]-prev.m[k]; if(Math.abs(d)<0.05) return "";
+  return ` <span class="${d>0?"up":"down"}" style="font-size:.72rem">${d>0?"+":""}${fmtW(d)}</span>`;
+}
+function drawWeightChart(series){
+  const wrap=document.getElementById("wchart"); if(!wrap) return;
+  const pts=series.map(b=>({d:b.date, v:b.kg}));
+  if(pts.length<2){ wrap.innerHTML=""; return; }
+  const W=360,H=170,L=42,R=14,T=14,B=24;
+  let min=Math.min(...pts.map(p=>p.v)), max=Math.max(...pts.map(p=>p.v));
+  if(min===max){min-=1;max+=1;} const pad=(max-min)*0.15; min-=pad; max+=pad;
+  const X=i=>L+(W-L-R)*(i/(pts.length-1)), Y=v=>T+(H-T-B)*(1-(v-min)/(max-min));
+  let grid=""; for(let k=0;k<=3;k++){ const v=min+(max-min)*k/3,y=Y(v); grid+=`<line class="gridline" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"/><text class="axislbl" x="${L-6}" y="${y+3}" text-anchor="end">${fmtW(v)}</text>`; }
+  const line=pts.map((p,i)=>(i?"L":"M")+X(i).toFixed(1)+" "+Y(p.v).toFixed(1)).join(" ");
+  const area=`M${X(0).toFixed(1)} ${(H-B).toFixed(1)} `+pts.map((p,i)=>"L"+X(i).toFixed(1)+" "+Y(p.v).toFixed(1)).join(" ")+` L${X(pts.length-1).toFixed(1)} ${(H-B).toFixed(1)} Z`;
+  let dots=""; pts.forEach((p,i)=>{ const last=i===pts.length-1; dots+=`<circle class="dot${last?" last":""}" cx="${X(i).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="${last?4:2.5}"/>`; if(last) dots+=`<text class="lastlbl" x="${Math.min(X(i),W-R-14)}" y="${Math.max(Y(p.v)-9,11)}" text-anchor="middle">${fmtW(p.v)}</text>`; });
+  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolução do peso">
+    <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--line)" stop-opacity="0.22"/><stop offset="1" stop-color="var(--line)" stop-opacity="0"/></linearGradient></defs>
+    ${grid}<text class="axislbl" x="${L}" y="${H-7}">${fmtDate(pts[0].d)}</text><text class="axislbl" x="${W-R}" y="${H-7}" text-anchor="end">${fmtDate(pts[pts.length-1].d)}</text>
+    <path d="${area}" fill="url(#wg)"/><path class="serie" d="${line}"/>${dots}</svg>`;
+}
+function bodyForm(date){
+  const b = bodyByDate(date) || {date, m:{}};
+  const mm = b.m || {};
+  openModal(`<h2>Registro corporal</h2>
+    <div class="btnrow">
+      <div class="field" style="flex:1"><label for="bf-date">Data</label>
+      <input id="bf-date" type="date" value="${date}" max="${todayStr()}"></div>
+      <div class="field" style="flex:1"><label for="bf-kg">Peso (kg)</label>
+      <input id="bf-kg" type="number" inputmode="decimal" step="any" value="${typeof b.kg==="number"?b.kg:""}" placeholder="kg"></div>
+    </div>
+    <div class="field"><label for="bf-bf">Gordura corporal — BF % (bioimpedância)</label>
+    <input id="bf-bf" type="number" inputmode="decimal" step="any" value="${typeof b.bf==="number"?b.bf:""}" placeholder="%"></div>
+    <div class="field"><label>Medidas (cm) — opcional</label>
+      <div class="measgrid">
+        ${MEAS.map(m=>`<div class="field"><label for="bf-${m.k}" style="font-weight:600;color:var(--faint)">${m.l}</label>
+          <input id="bf-${m.k}" type="number" inputmode="decimal" step="any" value="${typeof mm[m.k]==="number"?mm[m.k]:""}"></div>`).join("")}
+      </div>
+    </div>
+    <div class="field"><label for="bf-note">Observação</label>
+    <input id="bf-note" value="${b.note?esc(b.note):""}" placeholder="opcional" maxlength="120"></div>
+    <button class="btn" data-action="save-body" data-orig="${date}">Salvar</button>
+    ${bodyByDate(date)?`<button class="btn danger sm" data-action="del-body" data-d="${date}" style="margin-top:8px">Excluir este dia</button>`:""}`);
+}
+
+/* ===================== ações (alimentação/evolução) ===================== */
+document.addEventListener("click", ev => {
+  const el = ev.target.closest("[data-action], [data-seg]");
+  if(!el) return;
+  if(el.dataset.seg){ // segmentos (tipo refeição/lanche) dentro de modais
+    const grp=el.dataset.seg;
+    sheet.querySelectorAll(`[data-seg="${grp}"]`).forEach(b=>b.classList.toggle("on", b===el));
+    const hid = grp==="kind"?"ff-kind":grp==="pkind"?"pf-kind":null;
+    if(hid) document.getElementById(hid).value = el.dataset.v;
+    return;
+  }
+  const a = el.dataset.action;
+
+  if(a === "tab"){ const t=el.dataset.t; location.hash = t==="treino"?"#/":t==="food"?"#/food":"#/progress"; }
+
+  else if(a === "food-day"){ foodDay = shiftDay(foodDay, +el.dataset.d); render(); }
+  else if(a === "add-food"){ foodForm(null); }
+  else if(a === "edit-food"){ foodForm(db.food.find(f=>f.id===el.dataset.id)); }
+  else if(a === "save-food"){
+    const name=document.getElementById("ff-name").value.trim();
+    const meal=document.getElementById("ff-meal").value.trim()||"Refeição";
+    const time=document.getElementById("ff-time").value||nowHM();
+    const kind=document.getElementById("ff-kind").value;
+    const binge=document.getElementById("ff-binge").checked;
+    const planned=!document.getElementById("ff-outside").checked;
+    if(!name){ toast("Escreva o alimento."); return; }
+    const ts=tsFor(foodDay,time);
+    if(el.dataset.id){ const f=db.food.find(x=>x.id===el.dataset.id); Object.assign(f,{name,meal,ts,kind,binge,planned}); }
+    else db.food.push({id:uid(), date:foodDay, ts, name, meal, kind, binge, planned});
+    save(); closeModal(); render();
+  }
+  else if(a === "del-food"){ db.food=db.food.filter(f=>f.id!==el.dataset.id); save(); render(); }
+  else if(a === "plan-tick"){
+    const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
+    const it=m.items.find(x=>x.id===el.dataset.i); if(!it) return;
+    it.done=it.done||{}; if(it.done[foodDay]) delete it.done[foodDay]; else it.done[foodDay]=true;
+    save(); render();
+  }
+  else if(a === "add-urge"){ urgeForm(); }
+  else if(a === "save-urge"){
+    const intensity=+document.getElementById("u-int").value;
+    const time=document.getElementById("u-time").value||nowHM();
+    const gaveIn=document.getElementById("u-gave").checked;
+    db.urges.push({id:uid(), date:foodDay, ts:tsFor(foodDay,time), intensity, gaveIn});
+    save(); closeModal(); render();
+    if(gaveIn) toast("Registrado. Amanhã é um novo dia 💪"); else toast("Boa — urge registrado, você resistiu! 💪");
+  }
+  else if(a === "del-urge"){ db.urges=db.urges.filter(u=>u.id!==el.dataset.id); save(); render(); }
+
+  else if(a === "add-plan"){ planForm(null); }
+  else if(a === "edit-plan"){ planForm(db.plan.find(m=>m.id===el.dataset.id)); }
+  else if(a === "save-plan"){
+    const name=document.getElementById("pf-name").value.trim();
+    const time=document.getElementById("pf-time").value||"";
+    const kind=document.getElementById("pf-kind").value;
+    const fixed=document.getElementById("pf-fixed").checked;
+    const items=document.getElementById("pf-items").value.split("\n").map(s=>s.trim()).filter(Boolean);
+    if(!name){ toast("Dê um nome à refeição."); return; }
+    if(el.dataset.id){
+      const m=db.plan.find(x=>x.id===el.dataset.id);
+      const old={}; m.items.forEach(it=>old[it.name]=it.done||{});
+      m.name=name; m.time=time; m.kind=kind; m.fixed=fixed; m.date=fixed?null:foodDay;
+      m.items=items.map(n=>({id:uid(), name:n, done:old[n]||{}}));
+    } else {
+      db.plan.push({id:uid(), name, time, kind, fixed, date:fixed?null:foodDay, items:items.map(n=>({id:uid(), name:n, done:{}}))});
+    }
+    save(); closeModal(); render();
+  }
+  else if(a === "del-plan"){ if(!confirm("Excluir esta refeição do plano?")) return; db.plan=db.plan.filter(m=>m.id!==el.dataset.id); save(); render(); }
+  else if(a === "copy-plan"){
+    const prev=shiftDay(foodDay,-1);
+    const src=db.plan.filter(m=>!m.fixed && m.date===prev);
+    if(!src.length){ toast("Nada para copiar de ontem."); return; }
+    src.forEach(m=>db.plan.push({id:uid(), name:m.name, time:m.time, kind:m.kind, fixed:false, date:foodDay, items:m.items.map(i=>({id:uid(), name:i.name, done:{}}))}));
+    save(); render(); toast(`${src.length} refeição(ões) copiada(s) de ontem ✓`);
+  }
+
+  else if(a === "body-entry"){ bodyForm(el.dataset.d || todayStr()); }
+  else if(a === "save-body"){
+    const date=document.getElementById("bf-date").value || el.dataset.orig;
+    const kg=parseFloat(String(document.getElementById("bf-kg").value).replace(",","."));
+    const bf=parseFloat(String(document.getElementById("bf-bf").value).replace(",","."));
+    const note=document.getElementById("bf-note").value.trim();
+    const m={}; MEAS.forEach(x=>{ const v=parseFloat(String(document.getElementById("bf-"+x.k).value).replace(",",".")); if(!isNaN(v)) m[x.k]=v; });
+    if(isNaN(kg) && isNaN(bf) && !Object.keys(m).length){ toast("Preencha ao menos o peso."); return; }
+    let e=db.body.find(b=>b.date===date);
+    if(!e){ e={id:uid(), date}; db.body.push(e); }
+    e.kg = isNaN(kg)?undefined:kg; e.bf = isNaN(bf)?undefined:bf; e.m = m; e.note = note;
+    // se mudou a data de um registro existente, remove o antigo
+    if(el.dataset.orig && el.dataset.orig!==date){ db.body=db.body.filter(b=>!(b.date===el.dataset.orig && b.id!==e.id)); }
+    save(); closeModal(); render();
+  }
+  else if(a === "del-body"){ if(!confirm("Excluir o registro deste dia?")) return; db.body=db.body.filter(b=>b.date!==el.dataset.d); save(); closeModal(); render(); }
+
+  else if(a === "do-update"){
+    if(native.isNative){ try{ window.open(APK_URL, "_system"); }catch(e){ location.href = APK_URL; } toast("Baixando… toque no arquivo para instalar."); }
+    else { toast("Atualizando…"); setTimeout(()=>location.reload(), 400); }
+  }
+  else if(a === "dismiss-update"){ const s=document.getElementById("updslot"); if(s) s.innerHTML=""; }
+});
+
 native.init();
 normalizeOrders();
 applyWake();
 render();
 Sync.start();
+checkUpdate();
+document.addEventListener("visibilitychange", () => { if(!document.hidden) checkUpdate(); });
 </script>
 </body>
 </html>
