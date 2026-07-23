@@ -55,6 +55,7 @@ input[type=number]{font-variant-numeric:tabular-nums;}
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .chev{color:var(--faint); font-size:1.2rem; flex:none;}
 .trendmini{font-size:1.25rem; flex:none;}
+.notecard{background:color-mix(in srgb, var(--gold) 11%, var(--surface)); border-color:color-mix(in srgb, var(--gold) 38%, var(--border)); white-space:pre-wrap; font-size:.94rem; line-height:1.5; margin-top:12px;}
 .reord{display:flex; gap:6px; flex:none;}
 .ordbtn{width:42px; height:42px; border-radius:10px; background:var(--surface2); border:1px solid var(--border); font-size:1.15rem; font-weight:800; color:var(--ink);}
 .ordbtn:disabled{opacity:.3;}
@@ -251,6 +252,8 @@ function fmtDate(iso){ const [y,m,d] = iso.split("-"); return d + "/" + m + "/" 
 function daysBetween(a,b){ return Math.abs((new Date(b) - new Date(a)) / 86400000); }
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function fmtNum(n){ return (Math.round(n*10)/10).toLocaleString("pt-BR"); }
+/* peso registrado: mostra exatamente o que foi digitado, sem arredondar */
+function fmtW(n){ return Number(n).toLocaleString("pt-BR", {maximumFractionDigits: 3}); }
 
 const gymById = id => db.gyms.find(g => g.id === id);
 const exById  = id => db.exercises.find(e => e.id === id);
@@ -355,7 +358,7 @@ function summaryLine(exId){
   if(!logs.length) return "Sem registros ainda";
   const l = logs[logs.length-1];
   const best = l.sets.reduce((a,s) => s.weight > a.weight ? s : a, l.sets[0]);
-  return `${fmtDate(l.date)} · ${fmtNum(best.weight)} kg × ${best.reps}`;
+  return `${fmtDate(l.date)} · ${fmtW(best.weight)} kg × ${best.reps}`;
 }
 
 function renderGym(g){
@@ -372,7 +375,7 @@ function renderGym(g){
     const t = computeTrend(e.id);
     const mini = t ? `<span class="trendmini" title="${TREND[t.dir].t}">${TREND[t.dir].em}</span>` : "";
     return `<div class="card tap row" data-action="open-ex" data-gym="${g.id}" data-id="${e.id}">
-      <div class="grow"><h3>${esc(e.name)}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}</h3>
+      <div class="grow"><h3>${esc(e.name)}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}${e.notes ? " 📝" : ""}</h3>
       <div class="sub">${e.targetSets} séries · descanso ${e.restSec}s · ${summaryLine(e.id)}</div></div>
       ${mini}<span class="chev">›</span></div>`;
   }).join("");
@@ -409,7 +412,7 @@ function renderEx(g, e){
       const s = done[i];
       rows += `<div class="setrow done">
         <div class="num">${i+1}</div>
-        <div class="val">${fmtNum(s.weight)} kg</div>
+        <div class="val">${fmtW(s.weight)} kg</div>
         <div class="val">${s.reps} reps</div>
         <button class="ok" data-action="del-set" data-ex="${e.id}" data-i="${i}" aria-label="Apagar série ${i+1}">✓</button>
       </div>`;
@@ -418,7 +421,7 @@ function renderEx(g, e){
       const pw = ref ? String(ref.weight) : "", pr = ref ? String(ref.reps) : "";
       rows += `<div class="setrow">
         <div class="num">${i+1}</div>
-        <input type="number" inputmode="decimal" step="0.5" min="0" id="w${i}" value="${pw}" placeholder="kg" aria-label="Peso da série ${i+1}">
+        <input type="number" inputmode="decimal" step="any" min="0" id="w${i}" value="${pw}" placeholder="kg" aria-label="Peso da série ${i+1}">
         <input type="number" inputmode="numeric" step="1" min="1" id="r${i}" value="${pr}" placeholder="reps" aria-label="Repetições da série ${i+1}">
         <button class="ok" data-action="log-set" data-ex="${e.id}" data-i="${i}" aria-label="Confirmar série ${i+1}">✓</button>
       </div>`;
@@ -432,7 +435,7 @@ function renderEx(g, e){
 
   const hist = logs.slice(-40).reverse().map(l => `
     <div class="hist"><div class="d">${fmtDate(l.date)}${prDates.has(l.date) ? ' <span class="pill pr">🏆 recorde</span>' : ""}</div>
-    <div class="s">${l.sets.map(s => `${fmtNum(s.weight)} kg × ${s.reps}`).join("&ensp;·&ensp;")}</div></div>`).join("");
+    <div class="s">${l.sets.map(s => `${fmtW(s.weight)} kg × ${s.reps}`).join("&ensp;·&ensp;")}</div></div>`).join("");
 
   view.innerHTML = `
     <div class="topbar">
@@ -446,6 +449,8 @@ function renderEx(g, e){
       ${e.gymId === null ? '<span class="pill glob">🌐 em todas as academias</span>' : ""}
       <button class="pill" data-action="edit-ex" data-gym="${g.id}" data-id="${e.id}" style="cursor:pointer">✏️ editar</button>
     </div>
+
+    ${e.notes ? `<div class="card notecard">📝 ${esc(e.notes)}</div>` : ""}
 
     <div class="section"><h2>Treino de hoje · ${fmtDate(todayStr())}</h2>
       <div class="card">
@@ -683,6 +688,9 @@ function exForm(gymId, e){
       <div class="field" style="flex:1"><label for="f-rest">Descanso (s)</label>
       <input id="f-rest" type="number" inputmode="numeric" min="5" max="900" step="5" value="${e ? e.restSec : 90}"></div>
     </div>
+    <div class="field"><label for="f-notes">📝 Observações (opcional)</label>
+    <textarea id="f-notes" maxlength="600" placeholder="Ex.: regulagem do banco no furo 4, pegada média, encosto 2 furos, cabo na polia baixa…">${e && e.notes ? esc(e.notes) : ""}</textarea>
+    <div class="hint">Aparece no topo da tela do exercício, na hora do treino.</div></div>
     <label class="check">
       <input type="checkbox" id="f-global" ${isGlobal ? "checked" : ""}>
       <div class="grow"><div class="t">🌐 Exercício global</div>
@@ -955,11 +963,11 @@ function detectPR(exId, w, r){
   if(!rec) return null; // primeira sessão não conta como recorde
   const newRm = e1rm(w, r);
   if(newRm > rec.rm.v + 0.01) return {kind:"forca", value:fmtNum(newRm), unit:"kg (1RM est.)"};
-  if(w > rec.wt.v + 0.01) return {kind:"peso", value:fmtNum(w), unit:"kg"};
+  if(w > rec.wt.v + 0.01) return {kind:"peso", value:fmtW(w), unit:"kg"};
   // recorde de reps no mesmo peso
   let bestRepsAtW = 0;
   exLogs(exId).forEach(l => l.sets.forEach(s => { if(Math.abs(s.weight - w) < 0.01 && s.reps > bestRepsAtW) bestRepsAtW = s.reps; }));
-  if(bestRepsAtW && r > bestRepsAtW) return {kind:"reps", value:r + " reps", unit:"com " + fmtNum(w) + " kg"};
+  if(bestRepsAtW && r > bestRepsAtW) return {kind:"reps", value:r + " reps", unit:"com " + fmtW(w) + " kg"};
   return null;
 }
 
@@ -1005,12 +1013,13 @@ document.addEventListener("click", ev => {
     const sets = Math.max(1, parseInt(document.getElementById("f-sets").value, 10) || 3);
     const restS = Math.max(5, parseInt(document.getElementById("f-rest").value, 10) || 90);
     const glob = document.getElementById("f-global").checked;
+    const notes = document.getElementById("f-notes").value.trim();
     if(!name){ toast("Dê um nome ao exercício."); return; }
     if(el.dataset.id){
       const e = exById(el.dataset.id);
-      e.name = name; e.targetSets = sets; e.restSec = restS; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
+      e.name = name; e.targetSets = sets; e.restSec = restS; e.notes = notes; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
     } else {
-      db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, targetSets:sets, restSec:restS, order: nextOrder()});
+      db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, targetSets:sets, restSec:restS, notes, order: nextOrder()});
     }
     save(); closeModal(); render();
   }
@@ -1033,7 +1042,7 @@ document.addEventListener("click", ev => {
   }
   else if(a === "do-copy"){
     const e = exById(el.dataset.id), g = gymById(el.dataset.gym);
-    db.exercises.push({id:uid(), gymId:g.id, name:e.name, targetSets:e.targetSets, restSec:e.restSec, order: nextOrder()});
+    db.exercises.push({id:uid(), gymId:g.id, name:e.name, targetSets:e.targetSets, restSec:e.restSec, notes:e.notes||"", order: nextOrder()});
     save(); closeModal(); toast(`Copiado para ${g.name} ✓`);
   }
   else if(a === "toggle-global"){

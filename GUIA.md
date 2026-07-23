@@ -80,6 +80,11 @@ Duas opções:
   academias. Também dá para **copiar** um exercício para outra academia.
 - **Reordenar:** dentro de uma academia, toque em **⇅ Reordenar exercícios**, use as
   setas ↑ ↓ para colocar na ordem que quiser e toque em ✓.
+- **Observações no exercício 📝:** ao criar/editar um exercício, escreva notas como
+  regulagem da máquina, pegada, inclinação. Elas aparecem no topo da tela do
+  exercício, na hora do treino (e um 📝 marca na lista).
+- **Pesos exatos:** o app guarda e mostra o peso exatamente como você digitou
+  (ex.: 21,25 kg), sem arredondar.
 - **Progressão:** o app diz de forma direta se sua **força está subindo, estável ou
   caindo** (com %), mostra sua **força atual** e seu **recorde**. Ao bater um recorde,
   aparece a comemoração **🎉 na hora**. Gráfico com **Força / Peso máx / Volume**.
