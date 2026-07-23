@@ -36,50 +36,23 @@ aceite. É isso que faz o celular **vibrar e notificar mesmo com a tela apagada*
 
 ## 2. Ativar a sincronização (celular ↔ PC)
 
-Assim seus treinos ficam iguais nos dois aparelhos. Você cria um projeto gratuito
-no Firebase **uma vez**:
+A nuvem (Firebase/Firestore) **já vem configurada dentro do app** — você não precisa
+criar projeto nem colar nada. Só definir um **código secreto** e usar o **mesmo** nos
+dois aparelhos:
 
-### Criar o projeto (uma vez só, ~5 min)
+1. Abra o app → **⚙️ Ajustes** → **Sincronização em nuvem** → **Ativar**.
+2. Digite um **código de sincronização** — invente um difícil de adivinhar
+   (ex.: `pedro-treino-8x2k9q`). Ele funciona como a senha do seu "baú" de dados.
+3. No **outro aparelho**, faça o mesmo com o **MESMO código**.
 
-1. Acesse **console.firebase.google.com** e entre com sua conta Google.
-2. Clique em **Adicionar projeto** → dê um nome (ex.: `fitness-global`) →
-   pode **desativar** o Google Analytics → **Criar projeto**.
-3. No menu esquerdo: **Criar** → **Firestore Database** → **Criar banco de dados**
-   → escolha o local `southamerica-east1` → comece em **modo de teste** (ou produção,
-   ver regras abaixo) → **Ativar**.
-4. Ainda no projeto, clique no ícone **`</>`** (Web) para registrar um app Web →
-   dê um apelido → **NÃO** marque Firebase Hosting → **Registrar app**.
-5. Ele mostra um trecho `const firebaseConfig = { apiKey: "...", ... }`.
-   **Copie só o objeto** `{ ... }` (das chaves `{` até `}`).
+Pronto: ao registrar um treino em um aparelho, ele aparece no outro sozinho. Dá para
+editar tanto pelo app quanto pelo navegador — fica tudo igual. O ideal é usar um
+aparelho por vez em cada treino (a nuvem resolve pelo registro mais recente).
 
-### Regras do Firestore (para os dados abrirem/salvarem)
-
-No Firestore → aba **Regras**, cole e publique:
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /vaults/{code} {
-      allow read, write: if true;
-    }
-  }
-}
-```
-
-> O "código de sincronização" que você define no app funciona como uma senha do seu
-> baú de dados. Use um código **longo e difícil de adivinhar** (ex.:
-> `pedro-treino-8x2k9q`). Quem não souber o código não acessa seus dados.
-
-### Ligar no app (nos dois aparelhos)
-
-1. Abra o app → **⚙️ Ajustes** → **Sincronização em nuvem** → **Configurar**.
-2. Cole o `firebaseConfig` no campo indicado.
-3. Defina um **código de sincronização** (o MESMO no celular e no PC).
-4. **Conectar e sincronizar**.
-
-Pronto: ao registrar um treino em um aparelho, ele aparece no outro. O ideal é usar
-um aparelho por vez em cada treino (a nuvem resolve pelo mais recente).
+> **Segurança:** quem não souber o seu código não acessa seus dados (as regras do
+> Firestore impedem listar os baús). Use um código longo. As chaves do Firebase que
+> ficam no app são públicas por natureza (identificam o projeto) e não dão acesso aos
+> seus dados sem o código.
 
 ---
 
