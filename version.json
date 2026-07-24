@@ -1,5 +1,5 @@
 {
-  "version": 5,
-  "notes": "App passa a se atualizar sozinho (sem baixar APK), ícone de halter e correção do Samsung Health.",
+  "version": 6,
+  "notes": "Correção dos minutos de cardio importados (não somar em duplicidade).",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
