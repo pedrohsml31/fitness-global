@@ -1,5 +1,5 @@
 {
-  "version": 3,
-  "notes": "Tempo de cardio em minutos e edição rápida de qualquer dia (toque na faixa).",
+  "version": 4,
+  "notes": "Importar passos e treinos do Samsung Health (Health Connect).",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

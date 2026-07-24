@@ -300,7 +300,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 3;
+const APP_VERSION = 4;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -1598,6 +1598,9 @@ function activitySection(){
         <input id="steps-today" type="number" inputmode="numeric" min="0" value="${typeof t.steps==="number"?t.steps:""}" placeholder="0" style="width:110px; text-align:center">
         <button class="btn ghost sm" data-action="save-activity" style="width:auto">Salvar</button>
       </div>
+      ${native.isNative
+        ? `<button class="btn ghost sm" data-action="health-sync" style="margin-top:12px">🔄 Importar do Samsung Health (Health Connect)</button>`
+        : `<p class="sub" style="margin-top:12px">💡 No app do celular dá para importar passos e treinos automaticamente do Samsung Health (via Health Connect).</p>`}
     </div>
     <div class="card">
       <div class="striprow">${strip}</div>
@@ -1723,6 +1726,44 @@ function bodyForm(date){
     ${bodyByDate(date)?`<button class="btn danger sm" data-action="del-body" data-d="${date}" style="margin-top:8px">Excluir este dia</button>`:""}`);
 }
 
+/* ---------- Samsung Health / Health Connect ---------- */
+function localDateOf(iso){ const d=new Date(iso); return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
+async function importHealth(silent){
+  const H = native.plugin("Health");
+  if(!native.isNative || !H){ if(!silent) toast("Disponível só no app do celular 📱"); return; }
+  try{
+    const av = await H.isHealthAvailable();
+    if(!av || !av.available){ if(!silent && confirm("O Health Connect não está instalado/ativo. Abrir na Play Store?")) { try{ H.showHealthConnectInPlayStore(); }catch(e){} } return; }
+    await H.requestHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS"]});
+    const start = new Date(); start.setDate(start.getDate()-13); start.setHours(0,0,0,0);
+    const end = new Date();
+    let days=0;
+    try{
+      const sr = await H.queryAggregated({startDate:start.toISOString(), endDate:end.toISOString(), dataType:"steps", bucket:"day"});
+      (sr.aggregatedData||[]).forEach(s=>{ if(s.value>0){ const e=bodyEntry(localDateOf(s.startDate)); e.steps=Math.round(s.value); days++; } });
+    }catch(e){ console.warn("steps", e); }
+    try{
+      const wr = await H.queryWorkouts({startDate:start.toISOString(), endDate:end.toISOString(), includeHeartRate:false, includeRoute:false, includeSteps:false});
+      (wr.workouts||[]).forEach(w=>{ const e=bodyEntry(localDateOf(w.startDate)); const t=String(w.workoutType||"").toUpperCase();
+        if(/STRENGTH|WEIGHT|RESISTANCE|GYM/.test(t)) e.musc=true;
+        else { e.cardio=true; const min=Math.round((w.duration||0)/60); if(min>0) e.cardioMin=(e.cardioMin||0)+min; }
+      });
+    }catch(e){ console.warn("workouts", e); }
+    save(); render();
+    if(!silent) toast(days?`Importado do Samsung Health ✓ (${days} dias)`:"Sincronizado — nada novo por enquanto.");
+  }catch(err){ console.warn("health", err); if(!silent) toast("Não deu para importar. Verifique as permissões no Health Connect."); }
+}
+async function autoHealthSync(){
+  if(!native.isNative) return;
+  const H = native.plugin("Health"); if(!H) return;
+  try{
+    const av = await H.isHealthAvailable(); if(!av || !av.available) return;
+    const c = await H.checkHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS"]});
+    const granted = c && Array.isArray(c.permissions) && c.permissions.some(p=>p && Object.values(p).some(v=>v===true));
+    if(granted) importHealth(true);
+  }catch(e){}
+}
+
 /* ===================== ações (alimentação/evolução) ===================== */
 document.addEventListener("click", ev => {
   const el = ev.target.closest("[data-action], [data-seg]");
@@ -1800,6 +1841,7 @@ document.addEventListener("click", ev => {
     save(); render(); toast(`${src.length} refeição(ões) copiada(s) de ontem ✓`);
   }
 
+  else if(a === "health-sync"){ toast("Conectando ao Health Connect…"); importHealth(false); }
   else if(a === "quick-train"){ const e=bodyEntry(todayStr()); const k=el.dataset.t; e[k]=!e[k]; save(); render(); }
   else if(a === "save-activity"){ const e=bodyEntry(todayStr()); const v=parseInt(document.getElementById("steps-today").value,10); e.steps=isNaN(v)?undefined:v; const cm=document.getElementById("cardiomin-today"); if(cm){ const c=parseInt(cm.value,10); e.cardioMin=isNaN(c)?undefined:c; } save(); render(); toast("Salvo ✓"); }
   else if(a === "body-entry"){ bodyForm(el.dataset.d || todayStr()); }
@@ -1836,7 +1878,8 @@ applyWake();
 render();
 Sync.start();
 checkUpdate();
-document.addEventListener("visibilitychange", () => { if(!document.hidden) checkUpdate(); });
+autoHealthSync();
+document.addEventListener("visibilitychange", () => { if(!document.hidden){ checkUpdate(); autoHealthSync(); } });
 </script>
 </body>
 </html>

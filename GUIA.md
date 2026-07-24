@@ -114,9 +114,14 @@ Tudo acima (academias, exercícios, séries, descanso, progressão).
 - **Gráfico de peso**, **média semanal** comparando com semanas anteriores, e
   variação das medidas.
 - **Atividade:** marque com um toque se no dia fez **🏋️ Musculação**, **🏃 Cardio**
-  (ou os dois) e registre os **passos** do dia. Tem uma faixa dos últimos 14 dias e um
-  resumo de 7 dias (dias treinados e média de passos).
-- **Editar qualquer dia** pelo histórico.
+  (ou os dois), o **tempo de cardio (min)** e os **passos** do dia. Tem uma faixa dos
+  últimos 14 dias (toque num dia para editá-lo) e um resumo de 7 dias.
+- **Samsung Health (Health Connect):** no app do celular, toque em
+  **🔄 Importar do Samsung Health** para puxar **passos e treinos** automaticamente.
+  Requer (uma vez): no Samsung Health → Configurações → **Health Connect**, ative a
+  sincronização de *passos* e *exercício*; e conceda a permissão ao Fitness Global na
+  primeira vez. Depois ele sincroniza sozinho ao abrir o app. *(Só no APK do celular.)*
+- **Editar qualquer dia** pelo histórico ou tocando no dia na faixa.
 
 ---
 
