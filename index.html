@@ -300,7 +300,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 2;
+const APP_VERSION = 3;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -1572,11 +1572,11 @@ function bodyByDate(date){ return db.body.find(b=>b.date===date); }
 function bodyEntry(date){ let e=db.body.find(b=>b.date===date); if(!e){ e={id:uid(), date, m:{}}; db.body.push(e); } return e; }
 function activitySection(){
   const t = bodyByDate(todayStr()) || {};
-  let muscD=0, cardioD=0, stepsSum=0, stepsDays=0;
-  for(let i=0;i<7;i++){ const b=bodyByDate(shiftDay(todayStr(),-i)); if(b){ if(b.musc)muscD++; if(b.cardio)cardioD++; if(typeof b.steps==="number"){stepsSum+=b.steps; stepsDays++;} } }
+  let muscD=0, cardioD=0, stepsSum=0, stepsDays=0, cardioMinSum=0;
+  for(let i=0;i<7;i++){ const b=bodyByDate(shiftDay(todayStr(),-i)); if(b){ if(b.musc)muscD++; if(b.cardio)cardioD++; if(typeof b.cardioMin==="number")cardioMinSum+=b.cardioMin; if(typeof b.steps==="number"){stepsSum+=b.steps; stepsDays++;} } }
   const avg = stepsDays?Math.round(stepsSum/stepsDays):null;
   let strip=""; for(let i=13;i>=0;i--){ const d=shiftDay(todayStr(),-i); const b=bodyByDate(d)||{}; const has=b.musc||b.cardio;
-    strip+=`<div class="stripcell ${d===todayStr()?"today":""}">
+    strip+=`<div class="stripcell ${d===todayStr()?"today":""}" data-action="body-entry" data-d="${d}" style="cursor:pointer">
       <div class="sd">${d.slice(8)}/${d.slice(5,7)}</div>
       <div class="si">${b.musc?"🏋️":""}${b.cardio?"🏃":""}${has?"":"·"}</div>
       <div class="ss">${typeof b.steps==="number"?(b.steps>=1000?(b.steps/1000).toFixed(b.steps>=10000?0:1)+"k":b.steps):"—"}</div>
@@ -1588,17 +1588,22 @@ function activitySection(){
         <button class="trainbtn ${t.musc?"on":""}" data-action="quick-train" data-t="musc">🏋️ Musculação</button>
         <button class="trainbtn ${t.cardio?"on":""}" data-action="quick-train" data-t="cardio">🏃 Cardio</button>
       </div>
-      <div class="row" style="gap:8px; margin-top:12px">
-        <span class="sub">Passos hoje:</span>
-        <input id="steps-today" type="number" inputmode="numeric" min="0" value="${typeof t.steps==="number"?t.steps:""}" placeholder="0" style="width:120px; text-align:center">
-        <button class="btn ghost sm" data-action="save-steps" style="width:auto">Salvar</button>
+      ${t.cardio?`<div class="row" style="gap:8px; margin-top:10px">
+        <span class="sub">🏃 Tempo de cardio:</span>
+        <input id="cardiomin-today" type="number" inputmode="numeric" min="0" value="${typeof t.cardioMin==="number"?t.cardioMin:""}" placeholder="min" style="width:90px; text-align:center">
+        <span class="sub">min</span>
+      </div>`:""}
+      <div class="row" style="gap:8px; margin-top:10px">
+        <span class="sub">👣 Passos hoje:</span>
+        <input id="steps-today" type="number" inputmode="numeric" min="0" value="${typeof t.steps==="number"?t.steps:""}" placeholder="0" style="width:110px; text-align:center">
+        <button class="btn ghost sm" data-action="save-activity" style="width:auto">Salvar</button>
       </div>
     </div>
     <div class="card">
       <div class="striprow">${strip}</div>
       <div class="row" style="gap:16px; flex-wrap:wrap; margin-top:6px">
         <div><div class="sub">Musculação (7d)</div><div class="bignumv">${muscD}<small style="font-size:.7rem;color:var(--muted)"> dias</small></div></div>
-        <div><div class="sub">Cardio (7d)</div><div class="bignumv">${cardioD}<small style="font-size:.7rem;color:var(--muted)"> dias</small></div></div>
+        <div><div class="sub">Cardio (7d)</div><div class="bignumv">${cardioD}<small style="font-size:.7rem;color:var(--muted)"> dias${cardioMinSum?` · ${cardioMinSum}min`:""}</small></div></div>
         <div><div class="sub">Passos/dia (7d)</div><div class="bignumv">${avg!=null?avg.toLocaleString("pt-BR"):"—"}</div></div>
       </div>
     </div></div>`;
@@ -1652,7 +1657,7 @@ function renderProgress(){
     <div class="section"><h2>Histórico</h2><div class="card">
       ${db.body.length?[...db.body].sort((a,b)=>a.date<b.date?1:-1).slice(0,60).map(b=>`
         <div class="wkrow" style="cursor:pointer" data-action="body-entry" data-d="${b.date}">
-          <span class="wd">${fmtDate(b.date)} ${b.musc?"🏋️":""}${b.cardio?"🏃":""}${typeof b.steps==="number"?` · ${b.steps.toLocaleString("pt-BR")} passos`:""}</span>
+          <span class="wd">${fmtDate(b.date)} ${b.musc?"🏋️":""}${b.cardio?"🏃"+(typeof b.cardioMin==="number"?b.cardioMin+"min":""):""}${typeof b.steps==="number"?` · ${b.steps.toLocaleString("pt-BR")} passos`:""}</span>
           <span class="wv">${typeof b.kg==="number"?fmtW(b.kg)+" kg":"—"}</span>
           <span class="wdelta" style="color:var(--muted)">${typeof b.bf==="number"?"BF "+fmtW(b.bf)+"%":""} ✎</span></div>`).join("")
         : `<div class="empty">Sem registros ainda.</div>`}
@@ -1702,6 +1707,8 @@ function bodyForm(date){
           <div class="grow"><div class="t">🏃 Cardio</div></div></label>
       </div>
     </div>
+    <div class="field"><label for="bf-cardiomin">Minutos de cardio</label>
+    <input id="bf-cardiomin" type="number" inputmode="numeric" min="0" value="${typeof b.cardioMin==="number"?b.cardioMin:""}" placeholder="min"></div>
     <div class="field"><label for="bf-steps">Passos no dia</label>
     <input id="bf-steps" type="number" inputmode="numeric" min="0" value="${typeof b.steps==="number"?b.steps:""}" placeholder="0"></div>
     <div class="field"><label>Medidas (cm) — opcional</label>
@@ -1794,7 +1801,7 @@ document.addEventListener("click", ev => {
   }
 
   else if(a === "quick-train"){ const e=bodyEntry(todayStr()); const k=el.dataset.t; e[k]=!e[k]; save(); render(); }
-  else if(a === "save-steps"){ const v=parseInt(document.getElementById("steps-today").value,10); const e=bodyEntry(todayStr()); e.steps=isNaN(v)?undefined:v; save(); render(); toast("Passos salvos ✓"); }
+  else if(a === "save-activity"){ const e=bodyEntry(todayStr()); const v=parseInt(document.getElementById("steps-today").value,10); e.steps=isNaN(v)?undefined:v; const cm=document.getElementById("cardiomin-today"); if(cm){ const c=parseInt(cm.value,10); e.cardioMin=isNaN(c)?undefined:c; } save(); render(); toast("Salvo ✓"); }
   else if(a === "body-entry"){ bodyForm(el.dataset.d || todayStr()); }
   else if(a === "save-body"){
     const date=document.getElementById("bf-date").value || el.dataset.orig;
@@ -1804,11 +1811,12 @@ document.addEventListener("click", ev => {
     const m={}; MEAS.forEach(x=>{ const v=parseFloat(String(document.getElementById("bf-"+x.k).value).replace(",",".")); if(!isNaN(v)) m[x.k]=v; });
     const musc=document.getElementById("bf-musc").checked, cardio=document.getElementById("bf-cardio").checked;
     const steps=parseInt(document.getElementById("bf-steps").value,10);
+    const cardioMin=parseInt(document.getElementById("bf-cardiomin").value,10);
     if(isNaN(kg) && isNaN(bf) && !Object.keys(m).length && !musc && !cardio && isNaN(steps)){ toast("Preencha ao menos o peso."); return; }
     let e=db.body.find(b=>b.date===date);
     if(!e){ e={id:uid(), date}; db.body.push(e); }
     e.kg = isNaN(kg)?undefined:kg; e.bf = isNaN(bf)?undefined:bf; e.m = m; e.note = note;
-    e.musc = musc; e.cardio = cardio; e.steps = isNaN(steps)?undefined:steps;
+    e.musc = musc; e.cardio = cardio; e.steps = isNaN(steps)?undefined:steps; e.cardioMin = isNaN(cardioMin)?undefined:cardioMin;
     // se mudou a data de um registro existente, remove o antigo
     if(el.dataset.orig && el.dataset.orig!==date){ db.body=db.body.filter(b=>!(b.date===el.dataset.orig && b.id!==e.id)); }
     save(); closeModal(); render();

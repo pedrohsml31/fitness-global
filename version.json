@@ -1,5 +1,5 @@
 {
-  "version": 2,
-  "notes": "Registro de musculação/cardio por dia e passos, com resumo semanal.",
+  "version": 3,
+  "notes": "Tempo de cardio em minutos e edição rápida de qualquer dia (toque na faixa).",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
