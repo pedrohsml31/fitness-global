@@ -118,20 +118,26 @@ Tudo acima (academias, exercícios, séries, descanso, progressão).
   últimos 14 dias (toque num dia para editá-lo) e um resumo de 7 dias.
 - **Samsung Health (Health Connect):** no app do celular, toque em
   **🔄 Importar do Samsung Health** para puxar **passos e treinos** automaticamente.
-  Requer (uma vez): no Samsung Health → Configurações → **Health Connect**, ative a
-  sincronização de *passos* e *exercício*; e conceda a permissão ao Fitness Global na
-  primeira vez. Depois ele sincroniza sozinho ao abrir o app. *(Só no APK do celular.)*
+  Configuração (uma vez), no app **Health Connect** ("Saúde Connect"):
+  1. Em **Permissões de apps / Dados e acesso** → **Samsung Health**: permita
+     *gravar* (compartilhar) **Passos** e **Exercício**.
+  2. Em **Fitness Global**: permita *ler* **Passos** e **Exercício**.
+  Depois é só abrir o Fitness Global → ele sincroniza sozinho. *(Só no APK do celular.)*
 - **Editar qualquer dia** pelo histórico ou tocando no dia na faixa.
 
 ---
 
 ## 5. Atualizar o app
 
-- **Automático:** quando eu publico uma versão nova, o app mostra um aviso
-  **"Atualização disponível"** — toque em **Atualizar**. No celular ele baixa o APK
-  novo (você só confirma a instalação, exigência do Android). No PC/PWA, recarrega
-  sozinho.
-- **Recompilar você mesmo** depois de editar o `index.html`: rode `recompilar-apk.ps1`.
-  Para o aviso automático aparecer nos aparelhos, aumente o número em **duas** partes:
-  `APP_VERSION` no `index.html` e `"version"` no `version.json` (o mesmo número), e
-  publique. Veja `HOSPEDAR.md`.
+A partir da versão instalada em 24/07, o app **se atualiza sozinho**: o APK carrega o
+app direto do site (`server.url`), então toda melhoria que eu publico aparece
+**automaticamente ao abrir o app** — sem baixar nem reinstalar nada.
+
+- **Você só precisa reinstalar o APK** quando eu mexer em código **nativo** (novo
+  recurso do celular, permissão, ícone). Nesses casos eu aviso.
+- **PC/PWA:** também atualiza sozinho ao recarregar.
+- **Offline:** depois da primeira abertura com internet, funciona offline (fica em
+  cache).
+
+Para recompilar o APK após mudança nativa: `recompilar-apk.ps1` (roda `cap sync` +
+build). Mudança só de `index.html` **não** exige rebuild — é só publicar no GitHub.

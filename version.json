@@ -1,5 +1,5 @@
 {
-  "version": 4,
-  "notes": "Importar passos e treinos do Samsung Health (Health Connect).",
+  "version": 5,
+  "notes": "App passa a se atualizar sozinho (sem baixar APK), ícone de halter e correção do Samsung Health.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
