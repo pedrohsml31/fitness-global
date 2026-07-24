@@ -113,6 +113,9 @@ Tudo acima (academias, exercícios, séries, descanso, progressão).
   quadril, peitoral, ombros, bíceps, antebraço, coxa, panturrilha, pescoço).
 - **Gráfico de peso**, **média semanal** comparando com semanas anteriores, e
   variação das medidas.
+- **Atividade:** marque com um toque se no dia fez **🏋️ Musculação**, **🏃 Cardio**
+  (ou os dois) e registre os **passos** do dia. Tem uma faixa dos últimos 14 dias e um
+  resumo de 7 dias (dias treinados e média de passos).
 - **Editar qualquer dia** pelo histórico.
 
 ---
