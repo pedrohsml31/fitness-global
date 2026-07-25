@@ -1,5 +1,5 @@
 {
-  "version": 7,
-  "notes": "Proteção contra perda de dados, editar série já feita, duração do som e teste de vibração com tela apagada.",
+  "version": 8,
+  "notes": "Sugestão de nome (PT/EN) + foto do exercício; atividades específicas do Samsung Health (caminhada, corrida, musculação…) com classificação ajustável; versão visível na tela inicial; proteção contra perda de dados; editar série já feita; duração do som.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

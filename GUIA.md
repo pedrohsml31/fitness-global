@@ -83,6 +83,12 @@ Duas opções:
 - **Observações no exercício 📝:** ao criar/editar um exercício, escreva notas como
   regulagem da máquina, pegada, inclinação. Elas aparecem no topo da tela do
   exercício, na hora do treino (e um 📝 marca na lista).
+- **🔍 Sugerir nome certo + foto:** escreva como você chama (ex.: "supino maquina") e
+  toque no botão. O app busca numa base de 873 exercícios, sugere o **nome correto em
+  português ou inglês** (você escolhe o idioma) e traz a **foto** do exercício. Ex.:
+  "supino maquina" → *Supino na máquina* / *Machine Bench Press*.
+- **Editar série já registrada:** toque no peso ou nas reps de uma série concluída e
+  mude — as outras séries não são afetadas.
 - **Pesos exatos:** o app guarda e mostra o peso exatamente como você digitou
   (ex.: 21,25 kg), sem arredondar.
 - **Progressão:** o app diz de forma direta se sua **força está subindo, estável ou
@@ -123,6 +129,11 @@ Tudo acima (academias, exercícios, séries, descanso, progressão).
      *gravar* (compartilhar) **Passos** e **Exercício**.
   2. Em **Fitness Global**: permita *ler* **Passos** e **Exercício**.
   Depois é só abrir o Fitness Global → ele sincroniza sozinho. *(Só no APK do celular.)*
+- **Atividades específicas:** o app mostra o que veio do Samsung/relógio com nome e
+  duração (ex.: *🚶 Caminhada · 14min*, *🏋️ Musculação · 66min*). Se um tipo vier como
+  **"Outro treino ❓"**, **toque na etiqueta** para dizer se conta como musculação,
+  cardio ou nada — o app **lembra sua escolha** para aquele tipo nas próximas
+  importações.
 - **Editar qualquer dia** pelo histórico ou tocando no dia na faixa.
 
 ---

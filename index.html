@@ -260,6 +260,17 @@ input[type=range]{accent-color:var(--accent);}
 .stripcell .sd{color:var(--muted); font-weight:800; font-size:.7rem;}
 .stripcell .si{font-size:.82rem; height:17px; line-height:17px;}
 .stripcell .ss{color:var(--faint); font-size:.66rem; font-variant-numeric:tabular-nums;}
+
+/* sugestões de exercício (nome + foto) */
+.suggrow{display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:9px 4px; border-bottom:1px solid var(--border);}
+.suggrow:last-child{border-bottom:none;}
+.suggrow img{width:64px; height:64px; border-radius:10px; object-fit:cover; background:var(--surface2); flex:none;}
+.suggrow .t{font-weight:700; font-size:.95rem;}
+.suggrow .d{color:var(--muted); font-size:.78rem;}
+.exphoto{width:100%; max-height:210px; object-fit:cover; border-radius:var(--radius); border:1px solid var(--border); display:block; margin-top:12px; background:var(--surface2);}
+.exthumb{width:44px; height:44px; border-radius:9px; object-fit:cover; background:var(--surface2); flex:none;}
+.photoprev{display:flex; align-items:center; gap:10px; background:var(--surface2); border:1px solid var(--border); border-radius:11px; padding:8px; margin-bottom:12px;}
+.photoprev img{width:56px; height:56px; border-radius:8px; object-fit:cover; flex:none;}
 </style>
 
 <div id="app"><div id="updslot"></div><div id="view"></div></div>
@@ -300,7 +311,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 7;
+const APP_VERSION = 8;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -315,7 +326,7 @@ function showUpdate(j){
   const slot = document.getElementById("updslot"); if(!slot) return;
   slot.innerHTML = `<div class="updbanner">
     <span style="font-size:1.3rem">⬆️</span>
-    <div class="grow"><b>Atualização disponível</b>
+    <div class="grow"><b>Atualização disponível — v${APP_VERSION} → v${esc(j.version)}</b>
       <div class="sub">${j.notes ? esc(j.notes) : "Nova versão do app."}</div></div>
     <button class="btn sm" style="width:auto" data-action="do-update">Atualizar</button>
     <button class="xbtn" data-action="dismiss-update" aria-label="Dispensar">✕</button></div>`;
@@ -457,6 +468,7 @@ function renderHome(){
   view.innerHTML = `
     <div class="topbar">
       <h1><span class="brand">▮</span> Fitness Global</h1>
+      <span class="pill" title="Versão do app">v${APP_VERSION}</span>
       <button class="iconbtn" data-action="go" data-h="#/settings" aria-label="Ajustes">⚙️</button>
     </div>
     <div class="section"><h2>Minhas academias ${Sync.badge()}</h2>
@@ -488,6 +500,7 @@ function renderGym(g){
     const t = computeTrend(e.id);
     const mini = t ? `<span class="trendmini" title="${TREND[t.dir].t}">${TREND[t.dir].em}</span>` : "";
     return `<div class="card tap row" data-action="open-ex" data-gym="${g.id}" data-id="${e.id}">
+      ${e.photo ? `<img class="exthumb" src="${esc(e.photo)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ""}
       <div class="grow"><h3>${esc(e.name)}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}${e.notes ? " 📝" : ""}</h3>
       <div class="sub">${e.targetSets} séries · descanso ${e.restSec}s · ${summaryLine(e.id)}</div></div>
       ${mini}<span class="chev">›</span></div>`;
@@ -563,6 +576,7 @@ function renderEx(g, e){
       <button class="pill" data-action="edit-ex" data-gym="${g.id}" data-id="${e.id}" style="cursor:pointer">✏️ editar</button>
     </div>
 
+    ${e.photo ? `<img class="exphoto" src="${esc(e.photo)}" alt="Foto do exercício ${esc(e.name)}" loading="lazy" onerror="this.style.display='none'">` : ""}
     ${e.notes ? `<div class="card notecard">📝 ${esc(e.notes)}</div>` : ""}
 
     <div class="section"><h2>Treino de hoje · ${fmtDate(todayStr())}</h2>
@@ -800,7 +814,7 @@ function renderSettings(){
         <button class="btn danger sm" style="width:auto" data-action="wipe">Apagar</button>
       </div>
     </div></div>
-    <p class="sub" style="margin-top:10px">${native.isNative ? "Rodando como app instalado 📱" : "Rodando no navegador"} · v1</p>`;
+    <p class="sub" style="margin-top:10px">${native.isNative ? "Rodando como app instalado 📱" : "Rodando no navegador"} · <b>versão ${APP_VERSION}</b></p>`;
 }
 
 /* ===================== modal ===================== */
@@ -816,27 +830,50 @@ function gymForm(g){
     <button class="btn" data-action="save-gym" data-id="${g ? g.id : ""}">Salvar</button>`);
   setTimeout(() => document.getElementById("f-name").focus(), 50);
 }
-function exForm(gymId, e){
-  const isGlobal = e ? e.gymId === null : false;
+/* guarda o que já está digitado, para o sugeridor não perder nada */
+let exFormCtx = null;
+function exFormSnapshot(){
+  if(!exFormCtx) return;
+  const g = id => document.getElementById(id);
+  if(g("f-name")) exFormCtx.name = g("f-name").value;
+  if(g("f-sets")) exFormCtx.sets = g("f-sets").value;
+  if(g("f-rest")) exFormCtx.rest = g("f-rest").value;
+  if(g("f-notes")) exFormCtx.notes = g("f-notes").value;
+  if(g("f-global")) exFormCtx.global = g("f-global").checked;
+  if(g("f-photo")) exFormCtx.photo = g("f-photo").value;
+}
+function exForm(gymId, e, pre){
+  const v = Object.assign({
+    name: e ? e.name : "", sets: e ? e.targetSets : 3, rest: e ? e.restSec : 90,
+    notes: (e && e.notes) || "", global: e ? e.gymId === null : false, photo: (e && e.photo) || ""
+  }, pre || {});
+  exFormCtx = {gymId, id: e ? e.id : "", name:v.name, sets:v.sets, rest:v.rest, notes:v.notes, global:v.global, photo:v.photo};
   openModal(`<h2>${e ? "Editar exercício" : "Novo exercício"}</h2>
     <div class="field"><label for="f-name">Nome</label>
-    <input id="f-name" value="${e ? esc(e.name) : ""}" placeholder="Ex.: Supino reto" maxlength="60"></div>
+    <input id="f-name" value="${esc(v.name)}" placeholder="Ex.: Supino reto" maxlength="60">
+    <button class="btn ghost sm" data-action="suggest-name" style="margin-top:8px">🔍 Sugerir nome certo + foto</button>
+    <div class="hint">Escreva como você chama (ex.: "supino maquina") e toque acima.</div></div>
+    ${v.photo ? `<div class="photoprev"><img src="${esc(v.photo)}" alt="">
+      <div class="grow"><div class="t" style="font-size:.88rem">Foto do exercício</div>
+      <div class="d" style="font-size:.76rem;color:var(--muted)">Aparece na tela do exercício</div></div>
+      <button class="xbtn" data-action="rm-photo" aria-label="Remover foto">✕</button></div>` : ""}
+    <input type="hidden" id="f-photo" value="${esc(v.photo)}">
     <div class="btnrow">
       <div class="field" style="flex:1"><label for="f-sets">Séries alvo</label>
-      <input id="f-sets" type="number" inputmode="numeric" min="1" max="20" value="${e ? e.targetSets : 3}"></div>
+      <input id="f-sets" type="number" inputmode="numeric" min="1" max="20" value="${esc(v.sets)}"></div>
       <div class="field" style="flex:1"><label for="f-rest">Descanso (s)</label>
-      <input id="f-rest" type="number" inputmode="numeric" min="5" max="900" step="5" value="${e ? e.restSec : 90}"></div>
+      <input id="f-rest" type="number" inputmode="numeric" min="5" max="900" step="5" value="${esc(v.rest)}"></div>
     </div>
     <div class="field"><label for="f-notes">📝 Observações (opcional)</label>
-    <textarea id="f-notes" maxlength="600" placeholder="Ex.: regulagem do banco no furo 4, pegada média, encosto 2 furos, cabo na polia baixa…">${e && e.notes ? esc(e.notes) : ""}</textarea>
+    <textarea id="f-notes" maxlength="600" placeholder="Ex.: regulagem do banco no furo 4, pegada média, encosto 2 furos, cabo na polia baixa…">${esc(v.notes)}</textarea>
     <div class="hint">Aparece no topo da tela do exercício, na hora do treino.</div></div>
     <label class="check">
-      <input type="checkbox" id="f-global" ${isGlobal ? "checked" : ""}>
+      <input type="checkbox" id="f-global" ${v.global ? "checked" : ""}>
       <div class="grow"><div class="t">🌐 Exercício global</div>
       <div class="d">Aparece em TODAS as academias que você registrar</div></div>
     </label>
     <button class="btn" data-action="save-ex" data-gym="${gymId}" data-id="${e ? e.id : ""}">Salvar</button>`);
-  setTimeout(() => document.getElementById("f-name").focus(), 50);
+  setTimeout(() => { const n = document.getElementById("f-name"); if(n) n.focus(); }, 50);
 }
 function syncForm(){
   const cur = db.settings.sync || {};
@@ -1204,19 +1241,33 @@ document.addEventListener("click", ev => {
   }
 
   else if(a === "add-ex") exForm(el.dataset.gym, null);
+  else if(a === "suggest-name"){ openSuggest(); }
+  else if(a === "sugg-lang"){ suggState.lang = el.dataset.v; renderSuggest(); }
+  else if(a === "sugg-back"){ const c = exFormCtx; if(c) exForm(c.gymId, c.id ? exById(c.id) : null, c); else closeModal(); }
+  else if(a === "pick-sugg"){
+    const x = suggState.results[+el.dataset.i]; if(!x) return;
+    const c = exFormCtx || {gymId: route().gymId, id: ""};
+    c.name = suggState.lang === "pt" ? ptNameOf(x.n, x.e) : x.n;
+    c.photo = ExDb.img(x.i);
+    exForm(c.gymId, c.id ? exById(c.id) : null, c);
+    toast("Nome e foto aplicados ✓");
+  }
+  else if(a === "rm-photo"){ exFormSnapshot(); const c = exFormCtx; c.photo = ""; exForm(c.gymId, c.id ? exById(c.id) : null, c); }
   else if(a === "save-ex"){
     const name = document.getElementById("f-name").value.trim();
     const sets = Math.max(1, parseInt(document.getElementById("f-sets").value, 10) || 3);
     const restS = Math.max(5, parseInt(document.getElementById("f-rest").value, 10) || 90);
     const glob = document.getElementById("f-global").checked;
     const notes = document.getElementById("f-notes").value.trim();
+    const photo = (document.getElementById("f-photo") || {value:""}).value;
     if(!name){ toast("Dê um nome ao exercício."); return; }
     if(el.dataset.id){
       const e = exById(el.dataset.id);
-      e.name = name; e.targetSets = sets; e.restSec = restS; e.notes = notes; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
+      e.name = name; e.targetSets = sets; e.restSec = restS; e.notes = notes; e.photo = photo; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
     } else {
-      db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, targetSets:sets, restSec:restS, notes, order: nextOrder()});
+      db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, targetSets:sets, restSec:restS, notes, photo, order: nextOrder()});
     }
+    exFormCtx = null;
     save(); closeModal(); render();
   }
   else if(a === "ex-menu"){
@@ -1238,7 +1289,7 @@ document.addEventListener("click", ev => {
   }
   else if(a === "do-copy"){
     const e = exById(el.dataset.id), g = gymById(el.dataset.gym);
-    db.exercises.push({id:uid(), gymId:g.id, name:e.name, targetSets:e.targetSets, restSec:e.restSec, notes:e.notes||"", order: nextOrder()});
+    db.exercises.push({id:uid(), gymId:g.id, name:e.name, targetSets:e.targetSets, restSec:e.restSec, notes:e.notes||"", photo:e.photo||"", order: nextOrder()});
     save(); closeModal(); toast(`Copiado para ${g.name} ✓`);
   }
   else if(a === "toggle-global"){
@@ -1413,6 +1464,157 @@ sheet.addEventListener("keydown", ev => {
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
   navigator.serviceWorker.register("./sw.js").catch(() => {});
 }
+/* ===================== SUGESTÃO DE EXERCÍCIOS (nome + foto) ===================== */
+/* Base pública free-exercise-db (873 exercícios com fotos de domínio público) */
+const EXDB_URL = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json";
+const EXDB_IMG = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/";
+const EXDB_LS  = "fitglobal.exdb.v1";
+
+function norm(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9\s-]/g," ").replace(/\s+/g," ").trim(); }
+
+/* como você escreve (PT) -> como a base chama (EN) */
+const PT2EN = {
+  "supino":"bench press","agachamento":"squat","agacho":"squat","levantamento terra":"deadlift","terra":"deadlift",
+  "remada":"row","puxada":"pulldown","desenvolvimento":"shoulder press","militar":"military press",
+  "rosca":"curl","triceps":"triceps","testa":"skull crusher","frances":"triceps extension","coice":"kickback",
+  "mergulho":"dip","paralelas":"dip","paralela":"dip","barra fixa":"pull up",
+  "crucifixo":"fly","voador":"pec deck","peck deck":"pec deck","peco deck":"pec deck",
+  "elevacao lateral":"lateral raise","elevacao frontal":"front raise","encolhimento":"shrug",
+  "leg press":"leg press","extensora":"leg extension","flexora":"leg curl","panturrilha":"calf raise","gemeos":"calf raise",
+  "afundo":"lunge","passada":"lunge","avanco":"lunge","bulgaro":"bulgarian",
+  "abdominal":"crunch","prancha":"plank","elevacao de pernas":"leg raise","gluteo":"glute","gluteos":"glute",
+  "elevacao pelvica":"hip thrust","adutora":"hip adduction","abdutora":"hip abduction",
+  "pullover":"pullover","hiperextensao":"hyperextension","lombar":"hyperextension",
+  "serrote":"one arm dumbbell row","cavalinho":"t-bar row","punho":"wrist curl","antebraco":"wrist curl",
+  "cadeira":"machine","mesa":"lying","maquina":"machine","halteres":"dumbbell","halter":"dumbbell","haltere":"dumbbell",
+  "barra":"barbell","barra w":"e-z curl bar","polia":"cable","pulley":"cable","cabo":"cable","corda":"rope",
+  "smith":"smith machine","hack":"hack","livre":"barbell","guiado":"machine",
+  "inclinado":"incline","declinado":"decline","reto":"flat","sentado":"seated","em pe":"standing","deitado":"lying",
+  "pegada":"grip","aberta":"wide","fechada":"close","neutra":"neutral","unilateral":"one arm",
+  "martelo":"hammer","inverso":"reverse","invertida":"reverse","invertido":"reverse","alternada":"alternate","alternado":"alternate",
+  "scott":"preacher","concentrada":"concentration","frontal":"front","nuca":"behind neck",
+  "romeno":"romanian","sumo":"sumo","stiff":"stiff","peito":"chest","costas":"back","ombro":"shoulders",
+  "biceps":"biceps","quadriceps":"quadriceps","posterior":"hamstrings","perna":"leg","pernas":"legs"
+};
+/* movimento em inglês -> nome usual em português (frases longas primeiro) */
+const EN2PT_MOVE = [
+  ["guillotine bench press","Supino guilhotina"],["incline bench press","Supino inclinado"],["decline bench press","Supino declinado"],
+  ["close-grip bench press","Supino pegada fechada"],["bench press","Supino"],["chest press","Supino máquina"],
+  ["pec deck","Voador (peck deck)"],["chest fly","Crucifixo"],["reverse fly","Crucifixo inverso"],["rear delt","Crucifixo inverso"],["fly","Crucifixo"],
+  ["push-up","Flexão"],["pushup","Flexão"],["push up","Flexão"],["dip","Paralelas"],["pullover","Pullover"],
+  ["front squat","Agachamento frontal"],["hack squat","Agachamento hack"],["split squat","Agachamento unilateral"],
+  ["full squat","Agachamento completo"],["squat","Agachamento"],
+  ["leg press","Leg press"],["leg extension","Cadeira extensora"],["leg curl","Mesa flexora"],
+  ["calf press","Panturrilha no leg press"],["calf raise","Panturrilha"],
+  ["lunge","Afundo"],["step-up","Step-up"],["hip thrust","Elevação pélvica"],["glute bridge","Ponte de glúteo"],
+  ["hip adduction","Cadeira adutora"],["hip abduction","Cadeira abdutora"],
+  ["romanian deadlift","Terra romeno"],["stiff leg deadlift","Stiff"],["sumo deadlift","Terra sumô"],["deadlift","Levantamento terra"],
+  ["good morning","Good morning"],["hyperextension","Hiperextensão lombar"],
+  ["lat pulldown","Puxada"],["pulldown","Puxada"],["chin-up","Barra fixa supinada"],["pull-up","Barra fixa"],["pullup","Barra fixa"],
+  ["bent over row","Remada curvada"],["upright row","Remada alta"],["t-bar row","Remada cavalinho"],["row","Remada"],
+  ["shoulder shrug","Encolhimento"],["shrug","Encolhimento"],
+  ["arnold press","Desenvolvimento Arnold"],["military press","Desenvolvimento militar"],["overhead press","Desenvolvimento"],
+  ["shoulder press","Desenvolvimento"],["lateral raise","Elevação lateral"],["front raise","Elevação frontal"],["face pull","Face pull"],
+  ["hammer curl","Rosca martelo"],["preacher curl","Rosca scott"],["concentration curl","Rosca concentrada"],
+  ["wrist curl","Rosca de punho"],["curl","Rosca"],
+  ["skull crusher","Tríceps testa"],["lying triceps extension","Tríceps testa"],["triceps extension","Tríceps francês"],
+  ["pushdown","Tríceps na polia"],["kickback","Tríceps coice"],
+  ["crunch","Abdominal"],["sit-up","Abdominal"],["situp","Abdominal"],["plank","Prancha"],["leg raise","Elevação de pernas"],
+  ["russian twist","Russian twist"]
+];
+const EQUIP_PT = {"barbell":"com barra","dumbbell":"com halteres","cable":"na polia","machine":"na máquina",
+  "smith machine":"no Smith","kettlebells":"com kettlebell","body only":"livre","bands":"com elástico",
+  "e-z curl bar":"com barra W","exercise ball":"com bola","medicine ball":"com bola","foam roll":"com rolo","other":""};
+const MOD_PT = [["incline","inclinado"],["decline","declinado"],["seated","sentado"],["standing","em pé"],
+  ["lying","deitado"],["one arm","unilateral"],["single-arm","unilateral"],["alternate","alternado"],
+  ["close-grip","pegada fechada"],["wide-grip","pegada aberta"],["wide grip","pegada aberta"],["reverse","invertido"],
+  ["behind neck","atrás da nuca"],["bulgarian","búlgaro"],["hammer","martelo"]];
+
+function ptNameOf(en, equipment){
+  const s = " " + norm(en) + " ";
+  let move = null;
+  for(const [k,v] of EN2PT_MOVE){ if(s.includes(norm(k))){ move = v; break; } }
+  if(!move) return en;                                   // sem tradução conhecida: mantém o inglês
+  const mods = [];
+  MOD_PT.forEach(([k,v]) => { if(s.includes(norm(k)) && !norm(move).includes(norm(v))) mods.push(v); });
+  let eq = EQUIP_PT[norm(equipment)] !== undefined ? EQUIP_PT[norm(equipment)] : "";
+  if(eq && norm(move).includes(norm(eq.replace(/^(com|na|no)\s+/,"")))) eq = "";
+  return [move, mods.join(" "), eq].filter(Boolean).join(" ").replace(/\s+/g," ").trim();
+}
+
+const ExDb = {
+  list: null, loading: false,
+  async load(){
+    if(this.list) return this.list;
+    try{ const c = localStorage.getItem(EXDB_LS); if(c){ this.list = JSON.parse(c); return this.list; } }catch(e){}
+    this.loading = true;
+    const r = await fetch(EXDB_URL, {cache:"force-cache"});
+    const raw = await r.json();
+    this.list = raw.map(x => ({n:x.name, e:x.equipment||"", m:(x.primaryMuscles||[])[0]||"", i:(x.images||[])[0]||""}));
+    this.loading = false;
+    try{ localStorage.setItem(EXDB_LS, JSON.stringify(this.list)); }catch(e){}   // cache (~90 KB)
+    return this.list;
+  },
+  search(q){
+    if(!this.list) return [];
+    const query = norm(q);
+    let en = " " + query + " ";
+    Object.keys(PT2EN).sort((a,b) => b.length - a.length).forEach(k => {
+      if(en.includes(" " + k + " ") || en.includes(k)) en = en.split(k).join(" " + PT2EN[k] + " ");
+    });
+    const toks = [...new Set((en + " " + query).split(/\s+/).filter(t => t.length > 2))];
+    if(!toks.length) return [];
+    return this.list.map(x => {
+      const hay = norm(x.n + " " + x.e + " " + x.m);
+      let sc = 0;
+      toks.forEach(t => { if(hay.includes(t)) sc += t.length + (norm(x.n).includes(t) ? 3 : 0); });
+      return {x, sc};
+    }).filter(r => r.sc > 0).sort((a,b) => b.sc - a.sc).slice(0, 12).map(r => r.x);
+  },
+  img(path){ return path ? EXDB_IMG + path : ""; }
+};
+
+let suggState = {lang:"pt", results:[], query:""};
+async function openSuggest(){
+  const q = (document.getElementById("f-name") || {}).value || "";
+  exFormSnapshot();                                        // guarda o que já foi digitado
+  if(!q.trim()){ toast("Escreva o nome do exercício primeiro."); return; }
+  suggState.query = q;
+  openModal(`<h2>🔍 Buscando "${esc(q)}"…</h2><div class="empty">Consultando a base de exercícios…</div>`);
+  try{
+    await ExDb.load();
+    suggState.results = ExDb.search(q);
+    renderSuggest();
+  }catch(e){
+    openModal(`<h2>Sugestões</h2><div class="empty">Não deu para carregar a base agora.<br>Confira a internet e tente de novo.</div>
+      <button class="btn ghost" data-action="sugg-back">Voltar</button>`);
+  }
+}
+function renderSuggest(){
+  const rs = suggState.results;
+  if(!rs.length){
+    openModal(`<h2>Sugestões para "${esc(suggState.query)}"</h2>
+      <div class="empty">Nenhum exercício parecido encontrado.<br>Tente outro termo (ex.: "supino", "remada", "rosca").</div>
+      <button class="btn ghost" data-action="sugg-back">Voltar</button>`);
+    return;
+  }
+  openModal(`<h2>Sugestões para "${esc(suggState.query)}"</h2>
+    <div class="field"><label>Nome do exercício em:</label>
+      <div class="seg">
+        <button type="button" data-action="sugg-lang" data-v="pt" class="${suggState.lang==="pt"?"on":""}">Português</button>
+        <button type="button" data-action="sugg-lang" data-v="en" class="${suggState.lang==="en"?"on":""}">Inglês</button>
+      </div></div>
+    ${rs.map((x,i) => {
+      const pt = ptNameOf(x.n, x.e), main = suggState.lang==="pt" ? pt : x.n, alt = suggState.lang==="pt" ? x.n : pt;
+      return `<button class="suggrow" data-action="pick-sugg" data-i="${i}">
+        <img src="${ExDb.img(x.i)}" alt="" loading="lazy">
+        <div style="min-width:0"><div class="t">${esc(main)}</div>
+        <div class="d">${esc(alt)}${x.e?" · "+esc(x.e):""}${x.m?" · "+esc(x.m):""}</div></div></button>`;
+    }).join("")}
+    <button class="btn ghost" data-action="sugg-back" style="margin-top:12px">Voltar sem escolher</button>
+    <p class="sub" style="margin-top:8px">Fotos e nomes: base pública free-exercise-db.</p>`);
+}
+
 /* ===================== ALIMENTAÇÃO & EVOLUÇÃO ===================== */
 let foodDay = todayStr();
 let bodyDay = todayStr();
@@ -1707,6 +1909,14 @@ function activitySection(){
         <input id="steps-today" type="number" inputmode="numeric" min="0" value="${typeof t.steps==="number"?t.steps:""}" placeholder="0" style="width:110px; text-align:center">
         <button class="btn ghost sm" data-action="save-activity" style="width:auto">Salvar</button>
       </div>
+      ${t.acts && t.acts.length ? `<div style="margin-top:12px">
+        <div class="sub">Atividades detectadas hoje (do Samsung Health):</div>
+        <div class="pills" style="margin-top:6px">${t.acts.map(a => { const k = actKind(a.t), inf = actInfo(a.t);
+          const tag = k==="musc" ? "conta como 🏋️" : k==="cardio" ? "conta como 🏃" : k==="skip" ? "não conta" : "❓ toque p/ classificar";
+          return `<button class="pill" data-action="cycle-act" data-t="${esc(a.t)}" style="cursor:pointer${k==="ask"?";color:var(--gold);border-color:var(--gold)":""}">${inf.e} ${esc(inf.l)} · ${a.min}min · ${tag}</button>`;
+        }).join("")}</div>
+        <div class="sub" style="margin-top:6px; font-size:.76rem">Toque numa atividade para alternar entre musculação → cardio → não contar. O app lembra a sua escolha para esse tipo.</div>
+      </div>` : ""}
       ${native.isNative
         ? `<button class="btn ghost sm" data-action="health-sync" style="margin-top:12px">🔄 Importar do Samsung Health (Health Connect)</button>`
         : `<p class="sub" style="margin-top:12px">💡 No app do celular dá para importar passos e treinos automaticamente do Samsung Health (via Health Connect).</p>`}
@@ -1837,6 +2047,39 @@ function bodyForm(date){
 
 /* ---------- Samsung Health / Health Connect ---------- */
 function localDateOf(iso){ const d=new Date(iso); return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
+
+/* tipos de atividade que o Health Connect entrega -> nome em português + como contar */
+const ACT_TYPES = {
+  STRENGTH_TRAINING:{l:"Musculação",e:"🏋️",k:"musc"}, WEIGHTLIFTING:{l:"Levantamento de peso",e:"🏋️",k:"musc"},
+  CALISTHENICS:{l:"Calistenia",e:"🤸",k:"musc"},
+  WALKING:{l:"Caminhada",e:"🚶",k:"cardio"}, RUNNING:{l:"Corrida",e:"🏃",k:"cardio"},
+  RUNNING_TREADMILL:{l:"Corrida na esteira",e:"🏃",k:"cardio"}, HIKING:{l:"Trilha",e:"🥾",k:"cardio"},
+  BIKING:{l:"Bicicleta",e:"🚴",k:"cardio"}, BIKING_STATIONARY:{l:"Bike ergométrica",e:"🚴",k:"cardio"},
+  ELLIPTICAL:{l:"Elíptico",e:"🏃",k:"cardio"}, STAIR_CLIMBING:{l:"Escada",e:"🪜",k:"cardio"},
+  STAIR_CLIMBING_MACHINE:{l:"Escada (máquina)",e:"🪜",k:"cardio"},
+  ROWING:{l:"Remo",e:"🚣",k:"cardio"}, ROWING_MACHINE:{l:"Remo (máquina)",e:"🚣",k:"cardio"},
+  SWIMMING_POOL:{l:"Natação",e:"🏊",k:"cardio"}, SWIMMING_OPEN_WATER:{l:"Natação (mar)",e:"🏊",k:"cardio"},
+  HIGH_INTENSITY_INTERVAL_TRAINING:{l:"HIIT",e:"🔥",k:"cardio"}, BOOT_CAMP:{l:"Funcional",e:"🔥",k:"cardio"},
+  BOXING:{l:"Boxe",e:"🥊",k:"cardio"}, MARTIAL_ARTS:{l:"Artes marciais",e:"🥋",k:"cardio"},
+  SOCCER:{l:"Futebol",e:"⚽",k:"cardio"}, BASKETBALL:{l:"Basquete",e:"🏀",k:"cardio"},
+  TENNIS:{l:"Tênis",e:"🎾",k:"cardio"}, VOLLEYBALL:{l:"Vôlei",e:"🏐",k:"cardio"},
+  DANCING:{l:"Dança",e:"💃",k:"cardio"}, EXERCISE_CLASS:{l:"Aula",e:"🏫",k:"cardio"},
+  GYMNASTICS:{l:"Ginástica",e:"🤸",k:"cardio"}, ROCK_CLIMBING:{l:"Escalada",e:"🧗",k:"cardio"},
+  YOGA:{l:"Yoga",e:"🧘",k:"skip"}, PILATES:{l:"Pilates",e:"🧘",k:"skip"}, STRETCHING:{l:"Alongamento",e:"🤸",k:"skip"},
+  GOLF:{l:"Golfe",e:"⛳",k:"skip"}, OTHER:{l:"Outro treino",e:"❓",k:"ask"}
+};
+function actInfo(t){ return ACT_TYPES[t] || {l:String(t||"Treino").replace(/_/g," ").toLowerCase(), e:"❓", k:"ask"}; }
+/* "ask" = o app não sabe se é musculação ou cardio; você decide tocando na etiqueta */
+function actKind(t){ const m = db.settings.actMap || {}; return m[t] || actInfo(t).k; }
+function deriveActs(e){
+  if(!e || !e.acts || !e.acts.length) return;
+  let musc = false, cardio = false, cmin = 0;
+  e.acts.forEach(a => { const k = actKind(a.t);
+    if(k === "musc") musc = true;
+    else if(k === "cardio"){ cardio = true; cmin += a.min || 0; } });
+  e.musc = musc; e.cardio = cardio; e.cardioMin = cmin || undefined;
+}
+function deriveAllActs(){ db.body.forEach(deriveActs); }
 async function importHealth(silent){
   const H = native.plugin("HealthPlugin");
   if(!native.isNative || !H){ if(!silent) toast("Disponível só no app do celular 📱"); return; }
@@ -1853,12 +2096,19 @@ async function importHealth(silent){
     }catch(e){ console.warn("steps", e); }
     try{
       const wr = await H.queryWorkouts({startDate:start.toISOString(), endDate:end.toISOString(), includeHeartRate:false, includeRoute:false, includeSteps:false});
-      const dayCardio = {};   // soma por dia NESTA importação (idempotente: sobrescreve, não acumula)
-      (wr.workouts||[]).forEach(w=>{ const d=localDateOf(w.startDate); const e=bodyEntry(d); const t=String(w.workoutType||"").toUpperCase();
-        if(/STRENGTH|WEIGHT|RESISTANCE|GYM/.test(t)) e.musc=true;
-        else { e.cardio=true; const min=Math.round((Number(w.duration)||0)/60); dayCardio[d]=(dayCardio[d]||0)+min; }
+      const byDay = {};   // idempotente: cada importação REESCREVE as atividades do dia
+      (wr.workouts||[]).forEach(w=>{
+        const d = localDateOf(w.startDate);
+        const t = String(w.workoutType || "OTHER").toUpperCase();
+        let min = Math.round((Number(w.duration)||0)/60);
+        if(!min && w.startDate && w.endDate) min = Math.round((new Date(w.endDate)-new Date(w.startDate))/60000);
+        (byDay[d] = byDay[d] || []).push({t, min, src:(w.sourceName||"")});
       });
-      Object.keys(dayCardio).forEach(d=>{ if(dayCardio[d]>0) bodyEntry(d).cardioMin = dayCardio[d]; });
+      Object.keys(byDay).forEach(d => {
+        const e = bodyEntry(d);
+        e.acts = byDay[d];
+        deriveActs(e);
+      });
     }catch(e){ console.warn("workouts", e); }
     save(); render();
     if(!silent) toast(days?`Importado do Samsung Health ✓ (${days} dias)`:"Sincronizado — nada novo por enquanto.");
@@ -1953,6 +2203,15 @@ document.addEventListener("click", ev => {
   }
 
   else if(a === "health-sync"){ toast("Conectando ao Health Connect…"); importHealth(false); }
+  else if(a === "cycle-act"){
+    const t = el.dataset.t;
+    const order = ["musc","cardio","skip"];
+    const cur = actKind(t);
+    const next = order[(order.indexOf(cur) + 1) % order.length] || "musc";
+    db.settings.actMap = Object.assign({}, db.settings.actMap, {[t]: next});
+    deriveAllActs(); save(); render();
+    toast(next === "musc" ? "Passa a contar como musculação 🏋️" : next === "cardio" ? "Passa a contar como cardio 🏃" : "Não vai mais contar");
+  }
   else if(a === "quick-train"){ const e=bodyEntry(todayStr()); const k=el.dataset.t; e[k]=!e[k]; save(); render(); }
   else if(a === "save-activity"){ const e=bodyEntry(todayStr()); const v=parseInt(document.getElementById("steps-today").value,10); e.steps=isNaN(v)?undefined:v; const cm=document.getElementById("cardiomin-today"); if(cm){ const c=parseInt(cm.value,10); e.cardioMin=isNaN(c)?undefined:c; } save(); render(); toast("Salvo ✓"); }
   else if(a === "body-entry"){ bodyForm(el.dataset.d || todayStr()); }
@@ -1985,6 +2244,7 @@ document.addEventListener("click", ev => {
 
 native.init();
 normalizeOrders();
+deriveAllActs();
 applyWake();
 render();
 Sync.start();
