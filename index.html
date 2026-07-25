@@ -311,7 +311,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 8;
+const APP_VERSION = 9;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -1057,68 +1057,111 @@ function doVibrate(pattern){
 }
 
 /* ===================== sincronização (Firebase) ===================== */
+/* decodifica os campos "tipados" do Firestore (formato antigo, do SDK) */
+function fsVal(v){
+  if(v == null) return null;
+  if("stringValue" in v) return v.stringValue;
+  if("integerValue" in v) return Number(v.integerValue);
+  if("doubleValue" in v) return Number(v.doubleValue);
+  if("booleanValue" in v) return v.booleanValue;
+  if("nullValue" in v) return null;
+  if("timestampValue" in v) return v.timestampValue;
+  if("arrayValue" in v) return (v.arrayValue.values || []).map(fsVal);
+  if("mapValue" in v){ const o = {}; Object.entries(v.mapValue.fields || {}).forEach(([k,x]) => o[k] = fsVal(x)); return o; }
+  return null;
+}
+/* Sincronização pela API REST do Firestore — funciona no WebView do app
+   (o SDK usa WebChannel/streaming, que costuma falhar dentro de apps). */
 const Sync = {
-  app:null, dbfs:null, unsub:null, state:"off", last:0, applying:false,
+  state:"off", last:0, applying:false, remoteCount:0, lastError:"", pollT:null,
   cfg(){ return db.settings.sync; },
   activeConfig(){ return (this.cfg() && this.cfg().config) || FIREBASE_CONFIG; },
   activeCode(){ return this.cfg() && this.cfg().code; },
-  enabled(){ return !!(this.activeConfig() && this.activeCode()); },
+  enabled(){ const c = this.activeConfig(); return !!(c && c.apiKey && c.projectId && this.activeCode()); },
   /* quantos registros existem — usado para NUNCA sobrescrever a nuvem com um app vazio */
   dataCount(o){ o = o || db; return ["gyms","exercises","logs","food","urges","plan","body"].reduce((n,k)=>n+((o[k]||[]).length),0); },
-  remoteCount: 0,
+  url(){
+    const c = this.activeConfig();
+    return "https://firestore.googleapis.com/v1/projects/" + c.projectId +
+      "/databases/(default)/documents/vaults/" + encodeURIComponent(this.activeCode()) + "?key=" + c.apiKey;
+  },
   badge(){
     if(!this.enabled()) return "";
     const map = {ok:'<span class="cloud" style="color:var(--good)">☁︎ sincronizado</span>',
-      connecting:'<span class="cloud">☁︎ conectando…</span>', error:'<span class="cloud" style="color:var(--bad)">☁︎ erro</span>',
-      off:""};
+      connecting:'<span class="cloud">☁︎ sincronizando…</span>',
+      error:'<span class="cloud" style="color:var(--bad)">☁︎ erro</span>', off:""};
     return map[this.state] || "";
   },
   stateText(){
     if(!this.enabled()) return "Desativada — cada aparelho guarda seus próprios dados";
-    if(this.state === "ok") return "Sincronizado" + (this.last ? " às " + new Date(this.last).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "");
-    if(this.state === "connecting") return "Conectando…";
-    if(this.state === "error") return "Erro ao conectar — confira a configuração e o código";
+    if(this.state === "ok") return "Sincronizado" + (this.last ? " às " + new Date(this.last).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "") +
+      (this.remoteCount ? " · " + this.remoteCount + " registros na nuvem" : "");
+    if(this.state === "connecting") return "Sincronizando…";
+    if(this.state === "error") return "Erro: " + (this.lastError || "sem conexão") + " — toque em Sincronizar para tentar de novo";
     return "Ativando…";
   },
+  data(){ return {gyms:db.gyms, exercises:db.exercises, logs:db.logs, food:db.food, urges:db.urges,
+    plan:db.plan, body:db.body, settings:Object.assign({}, db.settings, {sync:null}), updatedAt:db.updatedAt}; },
+  async getRemote(){
+    const r = await fetch(this.url(), {cache:"no-store"});
+    if(r.status === 404) return null;                       // ainda não existe esse código
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    const f = j.fields || {};
+    if(f.json && f.json.stringValue){                       // formato novo: um JSON só
+      const o = JSON.parse(f.json.stringValue);
+      o.updatedAt = Number((f.updatedAt && f.updatedAt.integerValue) || o.updatedAt || 0);
+      return o;
+    }
+    const o = {};                                           // formato antigo: campos separados
+    Object.keys(f).forEach(k => o[k] = fsVal(f[k]));
+    o.updatedAt = Number(o.updatedAt || 0);
+    return o;
+  },
+  async putRemote(){
+    const body = {fields:{ json:{stringValue: JSON.stringify(this.data())},
+      updatedAt:{integerValue: String(db.updatedAt || Date.now())} }};
+    const u = this.url() + "&updateMask.fieldPaths=json&updateMask.fieldPaths=updatedAt";
+    const r = await fetch(u, {method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+    if(!r.ok) throw new Error("HTTP " + r.status);
+  },
   async start(){
-    const config = this.activeConfig(), code = this.activeCode();
-    if(!config || !code){ this.state = "off"; return; }
-    this.state = "connecting"; this._reflect();
+    if(!this.enabled()){ this.state = "off"; this._reflect(); return; }
+    this.state = "connecting"; this.lastError = ""; this._reflect();
     try{
-      const appMod = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js");
-      const fs = await import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js");
-      this.fs = fs;
-      this.app = appMod.initializeApp(config, "fitsync-" + Math.random().toString(36).slice(2,6));
-      this.dbfs = fs.getFirestore(this.app);
-      const ref = fs.doc(this.dbfs, "vaults", code);
-      // puxa uma vez e resolve conflito por updatedAt
-      const snap = await fs.getDoc(ref);
-      if(snap.exists()){
-        const remote = snap.data();
-        const rc = this.dataCount(remote), lc = this.dataCount(db);
-        this.remoteCount = rc;
-        // PROTEÇÕES contra perda de dados (mais dados sempre vence quando a diferença é grande)
-        if(lc === 0 && rc > 0) this._adopt(remote);                       // aparelho vazio: recupera da nuvem
-        else if(rc === 0 && lc > 0) await this.push();                    // nuvem vazia: envia o daqui
-        else if(rc < lc * 0.5){                                           // nuvem com muito menos: não substitui
-          toast("Este aparelho tem mais dados que a nuvem — nada foi apagado.");
-          await this.push();
-        }
-        else if((remote.updatedAt || 0) > (db.updatedAt || 0)) this._adopt(remote);
-        else if((db.updatedAt || 0) > (remote.updatedAt || 0)) await this.push();
-      } else { this.remoteCount = 0; await this.push(); }
-      // escuta mudanças do outro aparelho
-      this.unsub = fs.onSnapshot(ref, s => {
-        if(!s.exists() || this.applying) return;
-        const remote = s.data();
-        this.remoteCount = this.dataCount(remote);
-        const lc2 = this.dataCount(db);
-        if(lc2 === 0 && this.remoteCount > 0){ this._adopt(remote); return; }
-        if(this.remoteCount < lc2 * 0.5) return;                          // não aceita perda grande vinda da nuvem
-        if((remote.updatedAt || 0) > (db.updatedAt || 0)){ this._adopt(remote); }
-      });
+      const remote = await this.getRemote();
+      const lc = this.dataCount(db);
+      this.remoteCount = remote ? this.dataCount(remote) : 0;
+      if(!remote) await this.putRemote();
+      else if(lc === 0 && this.remoteCount > 0) this._adopt(remote);            // aparelho vazio: recupera
+      else if(this.remoteCount === 0 && lc > 0) await this.putRemote();         // nuvem vazia: envia
+      else if(this.remoteCount < lc * 0.5){                                     // nuvem com muito menos: protege
+        toast("Este aparelho tem mais dados que a nuvem — nada foi apagado.");
+        await this.putRemote();
+      }
+      else if((remote.updatedAt || 0) > (db.updatedAt || 0)) this._adopt(remote);
+      else if((db.updatedAt || 0) > (remote.updatedAt || 0)) await this.putRemote();
       this.state = "ok"; this.last = Date.now(); this._reflect();
-    }catch(e){ console.warn("sync", e); this.state = "error"; this._reflect(); }
+    }catch(e){ this.lastError = (e && e.message) || String(e); this.state = "error"; this._reflect(); }
+    this._poll();
+  },
+  _poll(){
+    clearTimeout(this.pollT);
+    this.pollT = setTimeout(() => { if(document.hidden) this._poll(); else this.check(); }, 25000);
+  },
+  async check(){                        // vê se o outro aparelho mudou algo
+    if(!this.enabled()) return;
+    try{
+      const remote = await this.getRemote();
+      if(remote){
+        this.remoteCount = this.dataCount(remote);
+        const lc = this.dataCount(db);
+        if(lc === 0 && this.remoteCount > 0) this._adopt(remote);
+        else if(this.remoteCount >= lc * 0.5 && (remote.updatedAt || 0) > (db.updatedAt || 0)) this._adopt(remote);
+      }
+      this.state = "ok"; this.last = Date.now(); this.lastError = ""; this._reflect();
+    }catch(e){ this.lastError = (e && e.message) || String(e); this.state = "error"; this._reflect(); }
+    this._poll();
   },
   _adopt(remote){
     this.applying = true;
@@ -1128,42 +1171,36 @@ const Sync = {
     db.settings = Object.assign(seed().settings, remote.settings || {}, {sync:keepSync});
     db.updatedAt = remote.updatedAt || Date.now();
     localStorage.setItem(LS, JSON.stringify(db));
-    this.last = Date.now();
-    this.remoteCount = this.dataCount(db);
+    this.last = Date.now(); this.remoteCount = this.dataCount(db);
+    try{ deriveAllActs(); }catch(e){}
     render(); toast("Dados atualizados da nuvem ☁︎");
     setTimeout(() => this.applying = false, 300);
   },
   /* baixa da nuvem por vontade sua (recuperação) */
   async pull(){
-    if(!this.enabled() || !this.dbfs || !this.fs) { toast("Sincronização não está ativa."); return; }
+    if(!this.enabled()){ toast("Sincronização não está ativa."); return; }
     try{
-      const snap = await this.fs.getDoc(this.fs.doc(this.dbfs, "vaults", this.activeCode()));
-      if(!snap.exists()){ toast("Nada salvo na nuvem com esse código."); return; }
-      const remote = snap.data();
+      const remote = await this.getRemote();
+      if(!remote){ toast("Nada salvo na nuvem com esse código."); return; }
       const rc = this.dataCount(remote);
       if(!rc){ toast("O baú da nuvem está vazio."); return; }
-      if(!confirm(`Baixar da nuvem ${rc} registros e SUBSTITUIR os dados deste aparelho?`)) return;
+      if(!confirm("Baixar da nuvem " + rc + " registros e SUBSTITUIR os dados deste aparelho?")) return;
       this._adopt(remote);
-    }catch(e){ console.warn("pull", e); toast("Não deu para baixar da nuvem."); }
+    }catch(e){ toast("Não deu para baixar: " + ((e && e.message) || "erro")); }
   },
   async push(){
-    if(!this.enabled() || !this.dbfs || !this.fs || this.applying){ return; }
-    // PROTEÇÃO: nunca substituir dados da nuvem por um aparelho vazio
-    if(this.dataCount(db) === 0 && (this.remoteCount || 0) > 0){ console.warn("push bloqueado: app vazio"); return; }
+    if(!this.enabled() || this.applying) return;
+    if(this.dataCount(db) === 0 && (this.remoteCount || 0) > 0) return;      // nunca apaga a nuvem
     try{
-      const ref = this.fs.doc(this.dbfs, "vaults", this.activeCode());
-      const payload = { gyms:db.gyms, exercises:db.exercises, logs:db.logs,
-        food:db.food, urges:db.urges, plan:db.plan, body:db.body,
-        settings:Object.assign({}, db.settings, {sync:null}), updatedAt:db.updatedAt };
-      await this.fs.setDoc(ref, payload);
-      this.state = "ok"; this.last = Date.now(); this._reflect();
-    }catch(e){ console.warn("push", e); this.state = "error"; this._reflect(); }
+      await this.putRemote();
+      this.remoteCount = this.dataCount(db); this.state = "ok"; this.last = Date.now(); this.lastError = "";
+    }catch(e){ this.lastError = (e && e.message) || String(e); this.state = "error"; }
+    this._reflect();
   },
-  async restart(){ if(this.unsub){ try{ this.unsub(); }catch(e){} this.unsub = null; } this.app = null; this.dbfs = null; await this.start(); },
+  async restart(){ clearTimeout(this.pollT); await this.start(); },
   _reflect(){
     const el = document.getElementById("syncstate"); if(el) el.textContent = this.stateText();
-    const b = document.querySelector(".section h2 .cloud"); // atualiza badge se na home
-    if(route().name === "home"){ const h = document.querySelector(".section h2"); if(h && h.textContent.includes("academias")){ /* re-render leve */ } }
+    document.querySelectorAll(".cloud").forEach(x => { const b = this.badge(); if(b) x.outerHTML = b; else x.remove(); });
   }
 };
 
@@ -1461,8 +1498,14 @@ sheet.addEventListener("keydown", ev => {
 });
 
 /* ===================== boot ===================== */
+/* No app instalado (APK) os arquivos já são locais: o service worker só atrasaria a
+   entrada de versões novas (mantinha a antiga em cache). Só usamos no navegador. */
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
-  navigator.serviceWorker.register("./sw.js").catch(() => {});
+  if(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()){
+    navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
+  } else {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  }
 }
 /* ===================== SUGESTÃO DE EXERCÍCIOS (nome + foto) ===================== */
 /* Base pública free-exercise-db (873 exercícios com fotos de domínio público) */
@@ -1917,6 +1960,11 @@ function activitySection(){
         }).join("")}</div>
         <div class="sub" style="margin-top:6px; font-size:.76rem">Toque numa atividade para alternar entre musculação → cardio → não contar. O app lembra a sua escolha para esse tipo.</div>
       </div>` : ""}
+      ${db.settings.lastImport ? `<div class="sub" style="margin-top:10px; font-size:.75rem">
+        Última importação: ${db.settings.lastImport.workouts} treino(s) em ${db.settings.lastImport.dias} dia(s)
+        ${db.settings.lastImport.types && db.settings.lastImport.types.length ? "· tipos: " + esc(db.settings.lastImport.types.join(", ")) : "· nenhum treino encontrado"}
+        · ${new Date(db.settings.lastImport.when).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}
+      </div>` : ""}
       ${native.isNative
         ? `<button class="btn ghost sm" data-action="health-sync" style="margin-top:12px">🔄 Importar do Samsung Health (Health Connect)</button>`
         : `<p class="sub" style="margin-top:12px">💡 No app do celular dá para importar passos e treinos automaticamente do Samsung Health (via Health Connect).</p>`}
@@ -2109,6 +2157,10 @@ async function importHealth(silent){
         e.acts = byDay[d];
         deriveActs(e);
       });
+      const all = (wr.workouts || []);
+      db.settings.lastImport = { when: Date.now(), workouts: all.length,
+        types: [...new Set(all.map(w => String(w.workoutType || "OTHER")))].slice(0, 8),
+        dias: Object.keys(byDay).length };
     }catch(e){ console.warn("workouts", e); }
     save(); render();
     if(!silent) toast(days?`Importado do Samsung Health ✓ (${days} dias)`:"Sincronizado — nada novo por enquanto.");
@@ -2236,7 +2288,10 @@ document.addEventListener("click", ev => {
   else if(a === "del-body"){ if(!confirm("Excluir o registro deste dia?")) return; db.body=db.body.filter(b=>b.date!==el.dataset.d); save(); closeModal(); render(); }
 
   else if(a === "do-update"){
-    if(native.isNative){ try{ window.open(APK_URL, "_system"); }catch(e){ location.href = APK_URL; } toast("Baixando… toque no arquivo para instalar."); }
+    if(native.isNative){
+      try{ window.open(APK_URL, "_system"); }catch(e){ location.href = APK_URL; }
+      alert("Baixando a nova versão…\n\n1) Abra a notificação de download e toque no arquivo\n2) Confirme a instalação (é por cima, não perde dados)\n3) Feche e abra o app — a versão nova entra sozinha");
+    }
     else { toast("Atualizando…"); setTimeout(()=>location.reload(), 400); }
   }
   else if(a === "dismiss-update"){ const s=document.getElementById("updslot"); if(s) s.innerHTML=""; }
@@ -2250,7 +2305,9 @@ render();
 Sync.start();
 checkUpdate();
 autoHealthSync();
-document.addEventListener("visibilitychange", () => { if(!document.hidden){ checkUpdate(); autoHealthSync(); } });
+document.addEventListener("visibilitychange", () => {
+  if(!document.hidden){ checkUpdate(); autoHealthSync(); Sync.check(); }   // ao voltar pro app, confere a nuvem
+});
 </script>
 </body>
 </html>
