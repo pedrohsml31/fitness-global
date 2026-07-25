@@ -300,7 +300,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 6;
+const APP_VERSION = 7;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -327,7 +327,9 @@ function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
 
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], logs:[], food:[], urges:[], plan:[], body:[], settings:{sound:false, autoRest:true, wake:false, vibe:"media", sync:null}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], logs:[], food:[], urges:[], plan:[], body:[], settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null}, updatedAt:0}; }
+/* duração do bipe de fim de série (mesmo som, só mais longo) */
+const SOUNDLEN = { curto:0.45, medio:1.1, longo:2.4 };
 let db;
 try{ db = Object.assign(seed(), JSON.parse(localStorage.getItem(LS)) || {}); }
 catch(e){ db = seed(); }
@@ -523,8 +525,8 @@ function renderEx(g, e){
       const s = done[i];
       rows += `<div class="setrow done">
         <div class="num">${i+1}</div>
-        <div class="val">${fmtW(s.weight)} kg</div>
-        <div class="val">${s.reps} reps</div>
+        <input class="val" type="number" inputmode="decimal" step="any" min="0" value="${s.weight}" data-edit="w" data-ex="${e.id}" data-i="${i}" aria-label="Editar peso da série ${i+1}">
+        <input class="val" type="number" inputmode="numeric" step="1" min="1" value="${s.reps}" data-edit="r" data-ex="${e.id}" data-i="${i}" aria-label="Editar repetições da série ${i+1}">
         <button class="ok" data-action="del-set" data-ex="${e.id}" data-i="${i}" aria-label="Apagar série ${i+1}">✓</button>
       </div>`;
     } else {
@@ -722,6 +724,11 @@ function renderSettings(){
         <div class="d">${embedded ? "Já vem configurado neste app — só defina o mesmo código nos dois aparelhos" : "Salva seus treinos na nuvem e mantém celular e PC iguais"}</div></div>
         <button class="btn ghost sm" style="width:auto" data-action="sync-config">${syncOn ? "Editar" : (embedded ? "Definir código" : "Configurar")}</button>
       </div>
+      ${syncOn ? `<div class="setline">
+        <div class="grow"><div class="t">Restaurar da nuvem</div>
+        <div class="d">Baixa o que está salvo na nuvem e substitui este aparelho</div></div>
+        <button class="btn ghost sm" style="width:auto" data-action="sync-pull">Baixar</button>
+      </div>` : ""}
       ${syncOn ? `<div class="setline"><div class="grow"><div class="t">Desativar</div><div class="d">Para de sincronizar (dados continuam neste aparelho)</div></div>
         <button class="btn danger sm" style="width:auto" data-action="sync-off">Desativar</button></div>` : ""}
     </div></div>
@@ -737,6 +744,15 @@ function renderSettings(){
         <div class="d">${native.isNative ? "Só toca se houver <b>fone conectado</b> (com/sem fio). Sempre vibra." : "No navegador toca sempre que ligado (sem detecção de fone). Sempre vibra."}</div></div>
         <button class="switch${s.sound?" on":""}" data-action="tg" data-k="sound" role="switch" aria-checked="${s.sound}" aria-label="Tocar som ao terminar"></button>
       </div>
+      ${s.sound?`<div class="setline">
+        <div class="grow"><div class="t">Duração do som</div>
+        <div class="d">Mesmo som, só mais prolongado — toque para ouvir</div>
+        <div class="seg" style="margin-top:10px; max-width:280px">
+          <button data-action="set-soundlen" data-v="curto" class="${s.soundLen==="curto"?"on":""}">Curto</button>
+          <button data-action="set-soundlen" data-v="medio" class="${(s.soundLen||"medio")==="medio"?"on":""}">Médio</button>
+          <button data-action="set-soundlen" data-v="longo" class="${s.soundLen==="longo"?"on":""}">Longo</button>
+        </div></div>
+      </div>`:""}
       <div class="setline">
         <div class="grow"><div class="t">Intensidade da vibração</div>
         <div class="d">Toque para testar. ${native.isNative ? "A força depende do aparelho; ajusta a duração/pulsos." : "Duração/pulsos da vibração."}</div>
@@ -746,6 +762,18 @@ function renderSettings(){
           <button data-action="set-vibe" data-v="forte" class="${s.vibe==="forte"?"on":""}">Forte</button>
         </div></div>
       </div>
+      ${native.isNative?`<div class="setline">
+        <div class="grow"><div class="t">Testar com a tela apagada</div>
+        <div class="d">Dispara em 10s — apague a tela e espere para conferir</div></div>
+        <button class="btn ghost sm" style="width:auto" data-action="test-bg">Testar 10s</button>
+      </div>
+      <div class="setline">
+        <div class="grow"><div class="t">⚠️ Não vibra com a tela apagada?</div>
+        <div class="d">É o Android economizando bateria. Em <b>Config. do Android → Apps → Fitness Global</b>:<br>
+        • <b>Bateria</b> → "Sem restrições" / "Não otimizar"<br>
+        • <b>Alarmes e lembretes</b> → permitir<br>
+        • <b>Notificações</b> → permitir</div></div>
+      </div>`:""}
       <div class="setline">
         <div class="grow"><div class="t">Manter tela ligada</div>
         <div class="d">Evita a tela apagar durante o treino (só no navegador)</div></div>
@@ -878,14 +906,18 @@ async function maybeBeep(){
 }
 function playBeep(){
   try{
+    if(!audioCtx){ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
     audioCtx.resume();
+    const dur = SOUNDLEN[db.settings.soundLen] || SOUNDLEN.medio;
+    const t0 = audioCtx.currentTime;
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    o.frequency.value = 880; o.type = "sine";
-    g.gain.setValueAtTime(0.001, audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.9);
+    o.frequency.value = 880; o.type = "sine";     // mesmo som sempre, só a duração muda
+    g.gain.setValueAtTime(0.001, t0);
+    g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
+    g.gain.setValueAtTime(0.25, t0 + dur * 0.75);  // sustenta e só decai no fim
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
     o.connect(g); g.connect(audioCtx.destination);
-    o.start(); o.stop(audioCtx.currentTime + 0.95);
+    o.start(t0); o.stop(t0 + dur + 0.05);
   }catch(e){}
 }
 document.addEventListener("visibilitychange", () => { if(!document.hidden) tickRest(); });
@@ -924,16 +956,35 @@ const native = {
   get cap(){ return window.Capacitor; },
   get isNative(){ return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); },
   plugin(n){ return window.Capacitor && window.Capacitor.Plugins ? window.Capacitor.Plugins[n] : null; },
+  /* o Android ignora alterações num canal existente — por isso o id muda junto com os ajustes */
+  channelId(){ return "rest-v2-" + (db.settings.sound ? "som" : "mudo") + "-" + (db.settings.vibe || "media"); },
   async init(){
     if(!this.isNative) return;
     const LN = this.plugin("LocalNotifications");
     if(LN){
       try{
         await LN.requestPermissions();
-        await LN.createChannel({ id:"rest", name:"Descanso", importance:5, vibration:true,
-          sound: db.settings.sound ? "default" : null, visibility:1 });
+        const ch = { id:this.channelId(), name:"Descanso", description:"Fim do tempo de descanso",
+          importance:5, vibration:true, visibility:1 };
+        if(db.settings.sound) ch.sound = "default";
+        await LN.createChannel(ch);
       }catch(e){}
     }
+  },
+  /* dispara uma notificação de teste em N segundos (para testar com a tela apagada) */
+  async testDelayed(secs){
+    if(!this.isNative) return false;
+    const LN = this.plugin("LocalNotifications"); if(!LN) return false;
+    try{
+      await this.init();
+      await LN.schedule({ notifications:[{
+        id:7002, channelId:this.channelId(), title:"Teste de vibração 📳",
+        body:"Se você sentiu isso com a tela apagada, está funcionando!",
+        schedule:{ at:new Date(Date.now()+secs*1000), allowWhileIdle:true },
+        smallIcon:"ic_stat_icon"
+      }]});
+      return true;
+    }catch(e){ return false; }
   },
   async scheduleRestEnd(atMs, label){
     if(!this.isNative) return;
@@ -941,7 +992,7 @@ const native = {
     try{
       await LN.cancel({ notifications:[{id:7001}] });
       await LN.schedule({ notifications:[{
-        id:7001, channelId:"rest", title:"Descanso concluído 💪",
+        id:7001, channelId:this.channelId(), title:"Descanso concluído 💪",
         body:(label ? label + " — " : "") + "Hora da próxima série!",
         schedule:{ at:new Date(atMs), allowWhileIdle:true },
         smallIcon:"ic_stat_icon"
@@ -975,6 +1026,9 @@ const Sync = {
   activeConfig(){ return (this.cfg() && this.cfg().config) || FIREBASE_CONFIG; },
   activeCode(){ return this.cfg() && this.cfg().code; },
   enabled(){ return !!(this.activeConfig() && this.activeCode()); },
+  /* quantos registros existem — usado para NUNCA sobrescrever a nuvem com um app vazio */
+  dataCount(o){ o = o || db; return ["gyms","exercises","logs","food","urges","plan","body"].reduce((n,k)=>n+((o[k]||[]).length),0); },
+  remoteCount: 0,
   badge(){
     if(!this.enabled()) return "";
     const map = {ok:'<span class="cloud" style="color:var(--good)">☁︎ sincronizado</span>',
@@ -1004,13 +1058,26 @@ const Sync = {
       const snap = await fs.getDoc(ref);
       if(snap.exists()){
         const remote = snap.data();
-        if((remote.updatedAt || 0) > (db.updatedAt || 0)) this._adopt(remote);
-        else if((db.updatedAt || 0) > (remote.updatedAt || 0)) await this.push(true);
-      } else { await this.push(true); }
+        const rc = this.dataCount(remote), lc = this.dataCount(db);
+        this.remoteCount = rc;
+        // PROTEÇÕES contra perda de dados (mais dados sempre vence quando a diferença é grande)
+        if(lc === 0 && rc > 0) this._adopt(remote);                       // aparelho vazio: recupera da nuvem
+        else if(rc === 0 && lc > 0) await this.push();                    // nuvem vazia: envia o daqui
+        else if(rc < lc * 0.5){                                           // nuvem com muito menos: não substitui
+          toast("Este aparelho tem mais dados que a nuvem — nada foi apagado.");
+          await this.push();
+        }
+        else if((remote.updatedAt || 0) > (db.updatedAt || 0)) this._adopt(remote);
+        else if((db.updatedAt || 0) > (remote.updatedAt || 0)) await this.push();
+      } else { this.remoteCount = 0; await this.push(); }
       // escuta mudanças do outro aparelho
       this.unsub = fs.onSnapshot(ref, s => {
         if(!s.exists() || this.applying) return;
         const remote = s.data();
+        this.remoteCount = this.dataCount(remote);
+        const lc2 = this.dataCount(db);
+        if(lc2 === 0 && this.remoteCount > 0){ this._adopt(remote); return; }
+        if(this.remoteCount < lc2 * 0.5) return;                          // não aceita perda grande vinda da nuvem
         if((remote.updatedAt || 0) > (db.updatedAt || 0)){ this._adopt(remote); }
       });
       this.state = "ok"; this.last = Date.now(); this._reflect();
@@ -1025,11 +1092,27 @@ const Sync = {
     db.updatedAt = remote.updatedAt || Date.now();
     localStorage.setItem(LS, JSON.stringify(db));
     this.last = Date.now();
+    this.remoteCount = this.dataCount(db);
     render(); toast("Dados atualizados da nuvem ☁︎");
     setTimeout(() => this.applying = false, 300);
   },
-  async push(force){
+  /* baixa da nuvem por vontade sua (recuperação) */
+  async pull(){
+    if(!this.enabled() || !this.dbfs || !this.fs) { toast("Sincronização não está ativa."); return; }
+    try{
+      const snap = await this.fs.getDoc(this.fs.doc(this.dbfs, "vaults", this.activeCode()));
+      if(!snap.exists()){ toast("Nada salvo na nuvem com esse código."); return; }
+      const remote = snap.data();
+      const rc = this.dataCount(remote);
+      if(!rc){ toast("O baú da nuvem está vazio."); return; }
+      if(!confirm(`Baixar da nuvem ${rc} registros e SUBSTITUIR os dados deste aparelho?`)) return;
+      this._adopt(remote);
+    }catch(e){ console.warn("pull", e); toast("Não deu para baixar da nuvem."); }
+  },
+  async push(){
     if(!this.enabled() || !this.dbfs || !this.fs || this.applying){ return; }
+    // PROTEÇÃO: nunca substituir dados da nuvem por um aparelho vazio
+    if(this.dataCount(db) === 0 && (this.remoteCount || 0) > 0){ console.warn("push bloqueado: app vazio"); return; }
     try{
       const ref = this.fs.doc(this.dbfs, "vaults", this.activeCode());
       const payload = { gyms:db.gyms, exercises:db.exercises, logs:db.logs,
@@ -1226,9 +1309,13 @@ document.addEventListener("click", ev => {
   }
   else if(a === "ask-notif"){ Notification.requestPermission().then(() => render()); }
   else if(a === "set-vibe"){ db.settings.vibe = el.dataset.v; save(); doVibrate(vibePattern()); render(); }
+  else if(a === "set-soundlen"){ db.settings.soundLen = el.dataset.v; save(); playBeep(); native.init(); render(); }
   else if(a === "test-vibe"){
     const ok = doVibrate(vibePattern());
     toast(native.isNative || ok ? "Vibrando! 📳" : "Este aparelho/navegador não vibra (normal no PC).");
+  }
+  else if(a === "test-bg"){
+    native.testDelayed(10).then(ok => toast(ok ? "Apague a tela agora — vibra em 10s 📳" : "Não deu para agendar o teste."));
   }
 
   else if(a === "sync-config") syncForm();
@@ -1251,6 +1338,7 @@ document.addEventListener("click", ev => {
     Sync.restart();
   }
   else if(a === "sync-now"){ toast("Sincronizando…"); Sync.push().then(() => Sync.restart()); }
+  else if(a === "sync-pull"){ Sync.pull(); }
   else if(a === "sync-off"){
     if(!confirm("Desativar a sincronização? Os dados continuam neste aparelho.")) return;
     db.settings.sync = null; save();
@@ -1291,6 +1379,27 @@ document.addEventListener("click", ev => {
     const keepSync = db.settings.sync;
     db = seed(); db.settings.sync = keepSync; save(); location.hash = ""; render();
   }
+});
+
+/* editar uma série já registrada, sem mexer nas outras */
+document.addEventListener("change", ev => {
+  const el = ev.target.closest("[data-edit]");
+  if(!el) return;
+  const l = todayLog(el.dataset.ex); if(!l) return;
+  const s = l.sets[+el.dataset.i]; if(!s) return;
+  if(el.dataset.edit === "w"){
+    const v = parseFloat(String(el.value).replace(",", "."));
+    if(isNaN(v) || v < 0){ el.value = s.weight; return; }
+    s.weight = v;
+  } else {
+    const v = parseInt(el.value, 10);
+    if(!v || v < 1){ el.value = s.reps; return; }
+    s.reps = v;
+  }
+  save();
+  const r = route();
+  if(r.name === "ex"){ const e = exById(r.exId); if(e) renderProg(e, records(e.id)); }  // atualiza só a progressão
+  toast("Série atualizada ✓");
 });
 
 sheet.addEventListener("keydown", ev => {

@@ -129,15 +129,26 @@ Tudo acima (academias, exercícios, séries, descanso, progressão).
 
 ## 5. Atualizar o app
 
-A partir da versão instalada em 24/07, o app **se atualiza sozinho**: o APK carrega o
-app direto do site (`server.url`), então toda melhoria que eu publico aparece
-**automaticamente ao abrir o app** — sem baixar nem reinstalar nada.
+O app avisa **"Atualização disponível"** quando publico uma versão nova; no celular
+você toca em **Atualizar** e ele baixa o APK (o Android pede confirmação da
+instalação). No PC/PWA, recarrega sozinho.
 
-- **Você só precisa reinstalar o APK** quando eu mexer em código **nativo** (novo
-  recurso do celular, permissão, ícone). Nesses casos eu aviso.
-- **PC/PWA:** também atualiza sozinho ao recarregar.
-- **Offline:** depois da primeira abertura com internet, funciona offline (fica em
-  cache).
+> **Por que não atualiza 100% sozinho:** cheguei a fazer o APK carregar o app direto
+> do site (atualização automática sem baixar), mas isso **mudou o "endereço" interno
+> do app e os dados salvos ficaram inacessíveis** — deu perda de dados. Voltei ao
+> modelo seguro: os dados moram sempre no mesmo lugar.
+>
+> Se quiser atualização automática de verdade e sem risco, existe o caminho correto
+> (OTA com o pacote web servido no mesmo endereço interno) — dá para fazer depois,
+> com calma.
 
-Para recompilar o APK após mudança nativa: `recompilar-apk.ps1` (roda `cap sync` +
-build). Mudança só de `index.html` **não** exige rebuild — é só publicar no GitHub.
+### Proteções contra perda de dados (desde 25/07)
+
+- Um aparelho **vazio nunca sobrescreve** o que está salvo na nuvem — ele **baixa**.
+- Se a nuvem tiver **muito menos** dados que o aparelho, o app **não substitui** nada.
+- **Ajustes → Sincronização → Restaurar da nuvem**: baixa o baú do seu código por
+  vontade sua (recuperação manual).
+- Continue exportando um `.json` de vez em quando (Ajustes → Backup) — é o backup que
+  não depende de nada.
+
+Para recompilar o APK: `recompilar-apk.ps1`.

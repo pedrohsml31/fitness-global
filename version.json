@@ -1,5 +1,5 @@
 {
-  "version": 6,
-  "notes": "Correção dos minutos de cardio importados (não somar em duplicidade).",
+  "version": 7,
+  "notes": "Proteção contra perda de dados, editar série já feita, duração do som e teste de vibração com tela apagada.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
