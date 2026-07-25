@@ -311,7 +311,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 9;
+const APP_VERSION = 10;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -475,7 +475,7 @@ function renderHome(){
       ${cards || `<div class="empty">Nenhuma academia ainda.<br>Registre a primeira para começar a treinar.</div>`}
       <button class="btn" data-action="add-gym">＋ Registrar academia</button>
     </div>
-    ${glob ? `<p class="sub" style="margin-top:12px">🌐 Você tem ${glob} exercício${glob===1?"":"s"} global${glob===1?"":"is"} — ${glob===1?"aparece":"aparecem"} em todas as academias.</p>` : ""}`;
+    ${glob ? `<p class="sub" style="margin-top:12px">🌐 Você tem ${glob} ${glob===1?"exercício global":"exercícios globais"} — ${glob===1?"aparece":"aparecem"} em todas as academias.</p>` : ""}`;
 }
 
 function summaryLine(exId){
@@ -930,8 +930,10 @@ function finishRest(){
   stopRest();
   if(!wasRunning) return;
   doVibrate(vibePattern());
-  if(!native.isNative && "Notification" in window && Notification.permission === "granted"){
-    try{ new Notification("Descanso concluído 💪", {body:"Hora da próxima série!", silent:true, tag:"fitglobal-rest"}); }catch(e){}
+  const nome = (lEl.textContent || "").replace(/^Descanso · /, "");
+  if(native.isNative) native.notifyNow(nome);        // notificação na barra, sai quando você arrasta
+  else if("Notification" in window && Notification.permission === "granted"){
+    try{ new Notification("Descanso concluído 💪", {body:"Hora da próxima série!", silent:true, tag:"fitglobal-rest", requireInteraction:true}); }catch(e){}
   }
   maybeBeep();
   toast("Descanso concluído — próxima série! 💪");
@@ -999,14 +1001,35 @@ const native = {
     if(!this.isNative) return;
     const LN = this.plugin("LocalNotifications");
     if(LN){
-      try{
-        await LN.requestPermissions();
-        const ch = { id:this.channelId(), name:"Descanso", description:"Fim do tempo de descanso",
-          importance:5, vibration:true, visibility:1 };
-        if(db.settings.sound) ch.sound = "default";
-        await LN.createChannel(ch);
-      }catch(e){}
+      try{ await LN.requestPermissions(); }catch(e){}
+      /* canal com o padrão de vibração escolhido (plugin próprio); se falhar, usa o padrão do Capacitor */
+      const RC = this.plugin("RestChannel");
+      let done = false;
+      if(RC){
+        try{ await RC.create({ id:this.channelId(), name:"Descanso", pattern:vibePattern(), sound:!!db.settings.sound }); done = true; }catch(e){}
+      }
+      if(!done){
+        try{
+          const ch = { id:this.channelId(), name:"Descanso", description:"Fim do tempo de descanso",
+            importance:5, vibration:true, visibility:1 };
+          if(db.settings.sound) ch.sound = "default";
+          await LN.createChannel(ch);
+        }catch(e){}
+      }
     }
+  },
+  /* notificação imediata (quando o descanso acaba com o app aberto) — fica na barra até você arrastar */
+  async notifyNow(label){
+    if(!this.isNative) return;
+    const LN = this.plugin("LocalNotifications"); if(!LN) return;
+    try{
+      await this.init();
+      await LN.schedule({ notifications:[{
+        id:7003, channelId:this.channelId(), title:"Descanso concluído 💪",
+        body:(label ? label + " — " : "") + "Hora da próxima série!",
+        smallIcon:"ic_stat_icon", autoCancel:false, ongoing:false
+      }]});
+    }catch(e){}
   },
   /* dispara uma notificação de teste em N segundos (para testar com a tela apagada) */
   async testDelayed(secs){
@@ -1032,7 +1055,7 @@ const native = {
         id:7001, channelId:this.channelId(), title:"Descanso concluído 💪",
         body:(label ? label + " — " : "") + "Hora da próxima série!",
         schedule:{ at:new Date(atMs), allowWhileIdle:true },
-        smallIcon:"ic_stat_icon"
+        smallIcon:"ic_stat_icon", autoCancel:false, ongoing:false
       }]});
     }catch(e){}
   },
@@ -1929,7 +1952,7 @@ function activitySection(){
   let muscD=0, cardioD=0, stepsSum=0, stepsDays=0, cardioMinSum=0;
   for(let i=0;i<7;i++){ const b=bodyByDate(shiftDay(todayStr(),-i)); if(b){ if(b.musc)muscD++; if(b.cardio)cardioD++; if(typeof b.cardioMin==="number")cardioMinSum+=b.cardioMin; if(typeof b.steps==="number"){stepsSum+=b.steps; stepsDays++;} } }
   const avg = stepsDays?Math.round(stepsSum/stepsDays):null;
-  let strip=""; for(let i=13;i>=0;i--){ const d=shiftDay(todayStr(),-i); const b=bodyByDate(d)||{}; const has=b.musc||b.cardio;
+  let strip=""; for(let i=0;i<=13;i++){ const d=shiftDay(todayStr(),-i); const b=bodyByDate(d)||{}; const has=b.musc||b.cardio;   // hoje primeiro, indo para trás
     strip+=`<div class="stripcell ${d===todayStr()?"today":""}" data-action="body-entry" data-d="${d}" style="cursor:pointer">
       <div class="sd">${d.slice(8)}/${d.slice(5,7)}</div>
       <div class="si">${b.musc?"🏋️":""}${b.cardio?"🏃":""}${has?"":"·"}</div>
@@ -1966,7 +1989,10 @@ function activitySection(){
         · ${new Date(db.settings.lastImport.when).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}
       </div>` : ""}
       ${native.isNative
-        ? `<button class="btn ghost sm" data-action="health-sync" style="margin-top:12px">🔄 Importar do Samsung Health (Health Connect)</button>`
+        ? `<div class="btnrow" style="margin-top:12px">
+            <button class="btn ghost sm" data-action="health-sync">🔄 Importar do Samsung Health</button>
+            <button class="btn ghost sm" data-action="health-diag" style="flex:none; width:auto">🔎</button>
+           </div>`
         : `<p class="sub" style="margin-top:12px">💡 No app do celular dá para importar passos e treinos automaticamente do Samsung Health (via Health Connect).</p>`}
     </div>
     <div class="card">
@@ -2135,7 +2161,7 @@ async function importHealth(silent){
     const av = await H.isHealthAvailable();
     if(!av || !av.available){ if(!silent && confirm("O Health Connect não está instalado/ativo. Abrir na Play Store?")) { try{ H.showHealthConnectInPlayStore(); }catch(e){} } return; }
     await H.requestHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS"]});
-    const start = new Date(); start.setDate(start.getDate()-13); start.setHours(0,0,0,0);
+    const start = new Date(); start.setDate(start.getDate()-29); start.setHours(0,0,0,0);   // 30 dias
     const end = new Date();
     let days=0;
     try{
@@ -2160,20 +2186,69 @@ async function importHealth(silent){
       const all = (wr.workouts || []);
       db.settings.lastImport = { when: Date.now(), workouts: all.length,
         types: [...new Set(all.map(w => String(w.workoutType || "OTHER")))].slice(0, 8),
-        dias: Object.keys(byDay).length };
+        dias: Object.keys(byDay).length,
+        det: all.slice(-12).map(w => ({d:localDateOf(w.startDate), t:String(w.workoutType||"OTHER"),
+          min:Math.round((Number(w.duration)||0)/60), src:String(w.sourceName||"")})) };
     }catch(e){ console.warn("workouts", e); }
     save(); render();
     if(!silent) toast(days?`Importado do Samsung Health ✓ (${days} dias)`:"Sincronizado — nada novo por enquanto.");
   }catch(err){ console.warn("health", err); if(!silent) toast("Não deu para importar. Verifique as permissões no Health Connect."); }
 }
+/* a resposta de permissões vem em formatos diferentes conforme a versão do plugin —
+   normaliza tudo para {READ_STEPS:true/false, READ_WORKOUTS:true/false} */
+function permMap(res){
+  const out = {};
+  const put = o => { if(o && typeof o === "object") Object.keys(o).forEach(k => {
+    if(typeof o[k] === "boolean") out[k] = (out[k] === true) ? true : o[k]; }); };
+  if(!res) return out;
+  if(Array.isArray(res.permissions)) res.permissions.forEach(put);
+  else put(res.permissions);
+  put(res);
+  return out;
+}
+async function healthStatus(){
+  const H = native.plugin("HealthPlugin");
+  if(!native.isNative || !H) return {native:false, available:false, perms:{}};
+  try{
+    const av = await H.isHealthAvailable();
+    const c = await H.checkHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS"]});
+    return {native:true, available:!!(av && av.available), perms:permMap(c)};
+  }catch(e){ return {native:true, available:false, perms:{}, err:(e&&e.message)||String(e)}; }
+}
+async function healthDiagForm(){
+  openModal(`<h2>🔎 Diagnóstico do Samsung Health</h2><div class="empty">Verificando…</div>`);
+  const st = await healthStatus();
+  const li = db.settings.lastImport;
+  const yn = v => v === true ? "✅ permitido" : "❌ NÃO permitido";
+  openModal(`<h2>🔎 Diagnóstico do Samsung Health</h2>
+    <div class="card" style="margin-bottom:12px">
+      <div class="setline"><div class="grow"><div class="t">Health Connect instalado</div></div>
+        <div class="d">${st.native ? (st.available ? "✅ sim" : "❌ não encontrado") : "só no app do celular"}</div></div>
+      <div class="setline"><div class="grow"><div class="t">Permissão de passos</div></div>
+        <div class="d">${yn(st.perms.READ_STEPS)}</div></div>
+      <div class="setline"><div class="grow"><div class="t">Permissão de treinos (exercício)</div></div>
+        <div class="d">${yn(st.perms.READ_WORKOUTS)}</div></div>
+    </div>
+    ${li ? `<div class="card" style="margin-bottom:12px">
+      <div class="sub" style="margin-bottom:6px">Última importação (${new Date(li.when).toLocaleString("pt-BR")}): <b>${li.workouts} treino(s)</b> em ${li.dias} dia(s)</div>
+      ${li.det && li.det.length ? li.det.slice().reverse().map(w => `<div class="wkrow"><span class="wd">${fmtDate(w.d)}</span>
+        <span class="wv" style="font-size:.85rem">${esc(w.t)}</span><span class="wdelta" style="color:var(--muted)">${w.min}min${w.src?" · "+esc(w.src):""}</span></div>`).join("")
+        : `<div class="empty">Nenhum treino foi encontrado no Health Connect nos últimos 30 dias.</div>`}
+    </div>` : `<div class="empty">Você ainda não importou nesta versão.</div>`}
+    <p class="sub" style="margin-bottom:12px">Se a permissão de <b>treinos</b> estiver negada, ou se o Samsung não estiver <b>enviando</b> os treinos, o app não recebe a musculação. No Health Connect: em <b>Samsung Health</b> permita <i>gravar</i> Exercício; em <b>Fitness Global</b> permita <i>ler</i> Exercício.</p>
+    <div class="btnrow">
+      <button class="btn ghost" data-action="open-hc">Abrir Health Connect</button>
+      <button class="btn" data-action="health-sync">Importar agora</button>
+    </div>`);
+}
 async function autoHealthSync(){
   if(!native.isNative) return;
   const H = native.plugin("HealthPlugin"); if(!H) return;
   try{
-    const av = await H.isHealthAvailable(); if(!av || !av.available) return;
-    const c = await H.checkHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS"]});
-    const granted = c && Array.isArray(c.permissions) && c.permissions.some(p=>p && Object.values(p).some(v=>v===true));
-    if(granted) importHealth(true);
+    const st = await healthStatus();
+    if(!st.available) return;
+    // se qualquer permissão já está concedida, importa ao abrir o app
+    if(Object.values(st.perms).some(v => v === true)) importHealth(true);
   }catch(e){}
 }
 
@@ -2254,7 +2329,9 @@ document.addEventListener("click", ev => {
     save(); render(); toast(`${src.length} refeição(ões) copiada(s) de ontem ✓`);
   }
 
-  else if(a === "health-sync"){ toast("Conectando ao Health Connect…"); importHealth(false); }
+  else if(a === "health-sync"){ closeModal(); toast("Conectando ao Health Connect…"); importHealth(false); }
+  else if(a === "health-diag"){ healthDiagForm(); }
+  else if(a === "open-hc"){ const H = native.plugin("HealthPlugin"); if(H){ try{ H.openHealthConnectSettings(); }catch(e){ toast("Não deu para abrir."); } } }
   else if(a === "cycle-act"){
     const t = el.dataset.t;
     const order = ["musc","cardio","skip"];

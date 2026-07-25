@@ -1,5 +1,5 @@
 {
-  "version": 9,
-  "notes": "Nuvem corrigida (conexão direta, sem o componente que falhava no app) + mostra o erro real se houver; app não fica mais preso na versão antiga; diagnóstico da importação do Samsung Health.",
+  "version": 10,
+  "notes": "Vibração longa (padrão escolhido) com a tela apagada + notificação que fica na barra; importa do Samsung ao abrir o app; 30 dias de histórico; diagnóstico 🔎 do Samsung Health; faixa de dias começando em hoje; correção de grafia.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
