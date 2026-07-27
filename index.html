@@ -222,8 +222,21 @@ input[type=number]{font-variant-numeric:tabular-nums;}
 .fchip.binge{background:color-mix(in srgb, var(--bad) 24%, var(--surface)); color:var(--bad);}
 .fchip.outside{background:color-mix(in srgb, var(--gold) 22%, var(--surface)); color:var(--gold);}
 .fchip.skip{background:var(--surface2); color:var(--faint);}
+.fchip.pend{background:var(--surface2); color:var(--muted);}
+.fooditem.skipped .fn{color:var(--faint); text-decoration:line-through;}
 .ftick{width:34px; height:34px; border-radius:9px; background:var(--surface2); border:1px solid var(--border); flex:none; font-size:1rem; color:var(--muted);}
 .ftick.on{background:color-mix(in srgb, var(--good) 22%, var(--surface)); border-color:var(--good); color:var(--good);}
+.ftick.no{background:var(--surface2); border-color:var(--faint); color:var(--faint);}
+
+/* tabela de peso semana a semana (tipo planilha) */
+.tblwrap{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+table.xls{border-collapse:collapse; width:100%; min-width:430px; font-size:.82rem; font-variant-numeric:tabular-nums;}
+table.xls th, table.xls td{border:1px solid var(--border); padding:6px 4px; text-align:center; white-space:nowrap;}
+table.xls thead th{background:var(--surface2); color:var(--muted); font-size:.7rem; font-weight:800;}
+table.xls tbody th{background:var(--surface2); color:var(--faint); font-weight:700; font-size:.74rem; text-align:left; padding-left:8px;}
+table.xls td.avg, table.xls th.avg{background:color-mix(in srgb, var(--accent) 12%, var(--surface)); font-weight:800;}
+table.xls td .nil{color:var(--faint);}
+table.xls td.dl{color:var(--muted); font-weight:700;}   /* sem cor: só o sinal, sem julgar se subir é bom ou ruim */
 .xbtn{width:32px;height:32px;border-radius:9px;background:none;border:1px solid var(--border);color:var(--bad);flex:none;font-size:.95rem;}
 .urgebtn{background:color-mix(in srgb, var(--bad) 14%, var(--surface)); border:1px solid color-mix(in srgb,var(--bad) 45%, var(--border)); color:var(--bad); font-weight:800;}
 .rangewrap{display:flex; align-items:center; gap:12px;}
@@ -311,7 +324,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 10;
+const APP_VERSION = 11;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -338,7 +351,7 @@ function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
 
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], logs:[], food:[], urges:[], plan:[], body:[], settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], logs:[], food:[], urges:[], plan:[], body:[], settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", ignoreAuto:true}, updatedAt:0}; }
 /* duração do bipe de fim de série (mesmo som, só mais longo) */
 const SOUNDLEN = { curto:0.45, medio:1.1, longo:2.4 };
 let db;
@@ -475,7 +488,8 @@ function renderHome(){
       ${cards || `<div class="empty">Nenhuma academia ainda.<br>Registre a primeira para começar a treinar.</div>`}
       <button class="btn" data-action="add-gym">＋ Registrar academia</button>
     </div>
-    ${glob ? `<p class="sub" style="margin-top:12px">🌐 Você tem ${glob} ${glob===1?"exercício global":"exercícios globais"} — ${glob===1?"aparece":"aparecem"} em todas as academias.</p>` : ""}`;
+    ${glob ? `<p class="sub" style="margin-top:12px">🌐 Você tem ${glob} ${glob===1?"exercício global":"exercícios globais"} — ${glob===1?"aparece":"aparecem"} em todas as academias.</p>` : ""}
+    ${db.gyms.length||db.exercises.length ? `<button class="btn danger sm" data-action="reset-treino" style="margin-top:14px">🗑 Zerar treino (academias, exercícios e séries)</button>` : ""}`;
 }
 
 function summaryLine(exId){
@@ -809,8 +823,27 @@ function renderSettings(){
         <div class="grow"><div class="t">Importar arquivo</div><div class="d">Substitui os dados deste aparelho</div></div>
         <button class="btn ghost sm" style="width:auto" data-action="import">Importar</button>
       </div>
+    </div></div>
+
+    <div class="section"><h2>Apagar dados por parte</h2><div class="card">
       <div class="setline">
-        <div class="grow"><div class="t">Apagar tudo</div><div class="d">Remove academias, exercícios e histórico</div></div>
+        <div class="grow"><div class="t">🏋️ Treino</div><div class="d">Academias, exercícios e todas as séries registradas</div></div>
+        <button class="btn danger sm" style="width:auto" data-action="reset-treino">Zerar</button>
+      </div>
+      <div class="setline">
+        <div class="grow"><div class="t">🍽️ Alimentação</div><div class="d">Plano, alimentos consumidos e urges/binges</div></div>
+        <button class="btn danger sm" style="width:auto" data-action="reset-food">Zerar</button>
+      </div>
+      <div class="setline">
+        <div class="grow"><div class="t">⚖️ Peso, BF e medidas</div><div class="d">Mantém as atividades e os passos</div></div>
+        <button class="btn danger sm" style="width:auto" data-action="reset-body">Zerar</button>
+      </div>
+      <div class="setline">
+        <div class="grow"><div class="t">🏃 Atividades e passos</div><div class="d">Mantém peso, BF e medidas</div></div>
+        <button class="btn danger sm" style="width:auto" data-action="reset-act">Zerar</button>
+      </div>
+      <div class="setline">
+        <div class="grow"><div class="t">💣 Apagar tudo</div><div class="d">Zera o app inteiro neste aparelho (e na nuvem, se estiver sincronizado)</div></div>
         <button class="btn danger sm" style="width:auto" data-action="wipe">Apagar</button>
       </div>
     </div></div>
@@ -1415,7 +1448,8 @@ document.addEventListener("click", ev => {
 
   else if(a === "tg"){
     const k = el.dataset.k;
-    db.settings[k] = !db.settings[k];
+    db.settings[k] = (k === "ignoreAuto") ? (db.settings[k] === false) : !db.settings[k];
+    if(k === "ignoreAuto") deriveAllActs();
     save(); applyWake(); if(k === "sound") native.init(); render();
   }
   else if(a === "ask-notif"){ Notification.requestPermission().then(() => render()); }
@@ -1486,9 +1520,39 @@ document.addEventListener("click", ev => {
     inp.click();
   }
   else if(a === "wipe"){
-    if(!confirm("Apagar TODAS as academias, exercícios e histórico deste aparelho?")) return;
+    if(!confirm("Apagar TUDO (treino, alimentação, peso e medidas) deste aparelho?")) return;
     const keepSync = db.settings.sync;
     db = seed(); db.settings.sync = keepSync; save(); location.hash = ""; render();
+  }
+  /* zerar só uma parte do app — cada aba tem o seu */
+  else if(a === "reset-treino"){
+    if(!confirm("Zerar o TREINO?\n\nApaga academias, exercícios e todas as séries.\nAlimentação, peso e medidas continuam.")) return;
+    db.gyms = []; db.exercises = []; db.logs = [];
+    save(); location.hash = ""; render(); toast("Treino zerado");
+  }
+  else if(a === "reset-food"){
+    if(!confirm("Zerar a ALIMENTAÇÃO?\n\nApaga o plano, os alimentos consumidos e os urges/binges.\nTreino, peso e medidas continuam.")) return;
+    db.food = []; db.urges = []; db.plan = [];
+    save(); render(); toast("Alimentação zerada");
+  }
+  else if(a === "reset-body"){
+    if(!confirm("Zerar PESO, BF e MEDIDAS?\n\nAs atividades e os passos continuam.")) return;
+    db.body.forEach(b => { delete b.kg; delete b.bf; delete b.kgSrc; delete b.m; delete b.note; });
+    db.body = db.body.filter(b => b.musc || b.cardio || typeof b.steps === "number" || (b.acts && b.acts.length));
+    save(); render(); toast("Peso e medidas zerados");
+  }
+  else if(a === "reset-act"){
+    if(!confirm("Zerar ATIVIDADES e PASSOS?\n\nPeso, BF e medidas continuam.")) return;
+    db.body.forEach(b => { ["musc","cardio","muscM","cardioM","cardioMin","cardioMinM","steps","acts"].forEach(k => delete b[k]); });
+    db.body = db.body.filter(b => typeof b.kg === "number" || typeof b.bf === "number" || (b.m && Object.keys(b.m).length));
+    db.settings.lastImport = null;
+    save(); render(); toast("Atividades e passos zerados");
+  }
+  else if(a === "prog-view"){ progView = el.dataset.v; render(); }
+  else if(a === "save-wfrom"){
+    const v = document.getElementById("wfrom").value;
+    db.settings.weightFrom = v || null; save(); render();
+    toast(v ? "Vou importar o peso de " + fmtDate(v) + " em diante" : "Vou importar todas as pesagens");
   }
 });
 
@@ -1684,6 +1748,8 @@ function renderSuggest(){
 /* ===================== ALIMENTAÇÃO & EVOLUÇÃO ===================== */
 let foodDay = todayStr();
 let bodyDay = todayStr();
+let actDay  = todayStr();          // dia mostrado na aba Atividade
+let progView = "corpo";            // "corpo" (peso/medidas) ou "atividade"
 const MEAS = [
   {k:"cintura",l:"Cintura"},{k:"quadril",l:"Quadril"},{k:"peitoral",l:"Peitoral"},
   {k:"ombros",l:"Ombros"},{k:"biceps",l:"Bíceps"},{k:"antebraco",l:"Antebraço"},
@@ -1696,7 +1762,22 @@ function tsFor(date,hm){ const [y,m,dd]=date.split("-").map(Number); const [h,mi
 function shiftDay(date,n){ const [y,m,d]=date.split("-").map(Number); const dt=new Date(y,m-1,d); dt.setDate(dt.getDate()+n); return dt.getFullYear()+"-"+pad2(dt.getMonth()+1)+"-"+pad2(dt.getDate()); }
 function dayLabel(date){ if(date===todayStr())return "Hoje · "+fmtDate(date); if(date===shiftDay(todayStr(),-1))return "Ontem · "+fmtDate(date); const wd=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][new Date(date+"T00:00").getDay()]; return wd+" · "+fmtDate(date); }
 function plannedForDay(date){ return db.plan.filter(m => m.fixed || m.date === date).sort((a,b)=>(a.time||"").localeCompare(b.time||"")); }
-function adherence(date){ let t=0,d=0; plannedForDay(date).forEach(m=>m.items.forEach(it=>{ t++; if(it.done&&it.done[date]) d++; })); return {t,d,pct:t?Math.round(d/t*100):null}; }
+/* estado de um item planejado num dia:
+   true = comido · "skip" = você decidiu não comer (riscado) · undefined = ainda em aberto.
+   Em aberto só conta como "não consumido" depois que o dia passa. */
+function itemState(it, date){ const v = it.done && it.done[date]; return v === true ? "done" : v === "skip" ? "skip" : "open"; }
+function dayClosed(date){ return date < todayStr(); }
+function adherence(date){
+  let t=0, d=0, open=0;
+  plannedForDay(date).forEach(m=>m.items.forEach(it=>{
+    const st = itemState(it, date);
+    if(st === "done"){ t++; d++; }
+    else if(st === "skip"){ t++; }
+    else if(dayClosed(date)) t++;      // passou o dia sem marcar: conta como não ingerido
+    else open++;
+  }));
+  return {t, d, open, pct: t?Math.round(d/t*100):null};
+}
 
 /* ---------- Alimentação: diário ---------- */
 function renderFood(){
@@ -1720,9 +1801,10 @@ function renderFood(){
       <button class="navb" data-action="food-day" data-d="1">›</button>
     </div>
 
-    <div class="section"><h2>Plano do dia ${adh.t?`· ${adh.pct}% seguido`:""}</h2>
+    <div class="section"><h2>Plano do dia${adh.t?` · ${adh.pct}% seguido`:""}${adh.open?` · ${adh.open} em aberto`:""}</h2>
       ${planned.length ? planned.map(m=>plannedMealHtml(m,day)).join("")
         : `<div class="empty">Nada planejado para este dia.</div>`}
+      ${planned.length?`<div class="sub" style="margin:2px 0 8px; font-size:.76rem">1 toque = comi ✓ · 2 toques = risca (não vou comer) · 3 toques volta ao normal. O que ficar em aberto só conta como não consumido depois que o dia passa.</div>`:""}
       <button class="btn ghost sm" data-action="go" data-h="#/foodplan" style="margin-top:2px">🗓 Planejar alimentação</button>
     </div>
 
@@ -1742,6 +1824,7 @@ function renderFood(){
         </div>
         ${urgesToday.length?`<div class="pills" style="margin-top:12px">${urgesToday.map(u=>`<span class="pill" style="cursor:pointer${u.gaveIn?';color:var(--bad);border-color:var(--bad)':''}" data-action="del-urge" data-id="${u.id}" title="Toque para remover">${fmtTime(u.ts)} · intens. ${u.intensity}${u.gaveIn?" · cedi 🔴":""} ✕</span>`).join("")}</div>`:""}
       </div>
+      <button class="btn danger sm" data-action="reset-food" style="margin-top:10px">🗑 Zerar alimentação (plano, alimentos e urges)</button>
     </div>`;
 }
 function plannedMealHtml(m,day){
@@ -1751,11 +1834,13 @@ function plannedMealHtml(m,day){
       <span class="mt">${esc(m.name)}${m.fixed?" 📌":""}</span>
       <span class="tm">${m.time||""}</span>
     </div>
-    ${m.items.map(it=>{ const done=it.done&&it.done[day];
-      return `<div class="fooditem ${done?"eaten":"pending"}">
-        <button class="ftick ${done?"on":""}" data-action="plan-tick" data-m="${m.id}" data-i="${it.id}" aria-label="Marcar consumido">${done?"✓":""}</button>
+    ${m.items.map(it=>{ const st=itemState(it,day);
+      const chip = st==="done" ? "" : st==="skip" ? `<span class="fchip skip">não vou comer</span>`
+        : dayClosed(day) ? `<span class="fchip skip">não consumido</span>` : `<span class="fchip pend">em aberto</span>`;
+      return `<div class="fooditem ${st==="done"?"eaten":st==="skip"?"skipped":"pending"}">
+        <button class="ftick ${st==="done"?"on":st==="skip"?"no":""}" data-action="plan-tick" data-m="${m.id}" data-i="${it.id}" aria-label="Marcar consumido">${st==="done"?"✓":st==="skip"?"✕":""}</button>
         <span class="fn">${esc(it.name)}</span>
-        ${done?"":`<span class="fchip skip">não consumido</span>`}
+        ${chip}
       </div>`; }).join("")}
   </div>`;
 }
@@ -1891,8 +1976,9 @@ function periodFoodStats(days, endDay){
   const inRange = d => d>=from && d<=endDay;
   const foods = db.food.filter(f=>inRange(f.date));
   const urges = db.urges.filter(u=>inRange(u.date));
-  let totPlan=0, donePlan=0;
-  for(let i=0;i<days;i++){ const d=shiftDay(endDay,-i); plannedForDay(d).forEach(m=>m.items.forEach(it=>{ totPlan++; if(it.done&&it.done[d]) donePlan++; })); }
+  let totPlan=0, donePlan=0, skipPlan=0;
+  for(let i=0;i<days;i++){ const d=shiftDay(endDay,-i); const ad=adherence(d); totPlan+=ad.t; donePlan+=ad.d;
+    plannedForDay(d).forEach(m=>m.items.forEach(it=>{ if(itemState(it,d)==="skip") skipPlan++; })); }
   const intens = urges.map(u=>u.intensity);
   return {
     urges: urges.length,
@@ -1904,7 +1990,7 @@ function periodFoodStats(days, endDay){
     refeicoes: foods.filter(f=>f.kind==="refeicao").length,
     lanches: foods.filter(f=>f.kind==="lanche").length,
     adherence: totPlan?Math.round(donePlan/totPlan*100):null,
-    planTot: totPlan, planDone: donePlan, notEaten: totPlan-donePlan
+    planTot: totPlan, planDone: donePlan, notEaten: totPlan-donePlan, planSkip: skipPlan
   };
 }
 function renderFoodReport(){
@@ -1921,7 +2007,8 @@ function renderFoodReport(){
         <div class="row"><div class="grow"><div class="sub">Aderência ao plano (7 dias)</div>
           <div class="bignumv">${w.adherence!=null?w.adherence+"%":"—"}${arrow(w.adherence,prev.adherence,false)}</div></div></div>
         <div class="bar"><span style="width:${w.adherence||0}%"></span></div>
-        <div class="sub" style="margin-top:8px">${w.planDone} de ${w.planTot} itens planejados consumidos · ${w.notEaten} não consumidos</div>
+        <div class="sub" style="margin-top:8px">${w.planDone} de ${w.planTot} itens planejados consumidos · ${w.notEaten} não consumidos${w.planSkip?` (${w.planSkip} você riscou de propósito)`:""}</div>
+        <div class="sub" style="margin-top:4px; font-size:.76rem">Itens de hoje ainda em aberto não entram na conta.</div>
       </div>
     </div>
     <div class="section"><h2>Compulsão (binge / urges)</h2>
@@ -1947,20 +2034,32 @@ function renderFoodReport(){
 /* ---------- Evolução (peso, BF, medidas) ---------- */
 function bodyByDate(date){ return db.body.find(b=>b.date===date); }
 function bodyEntry(date){ let e=db.body.find(b=>b.date===date); if(!e){ e={id:uid(), date, m:{}}; db.body.push(e); } return e; }
+function actLabel(a){
+  const inf = actInfo(a.t), k = actKind(a);
+  const nome = a.nome && a.nome.trim() ? a.nome.trim() : inf.l;
+  const em = inf.k === "ask" ? (k === "musc" ? "🏋️" : k === "cardio" ? "🏃" : inf.e) : inf.e;
+  return em + " " + nome + (isAuto(a) ? " 🤖" : "");
+}
 function activitySection(){
-  const t = bodyByDate(todayStr()) || {};
+  const day = actDay;
+  const t = bodyByDate(day) || {};
   let muscD=0, cardioD=0, stepsSum=0, stepsDays=0, cardioMinSum=0;
   for(let i=0;i<7;i++){ const b=bodyByDate(shiftDay(todayStr(),-i)); if(b){ if(b.musc)muscD++; if(b.cardio)cardioD++; if(typeof b.cardioMin==="number")cardioMinSum+=b.cardioMin; if(typeof b.steps==="number"){stepsSum+=b.steps; stepsDays++;} } }
   const avg = stepsDays?Math.round(stepsSum/stepsDays):null;
   let strip=""; for(let i=0;i<=13;i++){ const d=shiftDay(todayStr(),-i); const b=bodyByDate(d)||{}; const has=b.musc||b.cardio;   // hoje primeiro, indo para trás
-    strip+=`<div class="stripcell ${d===todayStr()?"today":""}" data-action="body-entry" data-d="${d}" style="cursor:pointer">
+    strip+=`<div class="stripcell ${d===day?"today":""}" data-action="act-day-set" data-d="${d}" style="cursor:pointer">
       <div class="sd">${d.slice(8)}/${d.slice(5,7)}</div>
       <div class="si">${b.musc?"🏋️":""}${b.cardio?"🏃":""}${has?"":"·"}</div>
       <div class="ss">${typeof b.steps==="number"?(b.steps>=1000?(b.steps/1000).toFixed(b.steps>=10000?0:1)+"k":b.steps):"—"}</div>
     </div>`; }
   return `<div class="section"><h2>Atividade</h2>
+    <div class="daynav">
+      <button class="navb" data-action="act-day" data-d="-1">‹</button>
+      <div class="d">${dayLabel(day)}</div>
+      <button class="navb" data-action="act-day" data-d="1" ${day===todayStr()?"disabled style=\"opacity:.35\"":""}>›</button>
+    </div>
     <div class="card">
-      <div class="sub" style="margin-bottom:8px">Hoje eu fiz:</div>
+      <div class="sub" style="margin-bottom:8px">${day===todayStr()?"Hoje eu fiz":"Nesse dia eu fiz"}:</div>
       <div class="btnrow">
         <button class="trainbtn ${t.musc?"on":""}" data-action="quick-train" data-t="musc">🏋️ Musculação</button>
         <button class="trainbtn ${t.cardio?"on":""}" data-action="quick-train" data-t="cardio">🏃 Cardio</button>
@@ -1971,18 +2070,18 @@ function activitySection(){
         <span class="sub">min</span>
       </div>`:""}
       <div class="row" style="gap:8px; margin-top:10px">
-        <span class="sub">👣 Passos hoje:</span>
+        <span class="sub">👣 Passos:</span>
         <input id="steps-today" type="number" inputmode="numeric" min="0" value="${typeof t.steps==="number"?t.steps:""}" placeholder="0" style="width:110px; text-align:center">
         <button class="btn ghost sm" data-action="save-activity" style="width:auto">Salvar</button>
       </div>
       ${t.acts && t.acts.length ? `<div style="margin-top:12px">
-        <div class="sub">Atividades detectadas hoje (do Samsung Health):</div>
-        <div class="pills" style="margin-top:6px">${t.acts.map(a => { const k = actKind(a.t), inf = actInfo(a.t);
-          const tag = k==="musc" ? "conta como 🏋️" : k==="cardio" ? "conta como 🏃" : k==="skip" ? "não conta" : "❓ toque p/ classificar";
-          return `<button class="pill" data-action="cycle-act" data-t="${esc(a.t)}" style="cursor:pointer${k==="ask"?";color:var(--gold);border-color:var(--gold)":""}">${inf.e} ${esc(inf.l)} · ${a.min}min · ${tag}</button>`;
+        <div class="sub">Atividades que vieram do Samsung Health nesse dia:</div>
+        <div class="pills" style="margin-top:6px">${t.acts.map(a => { const k = actKind(a);
+          const tag = k==="musc" ? "conta como 🏋️" : k==="cardio" ? "conta como 🏃" : k==="skip" ? (isAuto(a)?"automática · não conta":"não conta") : "❓ toque p/ classificar";
+          return `<button class="pill" data-action="cycle-act" data-k="${esc(actKey(a))}" style="cursor:pointer${k==="ask"?";color:var(--gold);border-color:var(--gold)":""}${k==="skip"?";opacity:.6":""}">${esc(actLabel(a))} · ${a.min}min · ${tag}</button>`;
         }).join("")}</div>
-        <div class="sub" style="margin-top:6px; font-size:.76rem">Toque numa atividade para alternar entre musculação → cardio → não contar. O app lembra a sua escolha para esse tipo.</div>
-      </div>` : ""}
+        <div class="sub" style="margin-top:6px; font-size:.76rem">🤖 = o relógio detectou sozinho, por isso não conta. Toque numa etiqueta para alternar entre musculação → cardio → não contar; o app lembra a escolha para esse tipo.</div>
+      </div>` : `<div class="sub" style="margin-top:12px; font-size:.78rem">Nenhuma atividade importada nesse dia.</div>`}
       ${db.settings.lastImport ? `<div class="sub" style="margin-top:10px; font-size:.75rem">
         Última importação: ${db.settings.lastImport.workouts} treino(s) em ${db.settings.lastImport.dias} dia(s)
         ${db.settings.lastImport.types && db.settings.lastImport.types.length ? "· tipos: " + esc(db.settings.lastImport.types.join(", ")) : "· nenhum treino encontrado"}
@@ -1992,8 +2091,14 @@ function activitySection(){
         ? `<div class="btnrow" style="margin-top:12px">
             <button class="btn ghost sm" data-action="health-sync">🔄 Importar do Samsung Health</button>
             <button class="btn ghost sm" data-action="health-diag" style="flex:none; width:auto">🔎</button>
+           </div>
+           <div class="setline" style="margin-top:6px">
+             <div class="grow"><div class="t">Ignorar atividades automáticas</div>
+             <div class="d">As que o relógio detecta sozinho (caminhada, "outro exercício") não contam</div></div>
+             <button class="switch${db.settings.ignoreAuto!==false?" on":""}" data-action="tg" data-k="ignoreAuto" role="switch" aria-checked="${db.settings.ignoreAuto!==false}"></button>
            </div>`
-        : `<p class="sub" style="margin-top:12px">💡 No app do celular dá para importar passos e treinos automaticamente do Samsung Health (via Health Connect).</p>`}
+        : `<p class="sub" style="margin-top:12px">💡 No app do celular dá para importar passos, treinos e peso automaticamente do Samsung Health (via Health Connect).</p>`}
+      <button class="btn ghost sm" data-action="body-entry" data-d="${day}" style="margin-top:10px">✎ Editar tudo desse dia</button>
     </div>
     <div class="card">
       <div class="striprow">${strip}</div>
@@ -2002,13 +2107,37 @@ function activitySection(){
         <div><div class="sub">Cardio (7d)</div><div class="bignumv">${cardioD}<small style="font-size:.7rem;color:var(--muted)"> dias${cardioMinSum?` · ${cardioMinSum}min`:""}</small></div></div>
         <div><div class="sub">Passos/dia (7d)</div><div class="bignumv">${avg!=null?avg.toLocaleString("pt-BR"):"—"}</div></div>
       </div>
-    </div></div>`;
+    </div>
+    <button class="btn danger sm" data-action="reset-act" style="margin-top:4px">🗑 Zerar atividades e passos</button></div>`;
 }
 function bodySorted(){ return db.body.filter(b=>typeof b.kg==="number").sort((a,b)=>a.date<b.date?-1:1); }
 function weekKeyOf(date){ const d=new Date(date+"T00:00"); const off=(d.getDay()+6)%7; d.setDate(d.getDate()-off); return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
 function weeklyWeight(){
   const map={}; bodySorted().forEach(b=>{ const k=weekKeyOf(b.date); (map[k]=map[k]||[]).push(b.kg); });
   return Object.keys(map).sort().map(k=>({week:k, avg:map[k].reduce((a,b)=>a+b,0)/map[k].length, n:map[k].length}));
+}
+/* tabela tipo planilha: uma linha por semana, um peso por dia e a média no fim */
+const DOW = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
+function dowIndex(date){ const d=new Date(date+"T00:00").getDay(); return (d+6)%7; }   // 0 = segunda
+function weightTable(nWeeks){
+  const rows = {};
+  bodySorted().forEach(b=>{ const k=weekKeyOf(b.date); (rows[k]=rows[k]||{})[dowIndex(b.date)] = b.kg; });
+  const keys = Object.keys(rows).sort().slice(-nWeeks).reverse();
+  if(!keys.length) return `<div class="empty">Registre seu peso para ver a tabela da semana.</div>`;
+  const avgOf = k => { const v=Object.values(rows[k]); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; };
+  const body = keys.map((k,i)=>{
+    const avg = avgOf(k);
+    const prevK = keys[i+1];                       // semana anterior (a lista está do mais novo p/ o mais antigo)
+    const diff = prevK ? avg - avgOf(prevK) : null;
+    const cells = DOW.map((_,j)=>{ const v=rows[k][j];
+      return `<td>${typeof v==="number"?fmtW(v):"<span class='nil'>–</span>"}</td>`; }).join("");
+    return `<tr><th>${fmtDate(k)}</th>${cells}<td class="avg">${fmtW(avg)}</td>
+      <td class="dl ${diff==null?"":diff<-0.005?"down":diff>0.005?"up":""}">${diff==null?"–":(diff>0?"+":"")+fmtW(diff)}</td></tr>`;
+  }).join("");
+  return `<div class="tblwrap"><table class="xls">
+    <thead><tr><th>Semana de</th>${DOW.map(d=>`<th>${d}</th>`).join("")}<th class="avg">Média</th><th>Δ</th></tr></thead>
+    <tbody>${body}</tbody></table></div>
+    <div class="sub" style="margin-top:8px">Δ = diferença da média desta semana em relação à semana anterior.</div>`;
 }
 function renderProgress(){
   const series = bodySorted();
@@ -2022,11 +2151,22 @@ function renderProgress(){
     const diff=cur-base.kg; const dcls=diff<-0.05?"down":diff>0.05?"up":"";
     trendHtml=`<span class="wdelta ${dcls}">${diff>0?"+":""}${fmtW(diff)} kg vs ${fmtDate(base.date)}</span>`;
   }
-  view.innerHTML = `
+  const head = `
     <div class="topbar">
       <h1>📊 Evolução</h1>
       <button class="iconbtn" data-action="go" data-h="#/settings" aria-label="Ajustes">⚙️</button>
     </div>
+    <div class="seg" style="margin-bottom:12px">
+      <button data-action="prog-view" data-v="corpo" class="${progView==="corpo"?"on":""}">⚖️ Peso e medidas</button>
+      <button data-action="prog-view" data-v="atividade" class="${progView==="atividade"?"on":""}">🏃 Atividade</button>
+    </div>`;
+
+  if(progView === "atividade"){
+    view.innerHTML = head + activitySection();
+    return;
+  }
+
+  view.innerHTML = head + `
     <div class="section"><h2>Peso</h2>
       <div class="card">
         ${latest?`<div class="row" style="gap:18px; flex-wrap:wrap">
@@ -2038,8 +2178,22 @@ function renderProgress(){
         : `<div class="empty">Registre seu peso para ver a evolução.</div>`}
       </div>
       <button class="btn" data-action="body-entry" data-d="${todayStr()}">＋ Registrar hoje (peso, BF, medidas)</button>
+      ${native.isNative?`<div class="card" style="margin-top:10px">
+        <div class="setline"><div class="grow"><div class="t">Peso da balança (Samsung Health)</div>
+          <div class="d">Puxa as pesagens da Yunmai a partir da data abaixo. O que você digita à mão nunca é sobrescrito.</div>
+          <div class="row" style="gap:8px; margin-top:8px">
+            <input id="wfrom" type="date" value="${db.settings.weightFrom||""}" style="width:auto">
+            <button class="btn ghost sm" data-action="save-wfrom" style="width:auto">Salvar</button>
+          </div></div></div>
+        <div class="btnrow" style="margin-top:6px">
+          <button class="btn ghost sm" data-action="health-sync">🔄 Importar do Samsung Health</button>
+          <button class="btn ghost sm" data-action="health-diag" style="flex:none; width:auto">🔎</button>
+        </div>
+      </div>`:""}
     </div>
-    ${activitySection()}
+    <div class="section"><h2>Semana a semana (peso por dia)</h2><div class="card">
+      ${weightTable(8)}
+    </div></div>
     ${weeks.length>=2?`<div class="section"><h2>Média semanal</h2><div class="card">
       ${weeks.slice(-8).reverse().map((w,i,arr)=>{ const prev=arr[i+1]; const diff=prev?w.avg-prev.avg:null;
         return `<div class="wkrow"><span class="wd">Semana de ${fmtDate(w.week)}</span>
@@ -2054,10 +2208,11 @@ function renderProgress(){
       ${db.body.length?[...db.body].sort((a,b)=>a.date<b.date?1:-1).slice(0,60).map(b=>`
         <div class="wkrow" style="cursor:pointer" data-action="body-entry" data-d="${b.date}">
           <span class="wd">${fmtDate(b.date)} ${b.musc?"🏋️":""}${b.cardio?"🏃"+(typeof b.cardioMin==="number"?b.cardioMin+"min":""):""}${typeof b.steps==="number"?` · ${b.steps.toLocaleString("pt-BR")} passos`:""}</span>
-          <span class="wv">${typeof b.kg==="number"?fmtW(b.kg)+" kg":"—"}</span>
+          <span class="wv">${typeof b.kg==="number"?fmtW(b.kg)+" kg"+(b.kgSrc==="health"?" ⌚":""):"—"}</span>
           <span class="wdelta" style="color:var(--muted)">${typeof b.bf==="number"?"BF "+fmtW(b.bf)+"%":""} ✎</span></div>`).join("")
         : `<div class="empty">Sem registros ainda.</div>`}
-    </div></div>`;
+    </div></div>
+    <button class="btn danger sm" data-action="reset-body" style="margin-top:4px">🗑 Zerar peso, BF e medidas</button>`;
   if(latest) drawWeightChart(series);
 }
 function measDelta(k,cur){
@@ -2143,27 +2298,66 @@ const ACT_TYPES = {
   GOLF:{l:"Golfe",e:"⛳",k:"skip"}, OTHER:{l:"Outro treino",e:"❓",k:"ask"}
 };
 function actInfo(t){ return ACT_TYPES[t] || {l:String(t||"Treino").replace(/_/g," ").toLowerCase(), e:"❓", k:"ask"}; }
+/* recordingMethod do Health Connect: 2 = o relógio detectou sozinho (automático) */
+function isAuto(a){ return !!a && a.rec === 2; }
+/* a escolha do usuário é guardada por tipo; atividades automáticas têm chave própria,
+   assim "caminhada automática" pode não contar sem afetar uma caminhada que você iniciou */
+function actKey(a){ return isAuto(a) ? a.t + "#auto" : a.t; }
 /* "ask" = o app não sabe se é musculação ou cardio; você decide tocando na etiqueta */
-function actKind(t){ const m = db.settings.actMap || {}; return m[t] || actInfo(t).k; }
+/* quando o Samsung manda o tipo genérico ("Outro exercício"), tenta adivinhar pelo nome do treino */
+function guessByName(nome){
+  const n = norm(nome);
+  if(!n) return null;
+  if(/muscula|aparelho|weight|strength|forca|halter|academia/.test(n)) return "musc";
+  if(/bicicl|bike|cycl|spinning|corrida|running|caminhad|walk|eliptic|remo|rowing|nata|swim|escada|stair|hiit|funcional|esteira/.test(n)) return "cardio";
+  return null;
+}
+function actKind(a){
+  const m = db.settings.actMap || {};
+  const key = typeof a === "string" ? a : actKey(a);
+  if(m[key]) return m[key];
+  if(typeof a === "object" && isAuto(a) && db.settings.ignoreAuto !== false) return "skip";
+  const base = actInfo(typeof a === "string" ? a : a.t).k;
+  if(base === "ask" && typeof a === "object"){ const g = guessByName(a.nome); if(g) return g; }
+  return base;
+}
 function deriveActs(e){
-  if(!e || !e.acts || !e.acts.length) return;
-  let musc = false, cardio = false, cmin = 0;
-  e.acts.forEach(a => { const k = actKind(a.t);
+  if(!e) return;
+  const acts = e.acts || [];
+  if(!acts.length && !e.muscM && !e.cardioM && typeof e.cardioMinM !== "number") return;  // nada importado: preserva o registro manual
+  let musc = !!e.muscM, cardio = !!e.cardioM, cmin = 0;
+  acts.forEach(a => { const k = actKind(a);
     if(k === "musc") musc = true;
     else if(k === "cardio"){ cardio = true; cmin += a.min || 0; } });
-  e.musc = musc; e.cardio = cardio; e.cardioMin = cmin || undefined;
+  e.musc = musc; e.cardio = cardio;
+  e.cardioMin = (typeof e.cardioMinM === "number") ? e.cardioMinM : (cmin || undefined);
 }
 function deriveAllActs(){ db.body.forEach(deriveActs); }
+/* migração v11: o que já estava marcado à mão passa a ser "manual" e não é mais
+   sobrescrito pela importação do Samsung Health */
+function migrateManualActs(){
+  if(db.settings.migAct11) return;
+  db.body.forEach(b => {
+    if(!b.acts || !b.acts.length){
+      if(b.musc) b.muscM = true;
+      if(b.cardio) b.cardioM = true;
+      if(typeof b.cardioMin === "number") b.cardioMinM = b.cardioMin;
+    }
+    if(typeof b.kg === "number" && !b.kgSrc) b.kgSrc = "manual";   // peso digitado nunca é sobrescrito
+  });
+  db.settings.migAct11 = true;
+  save(false);
+}
 async function importHealth(silent){
   const H = native.plugin("HealthPlugin");
   if(!native.isNative || !H){ if(!silent) toast("Disponível só no app do celular 📱"); return; }
   try{
     const av = await H.isHealthAvailable();
     if(!av || !av.available){ if(!silent && confirm("O Health Connect não está instalado/ativo. Abrir na Play Store?")) { try{ H.showHealthConnectInPlayStore(); }catch(e){} } return; }
-    await H.requestHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS"]});
-    const start = new Date(); start.setDate(start.getDate()-29); start.setHours(0,0,0,0);   // 30 dias
+    await H.requestHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS","READ_WEIGHT"]});
+    const start = new Date(); start.setDate(start.getDate()-59); start.setHours(0,0,0,0);   // 60 dias
     const end = new Date();
-    let days=0;
+    let days=0, kgs=0;
     try{
       const sr = await H.queryAggregated({startDate:start.toISOString(), endDate:end.toISOString(), dataType:"steps", bucket:"day"});
       (sr.aggregatedData||[]).forEach(s=>{ if(s.value>0){ const e=bodyEntry(localDateOf(s.startDate)); e.steps=Math.round(s.value); days++; } });
@@ -2176,7 +2370,10 @@ async function importHealth(silent){
         const t = String(w.workoutType || "OTHER").toUpperCase();
         let min = Math.round((Number(w.duration)||0)/60);
         if(!min && w.startDate && w.endDate) min = Math.round((new Date(w.endDate)-new Date(w.startDate))/60000);
-        (byDay[d] = byDay[d] || []).push({t, min, src:(w.sourceName||"")});
+        (byDay[d] = byDay[d] || []).push({t, min, src:(w.sourceName||w.deviceModel||""),
+          rec:(typeof w.recordingMethod==="number"?w.recordingMethod:0),
+          raw:(typeof w.exerciseTypeRaw==="number"?w.exerciseTypeRaw:null),
+          nome:String(w.title||"")});
       });
       Object.keys(byDay).forEach(d => {
         const e = bodyEntry(d);
@@ -2187,12 +2384,43 @@ async function importHealth(silent){
       db.settings.lastImport = { when: Date.now(), workouts: all.length,
         types: [...new Set(all.map(w => String(w.workoutType || "OTHER")))].slice(0, 8),
         dias: Object.keys(byDay).length,
-        det: all.slice(-12).map(w => ({d:localDateOf(w.startDate), t:String(w.workoutType||"OTHER"),
-          min:Math.round((Number(w.duration)||0)/60), src:String(w.sourceName||"")})) };
-    }catch(e){ console.warn("workouts", e); }
+        det: all.slice(-16).map(w => ({d:localDateOf(w.startDate), t:String(w.workoutType||"OTHER"),
+          min:Math.round((Number(w.duration)||0)/60), src:String(w.sourceName||w.deviceModel||""),
+          rec:(typeof w.recordingMethod==="number"?w.recordingMethod:0),
+          raw:(typeof w.exerciseTypeRaw==="number"?w.exerciseTypeRaw:null),
+          nome:String(w.title||"")})) };
+    }catch(e){ console.warn("workouts", e); db.settings.lastErr = "treinos: " + ((e&&e.message)||e); }
+    kgs = await importWeights(H, start, end);
     save(); render();
-    if(!silent) toast(days?`Importado do Samsung Health ✓ (${days} dias)`:"Sincronizado — nada novo por enquanto.");
+    if(!silent) toast(days||kgs ? `Importado do Samsung Health ✓ (${days} dia(s)${kgs?`, ${kgs} peso(s)`:""})` : "Sincronizado — nada novo por enquanto.");
   }catch(err){ console.warn("health", err); if(!silent) toast("Não deu para importar. Verifique as permissões no Health Connect."); }
+}
+/* peso da balança (Yunmai -> Samsung Health -> Health Connect).
+   Nunca sobrescreve um peso digitado por você; fica com o último pesagem de cada dia. */
+async function importWeights(H, start, end){
+  if(!H || !H.queryWeight) return 0;
+  try{
+    const r = await H.queryWeight({startDate:start.toISOString(), endDate:end.toISOString()});
+    const list = r.weights || [];
+    db.settings.lastWeights = { when:Date.now(), n:list.length,
+      det:list.slice(-10).map(w=>({d:localDateOf(w.time), kg:Math.round(Number(w.kg)*100)/100, src:String(w.deviceModel||w.sourceBundleId||"")})) };
+    const from = db.settings.weightFrom || null;
+    const byDay = {};
+    list.forEach(w=>{
+      const d = localDateOf(w.time);
+      if(from && d < from) return;                       // só a partir da data escolhida
+      if(!byDay[d] || byDay[d].time < w.time) byDay[d] = w;
+    });
+    let n = 0;
+    Object.keys(byDay).forEach(d=>{
+      const kg = Math.round(Number(byDay[d].kg)*100)/100;
+      if(!kg || kg < 20 || kg > 400) return;
+      const e = bodyEntry(d);
+      if(typeof e.kg === "number" && e.kgSrc !== "health") return;   // peso digitado por você manda
+      if(e.kg !== kg){ e.kg = kg; e.kgSrc = "health"; n++; }
+    });
+    return n;
+  }catch(e){ console.warn("weight", e); db.settings.lastErr = "peso: " + ((e&&e.message)||e); return 0; }
 }
 /* a resposta de permissões vem em formatos diferentes conforme a versão do plugin —
    normaliza tudo para {READ_STEPS:true/false, READ_WORKOUTS:true/false} */
@@ -2211,15 +2439,16 @@ async function healthStatus(){
   if(!native.isNative || !H) return {native:false, available:false, perms:{}};
   try{
     const av = await H.isHealthAvailable();
-    const c = await H.checkHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS"]});
+    const c = await H.checkHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS","READ_WEIGHT"]});
     return {native:true, available:!!(av && av.available), perms:permMap(c)};
   }catch(e){ return {native:true, available:false, perms:{}, err:(e&&e.message)||String(e)}; }
 }
 async function healthDiagForm(){
   openModal(`<h2>🔎 Diagnóstico do Samsung Health</h2><div class="empty">Verificando…</div>`);
   const st = await healthStatus();
-  const li = db.settings.lastImport;
+  const li = db.settings.lastImport, lw = db.settings.lastWeights;
   const yn = v => v === true ? "✅ permitido" : "❌ NÃO permitido";
+  const recTxt = r => r === 2 ? "🤖 automático" : r === 1 ? "▶️ você iniciou" : r === 3 ? "✍️ digitado" : "· origem não informada";
   openModal(`<h2>🔎 Diagnóstico do Samsung Health</h2>
     <div class="card" style="margin-bottom:12px">
       <div class="setline"><div class="grow"><div class="t">Health Connect instalado</div></div>
@@ -2228,14 +2457,26 @@ async function healthDiagForm(){
         <div class="d">${yn(st.perms.READ_STEPS)}</div></div>
       <div class="setline"><div class="grow"><div class="t">Permissão de treinos (exercício)</div></div>
         <div class="d">${yn(st.perms.READ_WORKOUTS)}</div></div>
+      <div class="setline"><div class="grow"><div class="t">Permissão de peso</div></div>
+        <div class="d">${yn(st.perms.READ_WEIGHT)}</div></div>
+      ${db.settings.lastErr ? `<div class="setline"><div class="grow"><div class="t">Último erro</div>
+        <div class="d" style="color:var(--bad)">${esc(db.settings.lastErr)}</div></div></div>` : ""}
     </div>
     ${li ? `<div class="card" style="margin-bottom:12px">
-      <div class="sub" style="margin-bottom:6px">Última importação (${new Date(li.when).toLocaleString("pt-BR")}): <b>${li.workouts} treino(s)</b> em ${li.dias} dia(s)</div>
-      ${li.det && li.det.length ? li.det.slice().reverse().map(w => `<div class="wkrow"><span class="wd">${fmtDate(w.d)}</span>
-        <span class="wv" style="font-size:.85rem">${esc(w.t)}</span><span class="wdelta" style="color:var(--muted)">${w.min}min${w.src?" · "+esc(w.src):""}</span></div>`).join("")
-        : `<div class="empty">Nenhum treino foi encontrado no Health Connect nos últimos 30 dias.</div>`}
+      <div class="sub" style="margin-bottom:6px">Treinos recebidos (${new Date(li.when).toLocaleString("pt-BR")}): <b>${li.workouts}</b> em ${li.dias} dia(s)</div>
+      ${li.det && li.det.length ? li.det.slice().reverse().map(w => `<div class="wkrow" style="align-items:flex-start">
+        <span class="wd">${fmtDate(w.d)}<br><span class="sub" style="font-size:.72rem">${recTxt(w.rec)}</span></span>
+        <span class="wv" style="font-size:.82rem">${esc(w.t)}${w.raw!=null?` <span class="sub">(#${w.raw})</span>`:""}${w.nome?`<br><span class="sub" style="font-size:.72rem">${esc(w.nome)}</span>`:""}</span>
+        <span class="wdelta" style="color:var(--muted)">${w.min}min</span></div>`).join("")
+        : `<div class="empty">Nenhum treino foi encontrado no Health Connect nos últimos 60 dias.</div>`}
     </div>` : `<div class="empty">Você ainda não importou nesta versão.</div>`}
-    <p class="sub" style="margin-bottom:12px">Se a permissão de <b>treinos</b> estiver negada, ou se o Samsung não estiver <b>enviando</b> os treinos, o app não recebe a musculação. No Health Connect: em <b>Samsung Health</b> permita <i>gravar</i> Exercício; em <b>Fitness Global</b> permita <i>ler</i> Exercício.</p>
+    ${lw ? `<div class="card" style="margin-bottom:12px">
+      <div class="sub" style="margin-bottom:6px">Pesagens encontradas: <b>${lw.n}</b>${db.settings.weightFrom?` · importando de ${fmtDate(db.settings.weightFrom)} em diante`:""}</div>
+      ${lw.det && lw.det.length ? lw.det.slice().reverse().map(w=>`<div class="wkrow"><span class="wd">${fmtDate(w.d)}</span>
+        <span class="wv">${fmtW(w.kg)} kg</span><span class="wdelta" style="color:var(--muted)">${esc(w.src)}</span></div>`).join("")
+        : `<div class="empty">Nenhuma pesagem no Health Connect. Confira se a Yunmai está enviando para o Samsung Health e se o Samsung tem permissão de <i>gravar</i> Peso.</div>`}
+    </div>` : ""}
+    <p class="sub" style="margin-bottom:12px">Atividades marcadas <b>🤖 automático</b> (o relógio detectou sozinho) não contam — é o que você pediu. Se alguma que você iniciou aparecer como <b>${esc("Outro treino")}</b>, toque na etiqueta dela na aba Atividade para ensinar o app.</p>
     <div class="btnrow">
       <button class="btn ghost" data-action="open-hc">Abrir Health Connect</button>
       <button class="btn" data-action="health-sync">Importar agora</button>
@@ -2287,7 +2528,11 @@ document.addEventListener("click", ev => {
   else if(a === "plan-tick"){
     const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
     const it=m.items.find(x=>x.id===el.dataset.i); if(!it) return;
-    it.done=it.done||{}; if(it.done[foodDay]) delete it.done[foodDay]; else it.done[foodDay]=true;
+    it.done=it.done||{};
+    const st=itemState(it,foodDay);
+    if(st==="open"){ it.done[foodDay]=true; }                              // 1º toque: comi
+    else if(st==="done"){ it.done[foodDay]="skip"; toast("Riscado — não vou comer"); }  // 2º toque: risca
+    else { delete it.done[foodDay]; }                                       // 3º toque: volta pro aberto
     save(); render();
   }
   else if(a === "add-urge"){ urgeForm(); }
@@ -2333,16 +2578,29 @@ document.addEventListener("click", ev => {
   else if(a === "health-diag"){ healthDiagForm(); }
   else if(a === "open-hc"){ const H = native.plugin("HealthPlugin"); if(H){ try{ H.openHealthConnectSettings(); }catch(e){ toast("Não deu para abrir."); } } }
   else if(a === "cycle-act"){
-    const t = el.dataset.t;
+    const key = el.dataset.k;
     const order = ["musc","cardio","skip"];
-    const cur = actKind(t);
-    const next = order[(order.indexOf(cur) + 1) % order.length] || "musc";
-    db.settings.actMap = Object.assign({}, db.settings.actMap, {[t]: next});
+    const curK = (db.settings.actMap||{})[key] || (key.endsWith("#auto") && db.settings.ignoreAuto!==false ? "skip" : actInfo(key.replace(/#auto$/,"")).k);
+    const next = order[(order.indexOf(curK) + 1) % order.length] || "musc";
+    db.settings.actMap = Object.assign({}, db.settings.actMap, {[key]: next});
     deriveAllActs(); save(); render();
     toast(next === "musc" ? "Passa a contar como musculação 🏋️" : next === "cardio" ? "Passa a contar como cardio 🏃" : "Não vai mais contar");
   }
-  else if(a === "quick-train"){ const e=bodyEntry(todayStr()); const k=el.dataset.t; e[k]=!e[k]; save(); render(); }
-  else if(a === "save-activity"){ const e=bodyEntry(todayStr()); const v=parseInt(document.getElementById("steps-today").value,10); e.steps=isNaN(v)?undefined:v; const cm=document.getElementById("cardiomin-today"); if(cm){ const c=parseInt(cm.value,10); e.cardioMin=isNaN(c)?undefined:c; } save(); render(); toast("Salvo ✓"); }
+  else if(a === "act-day"){ const n=+el.dataset.d; const d=shiftDay(actDay,n); if(d<=todayStr()) actDay=d; render(); }
+  else if(a === "act-day-set"){ actDay = el.dataset.d; render(); }
+  else if(a === "quick-train"){
+    const e=bodyEntry(actDay); const k=el.dataset.t;
+    e[k+"M"] = !e[k];            // marca manual: a importação do Samsung não apaga mais
+    e[k] = !!e[k+"M"];
+    deriveActs(e); save(); render();
+  }
+  else if(a === "save-activity"){
+    const e=bodyEntry(actDay);
+    const v=parseInt(document.getElementById("steps-today").value,10); e.steps=isNaN(v)?undefined:v;
+    const cm=document.getElementById("cardiomin-today");
+    if(cm){ const c=parseInt(cm.value,10); e.cardioMinM=isNaN(c)?undefined:c; e.cardioMin=e.cardioMinM; }
+    deriveActs(e); save(); render(); toast("Salvo ✓");
+  }
   else if(a === "body-entry"){ bodyForm(el.dataset.d || todayStr()); }
   else if(a === "save-body"){
     const date=document.getElementById("bf-date").value || el.dataset.orig;
@@ -2357,7 +2615,10 @@ document.addEventListener("click", ev => {
     let e=db.body.find(b=>b.date===date);
     if(!e){ e={id:uid(), date}; db.body.push(e); }
     e.kg = isNaN(kg)?undefined:kg; e.bf = isNaN(bf)?undefined:bf; e.m = m; e.note = note;
+    if(!isNaN(kg)) e.kgSrc = "manual";          // peso digitado: a importação não sobrescreve
+    e.muscM = musc; e.cardioM = cardio; e.cardioMinM = isNaN(cardioMin)?undefined:cardioMin;
     e.musc = musc; e.cardio = cardio; e.steps = isNaN(steps)?undefined:steps; e.cardioMin = isNaN(cardioMin)?undefined:cardioMin;
+    deriveActs(e);
     // se mudou a data de um registro existente, remove o antigo
     if(el.dataset.orig && el.dataset.orig!==date){ db.body=db.body.filter(b=>!(b.date===el.dataset.orig && b.id!==e.id)); }
     save(); closeModal(); render();
@@ -2376,6 +2637,7 @@ document.addEventListener("click", ev => {
 
 native.init();
 normalizeOrders();
+migrateManualActs();
 deriveAllActs();
 applyWake();
 render();

@@ -23,6 +23,13 @@ foreach ($f in @("index.html","manifest.webmanifest","sw.js","icon.svg","version
     }
 }
 
+# O plugin capacitor-health foi modificado (le peso e marca atividades automaticas).
+# Um "npm install" desfaz isso, por isso a copia oficial vive em native-patch\.
+$hp = "$native\node_modules\capacitor-health\android\src\main\java\com\fit_up\health\capacitor\HealthPlugin.kt"
+if ((Test-Path "$src\native-patch\HealthPlugin.kt") -and (Test-Path $hp)) {
+    Copy-Item "$src\native-patch\HealthPlugin.kt" $hp -Force
+}
+
 Write-Host "2/3  Compilando o APK (pode levar alguns minutos)..." -ForegroundColor Cyan
 Set-Location "$native\android"
 & ".\gradlew.bat" assembleDebug --no-daemon | Out-Host
