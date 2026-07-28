@@ -1,5 +1,5 @@
 {
-  "version": 11,
-  "notes": "Atividades que o relógio detecta sozinho (caminhada, \"outro exercício\") não contam mais; a musculação e a bike que você inicia são reconhecidas pelo nome; peso da balança Yunmai importado do Samsung Health; tabela de peso semana a semana com média; alimento planejado só conta como não consumido depois que o dia passa (2 toques risca); botão de zerar cada parte do app; Evolução separada em Peso/medidas e Atividade; escolher o dia na aba Atividade.",
+  "version": 12,
+  "notes": "Aviso quando você esquece de preencher a dieta do dia anterior; a notificação do descanso não empilha mais e mostra em qual série você está (ex.: \"agora a série 3/4\"); contador de séries do dia na lista de exercícios (2/4, 4/4) que zera sozinho; comentário em refeição e em alimento; a tela não sobe mais ao marcar um alimento; musculação iniciada por você é reconhecida mesmo quando o Samsung manda sem nome; o diagnóstico avisa se o APK ainda não lê peso ou se falta a permissão de peso; passos reconferidos a cada 3 minutos com o app aberto.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

@@ -66,6 +66,13 @@ input[type=number]{font-variant-numeric:tabular-nums;}
 .pill.glob{color:var(--accent); border-color:color-mix(in srgb, var(--accent) 45%, var(--border));}
 .pill.pr{color:var(--gold); border-color:color-mix(in srgb, var(--gold) 40%, var(--border));}
 .pills{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+/* contador de séries feitas hoje (lista de exercícios) */
+.setcount{flex:none; font-variant-numeric:tabular-nums; font-weight:800; font-size:.8rem; color:var(--faint);
+  border:1px solid var(--border); border-radius:999px; padding:3px 9px; background:var(--surface2);}
+.setcount.part{color:var(--gold); border-color:color-mix(in srgb, var(--gold) 45%, var(--border));}
+.setcount.full{color:var(--good); border-color:color-mix(in srgb, var(--good) 45%, var(--border));}
+/* comentários em refeições/alimentos */
+.fnote{color:var(--muted); font-size:.75rem; font-weight:400; line-height:1.35;}
 
 .btn{display:flex; align-items:center; justify-content:center; gap:8px; width:100%;
   background:var(--accent); color:var(--on-accent); font-weight:800; letter-spacing:.01em;
@@ -324,7 +331,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 11;
+const APP_VERSION = 12;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -446,8 +453,13 @@ window.addEventListener("hashchange", () => { pendingExtra = 0; reorderMode = fa
 const view = document.getElementById("view");
 const TREND = {up:{em:"📈", t:"Sua força está subindo"}, flat:{em:"➡️", t:"Força estável"}, down:{em:"📉", t:"Força caiu um pouco"}};
 
+let _lastScrollKey = null;
 function render(){
   const r = route();
+  /* re-render da MESMA tela (marcar alimento, alternar switch…) mantém a posição de
+     rolagem — antes a tela "subia" a cada toque */
+  const key = location.hash || "#/";
+  const keepY = key === _lastScrollKey ? window.scrollY : 0;
   if(r.name === "gym"){ const g = gymById(r.gymId); if(!g){ location.hash = ""; return; } renderGym(g); }
   else if(r.name === "ex"){
     const e = exById(r.exId), g = gymById(r.gymId);
@@ -461,7 +473,8 @@ function render(){
   else if(r.name === "progress") renderProgress();
   else renderHome();
   updateTabs(r.name);
-  window.scrollTo(0,0);
+  window.scrollTo(0, keepY);
+  _lastScrollKey = key;
 }
 function updateTabs(name){
   const tab = (name === "food" || name === "foodplan" || name === "foodreport") ? "food"
@@ -471,10 +484,13 @@ function updateTabs(name){
 
 function renderHome(){
   const cards = db.gyms.map(g => {
-    const n = gymExercises(g.id).length;
+    const exs = gymExercises(g.id), n = exs.length;
+    /* quantos exercícios você já começou hoje aqui (zera sozinho quando o dia vira) */
+    const feitos = exs.filter(e => { const l = todayLog(e.id); return l && l.sets.length; }).length;
     return `<div class="card tap row" data-action="open-gym" data-id="${g.id}">
       <div class="grow"><h3>${esc(g.name)}</h3>
-      <div class="sub">${n} exercício${n===1?"":"s"}</div></div>
+      <div class="sub">${n} exercício${n===1?"":"s"}${feitos?` · ${feitos}/${n} feitos hoje`:""}</div></div>
+      ${feitos?`<span class="setcount ${feitos>=n?"full":"part"}">${feitos}/${n}</span>`:""}
       <span class="chev">›</span></div>`;
   }).join("");
   const glob = db.exercises.filter(e => e.gymId === null).length;
@@ -484,6 +500,7 @@ function renderHome(){
       <span class="pill" title="Versão do app">v${APP_VERSION}</span>
       <button class="iconbtn" data-action="go" data-h="#/settings" aria-label="Ajustes">⚙️</button>
     </div>
+    ${dietWarnHtml()}
     <div class="section"><h2>Minhas academias ${Sync.badge()}</h2>
       ${cards || `<div class="empty">Nenhuma academia ainda.<br>Registre a primeira para começar a treinar.</div>`}
       <button class="btn" data-action="add-gym">＋ Registrar academia</button>
@@ -513,11 +530,14 @@ function renderGym(g){
     }
     const t = computeTrend(e.id);
     const mini = t ? `<span class="trendmini" title="${TREND[t.dir].t}">${TREND[t.dir].em}</span>` : "";
+    /* séries feitas HOJE (controle durante o treino) — zera sozinho quando o dia vira */
+    const tl = todayLog(e.id), dn = tl ? tl.sets.length : 0;
+    const sc = `<span class="setcount ${dn >= e.targetSets ? "full" : dn > 0 ? "part" : ""}" title="Séries feitas hoje">${dn}/${e.targetSets}</span>`;
     return `<div class="card tap row" data-action="open-ex" data-gym="${g.id}" data-id="${e.id}">
       ${e.photo ? `<img class="exthumb" src="${esc(e.photo)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ""}
       <div class="grow"><h3>${esc(e.name)}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}${e.notes ? " 📝" : ""}</h3>
       <div class="sub">${e.targetSets} séries · descanso ${e.restSec}s · ${summaryLine(e.id)}</div></div>
-      ${mini}<span class="chev">›</span></div>`;
+      ${sc}${mini}<span class="chev">›</span></div>`;
   }).join("");
   const canReorder = exs.length > 1;
   view.innerHTML = `
@@ -584,7 +604,7 @@ function renderEx(g, e){
       <button class="iconbtn" data-action="ex-menu" data-gym="${g.id}" data-id="${e.id}" aria-label="Editar / opções">⋮</button>
     </div>
     <div class="pills" style="margin-top:-4px">
-      <span class="pill">${e.targetSets} séries alvo</span>
+      <span class="pill" style="${done.length>=e.targetSets?"color:var(--good);border-color:var(--good)":done.length?"color:var(--gold);border-color:var(--gold)":""}">${done.length}/${e.targetSets} séries hoje</span>
       <span class="pill">descanso ${e.restSec}s</span>
       ${e.gymId === null ? '<span class="pill glob">🌐 em todas as academias</span>' : ""}
       <button class="pill" data-action="edit-ex" data-gym="${g.id}" data-id="${e.id}" style="cursor:pointer">✏️ editar</button>
@@ -599,7 +619,7 @@ function renderEx(g, e){
         ${rows}
         <div class="btnrow" style="margin-top:10px">
           <button class="btn ghost sm" data-action="extra-set">＋ Série extra</button>
-          <button class="btn ghost sm" data-action="start-rest" data-sec="${e.restSec}" data-name="${esc(e.name)}">⏱ Iniciar descanso</button>
+          <button class="btn ghost sm" data-action="start-rest" data-sec="${e.restSec}" data-name="${esc(e.name)} — ${done.length >= e.targetSets ? "série extra" : `agora a série ${done.length+1}/${e.targetSets}`}">⏱ Iniciar descanso</button>
         </div>
       </div>
     </div>
@@ -951,22 +971,24 @@ function tickRest(){
   tEl.textContent = Math.floor(s/60) + ":" + String(s%60).padStart(2,"0");
   pEl.style.width = Math.max(0, Math.min(100, left/rest.total*100)) + "%";
 }
-function stopRest(){
+function stopRest(skipCancel){
   rest.end = 0;
   if(rest.iv){ clearInterval(rest.iv); rest.iv = null; }
   bar.classList.remove("on");
   keepAlive.off();
-  native.cancelRest();
+  if(!skipCancel) native.cancelRest();
 }
 function finishRest(){
   const wasRunning = !!rest.end;
-  stopRest();
+  const nome = (lEl.textContent || "").replace(/^Descanso · /, "");
+  /* não cancela aqui: quem reposta a notificação é o notifyNow, com o MESMO id.
+     Se cancelássemos em paralelo, o cancel podia chegar depois e matar a nova. */
+  stopRest(native.isNative);
   if(!wasRunning) return;
   doVibrate(vibePattern());
-  const nome = (lEl.textContent || "").replace(/^Descanso · /, "");
   if(native.isNative) native.notifyNow(nome);        // notificação na barra, sai quando você arrasta
   else if("Notification" in window && Notification.permission === "granted"){
-    try{ new Notification("Descanso concluído 💪", {body:"Hora da próxima série!", silent:true, tag:"fitglobal-rest", requireInteraction:true}); }catch(e){}
+    try{ new Notification("Descanso concluído 💪", {body:nome || "Hora da próxima série!", silent:true, tag:"fitglobal-rest", requireInteraction:true}); }catch(e){}
   }
   maybeBeep();
   toast("Descanso concluído — próxima série! 💪");
@@ -1051,15 +1073,16 @@ const native = {
       }
     }
   },
-  /* notificação imediata (quando o descanso acaba com o app aberto) — fica na barra até você arrastar */
+  /* notificação imediata (quando o descanso acaba com o app aberto) — fica na barra até você arrastar.
+     MESMO id da agendada (7001): uma sempre SUBSTITUI a outra, nunca empilha */
   async notifyNow(label){
     if(!this.isNative) return;
     const LN = this.plugin("LocalNotifications"); if(!LN) return;
     try{
       await this.init();
       await LN.schedule({ notifications:[{
-        id:7003, channelId:this.channelId(), title:"Descanso concluído 💪",
-        body:(label ? label + " — " : "") + "Hora da próxima série!",
+        id:7001, channelId:this.channelId(), title:"Descanso concluído 💪",
+        body:label || "Hora da próxima série!",
         smallIcon:"ic_stat_icon", autoCancel:false, ongoing:false
       }]});
     }catch(e){}
@@ -1084,9 +1107,11 @@ const native = {
     const LN = this.plugin("LocalNotifications"); if(!LN) return;
     try{
       await LN.cancel({ notifications:[{id:7001}] });
+      /* limpa a notificação da série anterior que ainda estiver na barra — não empilha */
+      try{ await LN.removeAllDeliveredNotifications(); }catch(e){}
       await LN.schedule({ notifications:[{
         id:7001, channelId:this.channelId(), title:"Descanso concluído 💪",
-        body:(label ? label + " — " : "") + "Hora da próxima série!",
+        body:label || "Hora da próxima série!",
         schedule:{ at:new Date(atMs), allowWhileIdle:true },
         smallIcon:"ic_stat_icon", autoCancel:false, ongoing:false
       }]});
@@ -1413,7 +1438,12 @@ document.addEventListener("click", ev => {
     if(pendingExtra > 0 && l.sets.length > e.targetSets) pendingExtra--;
     save();
     if(pr) celebratePR(pr.kind, pr.value, pr.unit);
-    if(db.settings.autoRest) startRest(e.restSec, e.name);
+    /* o rótulo vai para a barra de descanso E para a notificação: você sabe em qual série está */
+    const dn = l.sets.length;
+    const lbl = dn >= e.targetSets
+      ? `${e.name} — ${dn}/${e.targetSets} séries feitas ✓`
+      : `${e.name} — agora a série ${dn+1}/${e.targetSets}`;
+    if(db.settings.autoRest) startRest(e.restSec, lbl);
     render();
   }
   else if(a === "del-set"){
@@ -1442,8 +1472,8 @@ document.addEventListener("click", ev => {
   else if(a === "metric"){ exUI.metric = el.dataset.m; renderProg(exById(route().exId), records(route().exId)); }
 
   else if(a === "start-rest") startRest(+el.dataset.sec, el.dataset.name || "");
-  else if(a === "rest-minus"){ rest.end -= 15000; native.scheduleRestEnd(rest.end, lEl.textContent); if(rest.end <= Date.now()) finishRest(); else tickRest(); }
-  else if(a === "rest-plus"){ rest.end += 15000; native.scheduleRestEnd(rest.end, lEl.textContent); tickRest(); }
+  else if(a === "rest-minus"){ rest.end -= 15000; native.scheduleRestEnd(rest.end, (lEl.textContent||"").replace(/^Descanso · /,"")); if(rest.end <= Date.now()) finishRest(); else tickRest(); }
+  else if(a === "rest-plus"){ rest.end += 15000; native.scheduleRestEnd(rest.end, (lEl.textContent||"").replace(/^Descanso · /,"")); tickRest(); }
   else if(a === "rest-skip") stopRest();
 
   else if(a === "tg"){
@@ -1779,6 +1809,35 @@ function adherence(date){
   return {t, d, open, pct: t?Math.round(d/t*100):null};
 }
 
+/* dias já encerrados com itens do plano sem marcar (nem ✓ nem riscado) — para o app
+   avisar "preencha o que você comeu ontem". Refeições criadas depois do dia não contam. */
+function unfilledPlanDays(){
+  const out=[], dis=db.settings.dietDismiss||{};
+  for(let i=1;i<=3;i++){
+    const d=shiftDay(todayStr(),-i);
+    if(dis[d]) continue;
+    let n=0;
+    plannedForDay(d).forEach(m=>{
+      if(m.created && m.created > d) return;
+      m.items.forEach(it=>{ if(itemState(it,d)==="open") n++; });
+    });
+    if(n) out.push({d,n});
+  }
+  return out;
+}
+/* um aviso só, do dia mais recente que ficou em aberto */
+function dietWarnHtml(){
+  const list = unfilledPlanDays();
+  if(!list.length) return "";
+  const x = list[0], outros = list.length - 1;
+  return `<div class="updbanner" style="margin-bottom:10px">
+    <span style="font-size:1.2rem">📋</span>
+    <div class="grow"><b>${dayLabel(x.d)}</b> — ${x.n} ite${x.n===1?"m":"ns"} da dieta sem marcar
+      <div class="sub">Preencha o que comeu (ou risque o que não comeu)${outros?` · mais ${outros} dia${outros>1?"s":""} em aberto`:""}</div></div>
+    <button class="btn sm" style="width:auto" data-action="food-fill" data-d="${x.d}">Preencher</button>
+    <button class="xbtn" data-action="diet-dismiss" data-d="${x.d}" aria-label="Dispensar">✕</button></div>`;
+}
+
 /* ---------- Alimentação: diário ---------- */
 function renderFood(){
   const day = foodDay;
@@ -1795,6 +1854,7 @@ function renderFood(){
       <button class="iconbtn" data-action="go" data-h="#/foodreport" aria-label="Relatório">📊</button>
       <button class="iconbtn" data-action="go" data-h="#/settings" aria-label="Ajustes">⚙️</button>
     </div>
+    ${dietWarnHtml()}
     <div class="daynav">
       <button class="navb" data-action="food-day" data-d="-1">‹</button>
       <div class="d">${dayLabel(day)}</div>
@@ -1834,13 +1894,15 @@ function plannedMealHtml(m,day){
       <span class="mt">${esc(m.name)}${m.fixed?" 📌":""}</span>
       <span class="tm">${m.time||""}</span>
     </div>
+    ${m.note?`<div class="fnote" style="margin:2px 0 6px">💬 ${esc(m.note)}</div>`:""}
     ${m.items.map(it=>{ const st=itemState(it,day);
       const chip = st==="done" ? "" : st==="skip" ? `<span class="fchip skip">não vou comer</span>`
         : dayClosed(day) ? `<span class="fchip skip">não consumido</span>` : `<span class="fchip pend">em aberto</span>`;
       return `<div class="fooditem ${st==="done"?"eaten":st==="skip"?"skipped":"pending"}">
         <button class="ftick ${st==="done"?"on":st==="skip"?"no":""}" data-action="plan-tick" data-m="${m.id}" data-i="${it.id}" aria-label="Marcar consumido">${st==="done"?"✓":st==="skip"?"✕":""}</button>
-        <span class="fn">${esc(it.name)}</span>
+        <span class="fn">${esc(it.name)}${it.note?`<div class="fnote">💬 ${esc(it.note)}</div>`:""}</span>
         ${chip}
+        <button class="xbtn" data-action="plan-item-note" data-m="${m.id}" data-i="${it.id}" aria-label="Comentário no alimento" style="color:var(--faint)">💬</button>
       </div>`; }).join("")}
   </div>`;
 }
@@ -1855,7 +1917,7 @@ function consumedMealHtml(mealName,foods,day){
     </div>
     ${foods.map(f=>`<div class="fooditem eaten">
       <span class="tm" style="width:42px">${fmtTime(f.ts)}</span>
-      <span class="fn">${esc(f.name)}</span>
+      <span class="fn">${esc(f.name)}${f.note?`<div class="fnote">💬 ${esc(f.note)}</div>`:""}</span>
       ${f.binge?`<span class="fchip binge">binge</span>`:""}
       ${!f.planned?`<span class="fchip outside">fora do plano</span>`:""}
       <button class="xbtn" data-action="edit-food" data-id="${f.id}" aria-label="Editar" style="color:var(--muted)">✎</button>
@@ -1885,6 +1947,8 @@ function foodForm(food){
       <div class="field" style="flex:1"><label for="ff-time">Horário</label>
       <input id="ff-time" type="time" value="${food?fmtTime(food.ts):nowHM()}"></div>
     </div>
+    <div class="field"><label for="ff-note">💬 Comentário (opcional)</label>
+    <input id="ff-note" value="${food&&food.note?esc(food.note):""}" placeholder="Ex.: comi só metade, estava sem sal…" maxlength="200"></div>
     <div class="field"><label>Tipo</label>
       <div class="seg">
         <button type="button" data-seg="kind" data-v="refeicao" class="${kind==="refeicao"?"on":""}">Refeição</button>
@@ -1922,7 +1986,9 @@ function renderFoodPlan(){
         <button class="xbtn" data-action="edit-plan" data-id="${m.id}" style="color:var(--muted)">✎</button>
         <button class="xbtn" data-action="del-plan" data-id="${m.id}">✕</button>
       </div>
-      ${m.items.map(it=>`<div class="fooditem eaten"><span class="fn">${esc(it.name)}</span></div>`).join("") || `<div class="fooditem pending"><span class="fn">— sem itens —</span></div>`}
+      ${m.note?`<div class="fnote" style="margin:2px 0 6px">💬 ${esc(m.note)}</div>`:""}
+      ${m.items.map(it=>`<div class="fooditem eaten"><span class="fn">${esc(it.name)}${it.note?`<div class="fnote">💬 ${esc(it.note)}</div>`:""}</span>
+        <button class="xbtn" data-action="plan-item-note" data-m="${m.id}" data-i="${it.id}" aria-label="Comentário no alimento" style="color:var(--faint)">💬</button></div>`).join("") || `<div class="fooditem pending"><span class="fn">— sem itens —</span></div>`}
     </div>`;
   view.innerHTML = `
     <div class="topbar">
@@ -1963,6 +2029,8 @@ function planForm(meal){
       </div><input type="hidden" id="pf-kind" value="${kind}"></div>
     <div class="field"><label for="pf-items">Alimentos (um por linha)</label>
     <textarea id="pf-items" placeholder="100g arroz\n150g frango\nsalada">${meal?esc(meal.items.map(i=>i.name).join("\n")):""}</textarea></div>
+    <div class="field"><label for="pf-note">💬 Comentário da refeição (opcional)</label>
+    <input id="pf-note" value="${meal&&meal.note?esc(meal.note):""}" placeholder="Ex.: se não der tempo, trocar por iogurte" maxlength="200"></div>
     <label class="check"><input type="checkbox" id="pf-fixed" ${fixed?"checked":""}>
       <div class="grow"><div class="t">📌 Refeição fixa</div><div class="d">Aparece todos os dias (senão, só em ${fmtDate(day)})</div></div></label>
     <button class="btn" data-action="save-plan" data-id="${meal?meal.id:""}">Salvar</button>`);
@@ -2036,7 +2104,9 @@ function bodyByDate(date){ return db.body.find(b=>b.date===date); }
 function bodyEntry(date){ let e=db.body.find(b=>b.date===date); if(!e){ e={id:uid(), date, m:{}}; db.body.push(e); } return e; }
 function actLabel(a){
   const inf = actInfo(a.t), k = actKind(a);
-  const nome = a.nome && a.nome.trim() ? a.nome.trim() : inf.l;
+  let nome = a.nome && a.nome.trim() ? a.nome.trim() : inf.l;
+  /* tipo genérico sem nome ("Outro treino"): mostra como o app está contando */
+  if(inf.k === "ask" && !(a.nome && a.nome.trim())) nome = k === "musc" ? "Musculação" : k === "cardio" ? "Cardio" : inf.l;
   const em = inf.k === "ask" ? (k === "musc" ? "🏋️" : k === "cardio" ? "🏃" : inf.e) : inf.e;
   return em + " " + nome + (isAuto(a) ? " 🤖" : "");
 }
@@ -2318,7 +2388,13 @@ function actKind(a){
   if(m[key]) return m[key];
   if(typeof a === "object" && isAuto(a) && db.settings.ignoreAuto !== false) return "skip";
   const base = actInfo(typeof a === "string" ? a : a.t).k;
-  if(base === "ask" && typeof a === "object"){ const g = guessByName(a.nome); if(g) return g; }
+  if(base === "ask" && typeof a === "object"){
+    const g = guessByName(a.nome); if(g) return g;
+    /* O Samsung manda "Aparelhos musculação" como tipo genérico e muitas vezes SEM nome.
+       Se foi VOCÊ que iniciou, conta como musculação — bike/corrida chegam com o tipo
+       certo, então o genérico manual é a sua musculação. Toque na etiqueta p/ mudar. */
+    if(!isAuto(a)) return "musc";
+  }
   return base;
 }
 function deriveActs(e){
@@ -2348,6 +2424,14 @@ function migrateManualActs(){
   db.settings.migAct11 = true;
   save(false);
 }
+/* migração v12: refeições do plano ganham data de criação — o aviso de "dia sem preencher"
+   só olha dias a partir daí (não reclama de dias antes de o plano existir) */
+function migratePlan12(){
+  if(db.settings.migPlan12) return;
+  db.plan.forEach(m => { if(!m.created) m.created = todayStr(); });
+  db.settings.migPlan12 = true;
+  save(false);
+}
 async function importHealth(silent){
   const H = native.plugin("HealthPlugin");
   if(!native.isNative || !H){ if(!silent) toast("Disponível só no app do celular 📱"); return; }
@@ -2355,6 +2439,10 @@ async function importHealth(silent){
     const av = await H.isHealthAvailable();
     if(!av || !av.available){ if(!silent && confirm("O Health Connect não está instalado/ativo. Abrir na Play Store?")) { try{ H.showHealthConnectInPlayStore(); }catch(e){} } return; }
     await H.requestHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS","READ_WEIGHT"]});
+    db.settings.lastErr = null;                       // erro antigo não fica pendurado no 🔎
+    /* se a permissão de PESO ficou de fora, avisa na lata — era o que estava travando */
+    let wperm = null;
+    try{ wperm = permMap(await H.checkHealthPermissions({permissions:["READ_WEIGHT"]})).READ_WEIGHT; }catch(e){}
     const start = new Date(); start.setDate(start.getDate()-59); start.setHours(0,0,0,0);   // 60 dias
     const end = new Date();
     let days=0, kgs=0;
@@ -2391,14 +2479,24 @@ async function importHealth(silent){
           nome:String(w.title||"")})) };
     }catch(e){ console.warn("workouts", e); db.settings.lastErr = "treinos: " + ((e&&e.message)||e); }
     kgs = await importWeights(H, start, end);
-    save(); render();
-    if(!silent) toast(days||kgs ? `Importado do Samsung Health ✓ (${days} dia(s)${kgs?`, ${kgs} peso(s)`:""})` : "Sincronizado — nada novo por enquanto.");
-  }catch(err){ console.warn("health", err); if(!silent) toast("Não deu para importar. Verifique as permissões no Health Connect."); }
+    save();
+    /* não redesenha por cima de um campo que você está preenchendo (a sync roda sozinha) */
+    const busy = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+    if(!silent || (!busy && !modal.classList.contains("on"))) render();
+    if(!silent){
+      if(!H.queryWeight) toast("Passos e treinos ok — mas este APK ainda não lê peso. Instale a versão nova pelo botão Atualizar.");
+      else if(wperm === false) toast("Falta permitir PESO no Health Connect — toque em 🔎 → Abrir Health Connect.");
+      else toast(days||kgs ? `Importado do Samsung Health ✓ (${days} dia(s)${kgs?`, ${kgs} peso(s)`:""})` : "Sincronizado — nada novo por enquanto.");
+    }
+  }catch(err){ console.warn("health", err); db.settings.lastErr = "geral: " + ((err&&err.message)||err); save(false);
+    if(!silent) toast("Não deu para importar. Verifique as permissões no Health Connect."); }
 }
 /* peso da balança (Yunmai -> Samsung Health -> Health Connect).
    Nunca sobrescreve um peso digitado por você; fica com o último pesagem de cada dia. */
 async function importWeights(H, start, end){
-  if(!H || !H.queryWeight) return 0;
+  if(!H) return 0;
+  /* o APK antigo não tem esse método nativo — sem isso não há como ler a balança */
+  if(!H.queryWeight){ db.settings.lastWeights = {when:Date.now(), n:0, noMethod:true, det:[]}; return 0; }
   try{
     const r = await H.queryWeight({startDate:start.toISOString(), endDate:end.toISOString()});
     const list = r.weights || [];
@@ -2447,6 +2545,8 @@ async function healthDiagForm(){
   openModal(`<h2>🔎 Diagnóstico do Samsung Health</h2><div class="empty">Verificando…</div>`);
   const st = await healthStatus();
   const li = db.settings.lastImport, lw = db.settings.lastWeights;
+  const H0 = native.plugin("HealthPlugin");
+  const hasW = !!(H0 && H0.queryWeight);
   const yn = v => v === true ? "✅ permitido" : "❌ NÃO permitido";
   const recTxt = r => r === 2 ? "🤖 automático" : r === 1 ? "▶️ você iniciou" : r === 3 ? "✍️ digitado" : "· origem não informada";
   openModal(`<h2>🔎 Diagnóstico do Samsung Health</h2>
@@ -2459,6 +2559,9 @@ async function healthDiagForm(){
         <div class="d">${yn(st.perms.READ_WORKOUTS)}</div></div>
       <div class="setline"><div class="grow"><div class="t">Permissão de peso</div></div>
         <div class="d">${yn(st.perms.READ_WEIGHT)}</div></div>
+      <div class="setline"><div class="grow"><div class="t">Este APK sabe ler peso</div>
+        ${hasW ? "" : `<div class="d" style="color:var(--bad)">Instale a versão nova (botão Atualizar na tela inicial) — a leitura da balança é código nativo, não entra sozinha.</div>`}</div>
+        <div class="d">${hasW ? "✅ sim (v" + APP_VERSION + ")" : "❌ APK antigo"}</div></div>
       ${db.settings.lastErr ? `<div class="setline"><div class="grow"><div class="t">Último erro</div>
         <div class="d" style="color:var(--bad)">${esc(db.settings.lastErr)}</div></div></div>` : ""}
     </div>
@@ -2471,27 +2574,36 @@ async function healthDiagForm(){
         : `<div class="empty">Nenhum treino foi encontrado no Health Connect nos últimos 60 dias.</div>`}
     </div>` : `<div class="empty">Você ainda não importou nesta versão.</div>`}
     ${lw ? `<div class="card" style="margin-bottom:12px">
-      <div class="sub" style="margin-bottom:6px">Pesagens encontradas: <b>${lw.n}</b>${db.settings.weightFrom?` · importando de ${fmtDate(db.settings.weightFrom)} em diante`:""}</div>
-      ${lw.det && lw.det.length ? lw.det.slice().reverse().map(w=>`<div class="wkrow"><span class="wd">${fmtDate(w.d)}</span>
+      <div class="sub" style="margin-bottom:6px">Pesagens encontradas: <b>${lw.noMethod?"—":lw.n}</b>${db.settings.weightFrom?` · importando de ${fmtDate(db.settings.weightFrom)} em diante`:""}</div>
+      ${lw.noMethod ? `<div class="empty" style="color:var(--bad)">Este APK não tem a leitura de peso. Atualize o app.</div>`
+        : lw.det && lw.det.length ? lw.det.slice().reverse().map(w=>`<div class="wkrow"><span class="wd">${fmtDate(w.d)}</span>
         <span class="wv">${fmtW(w.kg)} kg</span><span class="wdelta" style="color:var(--muted)">${esc(w.src)}</span></div>`).join("")
-        : `<div class="empty">Nenhuma pesagem no Health Connect. Confira se a Yunmai está enviando para o Samsung Health e se o Samsung tem permissão de <i>gravar</i> Peso.</div>`}
+        : `<div class="empty">Nenhuma pesagem no Health Connect. No <b>Samsung Health → Configurações → Health Connect</b>, ligue <b>Peso</b> (o Samsung precisa ter permissão de <i>gravar</i> peso, senão a pesagem da Yunmai fica só dentro do Samsung).</div>`}
     </div>` : ""}
+    <div class="card" style="margin-bottom:12px">
+      <div class="sub">Passos de hoje neste app: <b>${(()=>{const b=bodyByDate(todayStr())||{}; return typeof b.steps==="number"?b.steps.toLocaleString("pt-BR"):"—";})()}</b></div>
+      <p class="sub" style="margin-top:6px; font-size:.76rem">O Samsung Health envia os passos para o Health Connect <b>de tempos em tempos</b>, não a cada passo — por isso o número do Samsung costuma estar na frente. Abrir o Samsung Health force a sincronização; depois toque em "Importar agora".</p>
+    </div>
     <p class="sub" style="margin-bottom:12px">Atividades marcadas <b>🤖 automático</b> (o relógio detectou sozinho) não contam — é o que você pediu. Se alguma que você iniciou aparecer como <b>${esc("Outro treino")}</b>, toque na etiqueta dela na aba Atividade para ensinar o app.</p>
     <div class="btnrow">
       <button class="btn ghost" data-action="open-hc">Abrir Health Connect</button>
       <button class="btn" data-action="health-sync">Importar agora</button>
     </div>`);
 }
-async function autoHealthSync(){
+let _lastAutoSync = 0;
+async function autoHealthSync(force){
   if(!native.isNative) return;
   const H = native.plugin("HealthPlugin"); if(!H) return;
+  if(!force && Date.now() - _lastAutoSync < 60000) return;    // no máximo 1x por minuto
   try{
     const st = await healthStatus();
     if(!st.available) return;
     // se qualquer permissão já está concedida, importa ao abrir o app
-    if(Object.values(st.perms).some(v => v === true)) importHealth(true);
+    if(Object.values(st.perms).some(v => v === true)){ _lastAutoSync = Date.now(); importHealth(true); }
   }catch(e){}
 }
+/* enquanto o app está aberto, confere o Health Connect a cada 3 min (passos do dia) */
+setInterval(() => { if(!document.hidden) autoHealthSync(); }, 180000);
 
 /* ===================== ações (alimentação/evolução) ===================== */
 document.addEventListener("click", ev => {
@@ -2518,10 +2630,11 @@ document.addEventListener("click", ev => {
     const kind=document.getElementById("ff-kind").value;
     const binge=document.getElementById("ff-binge").checked;
     const planned=!document.getElementById("ff-outside").checked;
+    const note=(document.getElementById("ff-note").value||"").trim()||undefined;
     if(!name){ toast("Escreva o alimento."); return; }
     const ts=tsFor(foodDay,time);
-    if(el.dataset.id){ const f=db.food.find(x=>x.id===el.dataset.id); Object.assign(f,{name,meal,ts,kind,binge,planned}); }
-    else db.food.push({id:uid(), date:foodDay, ts, name, meal, kind, binge, planned});
+    if(el.dataset.id){ const f=db.food.find(x=>x.id===el.dataset.id); Object.assign(f,{name,meal,ts,kind,binge,planned,note}); }
+    else db.food.push({id:uid(), date:foodDay, ts, name, meal, kind, binge, planned, note});
     save(); closeModal(); render();
   }
   else if(a === "del-food"){ db.food=db.food.filter(f=>f.id!==el.dataset.id); save(); render(); }
@@ -2534,6 +2647,18 @@ document.addEventListener("click", ev => {
     else if(st==="done"){ it.done[foodDay]="skip"; toast("Riscado — não vou comer"); }  // 2º toque: risca
     else { delete it.done[foodDay]; }                                       // 3º toque: volta pro aberto
     save(); render();
+  }
+  else if(a === "plan-item-note"){
+    const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
+    const it=m.items.find(x=>x.id===el.dataset.i); if(!it) return;
+    const v=prompt(`Comentário para "${it.name}":`, it.note||"");
+    if(v===null) return;
+    it.note=v.trim()||undefined; save(); render();
+  }
+  else if(a === "food-fill"){ foodDay = el.dataset.d; location.hash = "#/food"; render(); }
+  else if(a === "diet-dismiss"){
+    db.settings.dietDismiss = Object.assign({}, db.settings.dietDismiss, {[el.dataset.d]:true});
+    save(false); render();
   }
   else if(a === "add-urge"){ urgeForm(); }
   else if(a === "save-urge"){
@@ -2553,15 +2678,16 @@ document.addEventListener("click", ev => {
     const time=document.getElementById("pf-time").value||"";
     const kind=document.getElementById("pf-kind").value;
     const fixed=document.getElementById("pf-fixed").checked;
+    const note=(document.getElementById("pf-note").value||"").trim()||undefined;
     const items=document.getElementById("pf-items").value.split("\n").map(s=>s.trim()).filter(Boolean);
     if(!name){ toast("Dê um nome à refeição."); return; }
     if(el.dataset.id){
       const m=db.plan.find(x=>x.id===el.dataset.id);
-      const old={}; m.items.forEach(it=>old[it.name]=it.done||{});
-      m.name=name; m.time=time; m.kind=kind; m.fixed=fixed; m.date=fixed?null:foodDay;
-      m.items=items.map(n=>({id:uid(), name:n, done:old[n]||{}}));
+      const old={}, oldNote={}; m.items.forEach(it=>{ old[it.name]=it.done||{}; oldNote[it.name]=it.note; });
+      m.name=name; m.time=time; m.kind=kind; m.fixed=fixed; m.date=fixed?null:foodDay; m.note=note;
+      m.items=items.map(n=>({id:uid(), name:n, done:old[n]||{}, note:oldNote[n]}));
     } else {
-      db.plan.push({id:uid(), name, time, kind, fixed, date:fixed?null:foodDay, items:items.map(n=>({id:uid(), name:n, done:{}}))});
+      db.plan.push({id:uid(), name, time, kind, fixed, note, created:todayStr(), date:fixed?null:foodDay, items:items.map(n=>({id:uid(), name:n, done:{}}))});
     }
     save(); closeModal(); render();
   }
@@ -2580,7 +2706,11 @@ document.addEventListener("click", ev => {
   else if(a === "cycle-act"){
     const key = el.dataset.k;
     const order = ["musc","cardio","skip"];
-    const curK = (db.settings.actMap||{})[key] || (key.endsWith("#auto") && db.settings.ignoreAuto!==false ? "skip" : actInfo(key.replace(/#auto$/,"")).k);
+    let curK = (db.settings.actMap||{})[key];
+    if(!curK){
+      if(key.endsWith("#auto") && db.settings.ignoreAuto!==false) curK = "skip";
+      else { curK = actInfo(key.replace(/#auto$/,"")).k; if(curK==="ask") curK = key.endsWith("#auto") ? "skip" : "musc"; }
+    }
     const next = order[(order.indexOf(curK) + 1) % order.length] || "musc";
     db.settings.actMap = Object.assign({}, db.settings.actMap, {[key]: next});
     deriveAllActs(); save(); render();
@@ -2638,6 +2768,7 @@ document.addEventListener("click", ev => {
 native.init();
 normalizeOrders();
 migrateManualActs();
+migratePlan12();
 deriveAllActs();
 applyWake();
 render();
