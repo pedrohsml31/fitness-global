@@ -245,6 +245,10 @@ table.xls td.avg, table.xls th.avg{background:color-mix(in srgb, var(--accent) 1
 table.xls td .nil{color:var(--faint);}
 table.xls td.dl{color:var(--muted); font-weight:700;}   /* sem cor: só o sinal, sem julgar se subir é bom ou ruim */
 .xbtn{width:32px;height:32px;border-radius:9px;background:none;border:1px solid var(--border);color:var(--bad);flex:none;font-size:.95rem;}
+.xbtn.wide{width:auto; padding:0 10px; color:var(--muted); font-size:.74rem; font-weight:800;}
+.xbtn.wide.on{color:var(--good); border-color:color-mix(in srgb, var(--good) 45%, var(--border)); background:color-mix(in srgb, var(--good) 10%, transparent);}
+table.xls td.warn{color:var(--gold);} table.xls td.good{color:var(--good);}
+table.xls td.tot, table.xls th.tot{background:var(--surface2); font-weight:800;}
 .urgebtn{background:color-mix(in srgb, var(--bad) 14%, var(--surface)); border:1px solid color-mix(in srgb,var(--bad) 45%, var(--border)); color:var(--bad); font-weight:800;}
 .rangewrap{display:flex; align-items:center; gap:12px;}
 input[type=range]{accent-color:var(--accent);}
@@ -331,7 +335,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 12;
+const APP_VERSION = 13;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -358,7 +362,7 @@ function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
 
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], logs:[], food:[], urges:[], plan:[], body:[], settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", ignoreAuto:true}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], logs:[], food:[], urges:[], plan:[], body:[], mealNotes:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", ignoreAuto:true, scaleWins:true}, updatedAt:0}; }
 /* duração do bipe de fim de série (mesmo som, só mais longo) */
 const SOUNDLEN = { curto:0.45, medio:1.1, longo:2.4 };
 let db;
@@ -1562,7 +1566,7 @@ document.addEventListener("click", ev => {
   }
   else if(a === "reset-food"){
     if(!confirm("Zerar a ALIMENTAÇÃO?\n\nApaga o plano, os alimentos consumidos e os urges/binges.\nTreino, peso e medidas continuam.")) return;
-    db.food = []; db.urges = []; db.plan = [];
+    db.food = []; db.urges = []; db.plan = []; db.mealNotes = {};
     save(); render(); toast("Alimentação zerada");
   }
   else if(a === "reset-body"){
@@ -1888,11 +1892,17 @@ function renderFood(){
     </div>`;
 }
 function plannedMealHtml(m,day){
+  /* dá para fechar a refeição inteira de uma vez: se ainda falta algo, marca tudo;
+     se já está tudo comido, desmarca tudo (para corrigir um toque errado) */
+  const abertos = m.items.filter(it=>itemState(it,day)!=="done").length;
   return `<div class="mealcard">
     <div class="mealhead">
       <span class="kindtag ${m.kind}">${m.kind==="lanche"?"Lanche":"Refeição"}</span>
       <span class="mt">${esc(m.name)}${m.fixed?" 📌":""}</span>
       <span class="tm">${m.time||""}</span>
+      ${m.items.length?`<button class="xbtn wide ${abertos?"":"on"}" data-action="plan-all" data-m="${m.id}" data-v="${abertos?"1":"0"}"
+        title="${abertos?"Marcar a refeição inteira como comida":"Desmarcar a refeição inteira"}">${abertos?"✓ tudo":"✓ tudo ✔"}</button>`:""}
+      <button class="xbtn" data-action="plan-note" data-m="${m.id}" aria-label="Comentário da refeição" style="color:var(--faint)">💬</button>
     </div>
     ${m.note?`<div class="fnote" style="margin:2px 0 6px">💬 ${esc(m.note)}</div>`:""}
     ${m.items.map(it=>{ const st=itemState(it,day);
@@ -1906,15 +1916,20 @@ function plannedMealHtml(m,day){
       </div>`; }).join("")}
   </div>`;
 }
+function mealNoteKey(day,mealName){ return day + "|" + mealName; }
+function mealNoteOf(day,mealName){ return (db.mealNotes||{})[mealNoteKey(day,mealName)]; }
 function consumedMealHtml(mealName,foods,day){
   const kind = foods[0].kind || "refeicao";
   const t0 = fmtTime(Math.min(...foods.map(f=>f.ts)));
+  const mn = mealNoteOf(day,mealName);
   return `<div class="mealcard">
     <div class="mealhead">
       <span class="kindtag ${kind}">${kind==="lanche"?"Lanche":"Refeição"}</span>
       <span class="mt">${esc(mealName)}</span>
       <span class="tm">${t0}</span>
+      <button class="xbtn" data-action="meal-note" data-n="${esc(mealName)}" aria-label="Comentário da refeição" style="color:var(--faint)">💬</button>
     </div>
+    ${mn?`<div class="fnote" style="margin:2px 0 6px">💬 ${esc(mn)}</div>`:""}
     ${foods.map(f=>`<div class="fooditem eaten">
       <span class="tm" style="width:42px">${fmtTime(f.ts)}</span>
       <span class="fn">${esc(f.name)}${f.note?`<div class="fnote">💬 ${esc(f.note)}</div>`:""}</span>
@@ -2178,7 +2193,70 @@ function activitySection(){
         <div><div class="sub">Passos/dia (7d)</div><div class="bignumv">${avg!=null?avg.toLocaleString("pt-BR"):"—"}</div></div>
       </div>
     </div>
-    <button class="btn danger sm" data-action="reset-act" style="margin-top:4px">🗑 Zerar atividades e passos</button></div>`;
+    <button class="btn danger sm" data-action="reset-act" style="margin-top:4px">🗑 Zerar atividades e passos</button></div>
+    ${activityTables()}`;
+}
+
+/* ---------- tabelas de atividade (semana / mês) ---------- */
+const MES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+function monthLabel(k){ const [y,m]=k.split("-"); return MES[+m-1] + "/" + y.slice(2); }
+/* agrupa os dias registrados por semana (segunda a domingo) ou por mês */
+function actGroups(keyOf){
+  const map = {};
+  db.body.forEach(b=>{
+    const k = keyOf(b.date);
+    const r = map[k] = map[k] || {musc:0, cardio:0, cmin:0, steps:0, sdays:0, dias:{}};
+    if(b.musc) r.musc++;
+    if(b.cardio){ r.cardio++; if(typeof b.cardioMin === "number") r.cmin += b.cardioMin; }
+    if(typeof b.steps === "number" && b.steps > 0){ r.steps += b.steps; r.sdays++; r.dias[dowIndex(b.date)] = b.steps; }
+  });
+  return map;
+}
+const nStep = n => Math.round(n).toLocaleString("pt-BR");
+function activityTables(){
+  const wk = actGroups(weekKeyOf), wkeys = Object.keys(wk).sort().slice(-8).reverse();
+  const mo = actGroups(d=>d.slice(0,7)), mkeys = Object.keys(mo).sort().slice(-6).reverse();
+  if(!wkeys.length) return "";
+
+  const resumo = `<div class="tblwrap"><table class="xls">
+    <thead><tr><th>Semana de</th><th>🏋️</th><th>🏃</th><th>Cardio total</th><th class="avg">Média/sessão</th><th>Passos total</th><th class="avg">Passos/dia</th></tr></thead>
+    <tbody>${wkeys.map(k=>{ const r=wk[k];
+      const med = r.cardio ? r.cmin/r.cardio : null;
+      const spd = r.sdays ? r.steps/r.sdays : null;
+      return `<tr><th>${fmtDate(k)}</th>
+        <td class="${r.musc?"good":""}">${r.musc||"<span class='nil'>–</span>"}</td>
+        <td class="${r.cardio?"good":""}">${r.cardio||"<span class='nil'>–</span>"}</td>
+        <td>${r.cmin?r.cmin+" min":"<span class='nil'>–</span>"}</td>
+        <td class="avg">${med!=null&&r.cmin?Math.round(med)+" min":"<span class='nil'>–</span>"}</td>
+        <td>${r.steps?nStep(r.steps):"<span class='nil'>–</span>"}</td>
+        <td class="avg">${spd!=null?nStep(spd):"<span class='nil'>–</span>"}</td></tr>`;
+    }).join("")}</tbody></table></div>
+    <div class="sub" style="margin-top:8px">🏋️ e 🏃 = quantos <b>dias</b> da semana; média/sessão = minutos de cardio ÷ dias com cardio; passos/dia = média só dos dias que têm passos registrados.</div>`;
+
+  const passos = `<div class="tblwrap"><table class="xls">
+    <thead><tr><th>Semana de</th>${DOW.map(d=>`<th>${d}</th>`).join("")}<th class="tot">Total</th><th class="avg">Média</th></tr></thead>
+    <tbody>${wkeys.map(k=>{ const r=wk[k];
+      const cells = DOW.map((_,j)=>{ const v=r.dias[j];
+        return `<td>${typeof v==="number"?nStep(v):"<span class='nil'>–</span>"}</td>`; }).join("");
+      return `<tr><th>${fmtDate(k)}</th>${cells}
+        <td class="tot">${r.steps?nStep(r.steps):"<span class='nil'>–</span>"}</td>
+        <td class="avg">${r.sdays?nStep(r.steps/r.sdays):"<span class='nil'>–</span>"}</td></tr>`;
+    }).join("")}</tbody></table></div>`;
+
+  const meses = `<div class="tblwrap"><table class="xls">
+    <thead><tr><th>Mês</th><th>🏋️</th><th>🏃</th><th>Cardio total</th><th>Passos total</th><th class="avg">Passos/dia</th></tr></thead>
+    <tbody>${mkeys.map(k=>{ const r=mo[k];
+      return `<tr><th>${monthLabel(k)}</th>
+        <td class="${r.musc?"good":""}">${r.musc||"<span class='nil'>–</span>"}</td>
+        <td class="${r.cardio?"good":""}">${r.cardio||"<span class='nil'>–</span>"}</td>
+        <td>${r.cmin?r.cmin+" min":"<span class='nil'>–</span>"}</td>
+        <td>${r.steps?nStep(r.steps):"<span class='nil'>–</span>"}</td>
+        <td class="avg">${r.sdays?nStep(r.steps/r.sdays):"<span class='nil'>–</span>"}</td></tr>`;
+    }).join("")}</tbody></table></div>`;
+
+  return `<div class="section"><h2>Semana a semana</h2><div class="card">${resumo}</div></div>
+    <div class="section"><h2>Passos por dia</h2><div class="card">${passos}</div></div>
+    <div class="section"><h2>Mês a mês</h2><div class="card">${meses}</div></div>`;
 }
 function bodySorted(){ return db.body.filter(b=>typeof b.kg==="number").sort((a,b)=>a.date<b.date?-1:1); }
 function weekKeyOf(date){ const d=new Date(date+"T00:00"); const off=(d.getDay()+6)%7; d.setDate(d.getDate()-off); return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
@@ -2250,11 +2328,15 @@ function renderProgress(){
       <button class="btn" data-action="body-entry" data-d="${todayStr()}">＋ Registrar hoje (peso, BF, medidas)</button>
       ${native.isNative?`<div class="card" style="margin-top:10px">
         <div class="setline"><div class="grow"><div class="t">Peso da balança (Samsung Health)</div>
-          <div class="d">Puxa as pesagens da Yunmai a partir da data abaixo. O que você digita à mão nunca é sobrescrito.</div>
+          <div class="d">Puxa as pesagens da Yunmai a partir da data abaixo. Pesagens de dias anteriores a essa data são ignoradas.</div>
           <div class="row" style="gap:8px; margin-top:8px">
             <input id="wfrom" type="date" value="${db.settings.weightFrom||""}" style="width:auto">
             <button class="btn ghost sm" data-action="save-wfrom" style="width:auto">Salvar</button>
           </div></div></div>
+        <div class="setline"><div class="grow"><div class="t">A balança manda</div>
+          <div class="d">Quando a pesagem chega do Health Connect, ela substitui o peso que estava no dia. Desligue para proteger valores digitados à mão.</div></div>
+          <button class="switch${db.settings.scaleWins!==false?" on":""}" data-action="tg" data-k="scaleWins" role="switch" aria-checked="${db.settings.scaleWins!==false}"></button></div>
+        ${db.settings.wDenied ? `<div class="empty" style="color:var(--bad); margin-top:8px">O Health Connect está <b>negando</b> a leitura de peso para este app. Toque em 🔎 → <b>Abrir Health Connect</b> → <b>Permissões do app</b> → Fitness Global → ligue <b>Peso</b>.</div>` : ""}
         <div class="btnrow" style="margin-top:6px">
           <button class="btn ghost sm" data-action="health-sync">🔄 Importar do Samsung Health</button>
           <button class="btn ghost sm" data-action="health-diag" style="flex:none; width:auto">🔎</button>
@@ -2443,6 +2525,8 @@ async function importHealth(silent){
     /* se a permissão de PESO ficou de fora, avisa na lata — era o que estava travando */
     let wperm = null;
     try{ wperm = permMap(await H.checkHealthPermissions({permissions:["READ_WEIGHT"]})).READ_WEIGHT; }catch(e){}
+    /* fica visível na tela de Evolução até ser resolvido — toast some rápido demais */
+    db.settings.wDenied = (wperm === false && !!H.queryWeight);
     const start = new Date(); start.setDate(start.getDate()-59); start.setHours(0,0,0,0);   // 60 dias
     const end = new Date();
     let days=0, kgs=0;
@@ -2484,41 +2568,66 @@ async function importHealth(silent){
     const busy = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
     if(!silent || (!busy && !modal.classList.contains("on"))) render();
     if(!silent){
+      const lwx = db.settings.lastWeights || {};
       if(!H.queryWeight) toast("Passos e treinos ok — mas este APK ainda não lê peso. Instale a versão nova pelo botão Atualizar.");
       else if(wperm === false) toast("Falta permitir PESO no Health Connect — toque em 🔎 → Abrir Health Connect.");
+      else if(!lwx.n) toast("Passos e treinos ok — mas o Health Connect não tem nenhuma pesagem. Toque em 🔎 → 🧪 Testar leitura de peso.");
       else toast(days||kgs ? `Importado do Samsung Health ✓ (${days} dia(s)${kgs?`, ${kgs} peso(s)`:""})` : "Sincronizado — nada novo por enquanto.");
     }
   }catch(err){ console.warn("health", err); db.settings.lastErr = "geral: " + ((err&&err.message)||err); save(false);
     if(!silent) toast("Não deu para importar. Verifique as permissões no Health Connect."); }
 }
 /* peso da balança (Yunmai -> Samsung Health -> Health Connect).
-   Nunca sobrescreve um peso digitado por você; fica com o último pesagem de cada dia. */
+   Fica com a última pesagem de cada dia e guarda o que fez com CADA uma (res[]), para o
+   🔎 conseguir dizer por que um peso que está no Health Connect não apareceu no app. */
 async function importWeights(H, start, end){
   if(!H) return 0;
   /* o APK antigo não tem esse método nativo — sem isso não há como ler a balança */
-  if(!H.queryWeight){ db.settings.lastWeights = {when:Date.now(), n:0, noMethod:true, det:[]}; return 0; }
+  if(!H.queryWeight){ db.settings.lastWeights = {when:Date.now(), n:0, noMethod:true, det:[], res:[]}; return 0; }
   try{
     const r = await H.queryWeight({startDate:start.toISOString(), endDate:end.toISOString()});
     const list = r.weights || [];
-    db.settings.lastWeights = { when:Date.now(), n:list.length,
-      det:list.slice(-10).map(w=>({d:localDateOf(w.time), kg:Math.round(Number(w.kg)*100)/100, src:String(w.deviceModel||w.sourceBundleId||"")})) };
     const from = db.settings.weightFrom || null;
     const byDay = {};
-    list.forEach(w=>{
-      const d = localDateOf(w.time);
-      if(from && d < from) return;                       // só a partir da data escolhida
-      if(!byDay[d] || byDay[d].time < w.time) byDay[d] = w;
-    });
-    let n = 0;
-    Object.keys(byDay).forEach(d=>{
+    list.forEach(w=>{ const d = localDateOf(w.time); if(!byDay[d] || byDay[d].time < w.time) byDay[d] = w; });
+    const res = []; let n = 0;
+    Object.keys(byDay).sort().forEach(d=>{
       const kg = Math.round(Number(byDay[d].kg)*100)/100;
-      if(!kg || kg < 20 || kg > 400) return;
+      const src = String(byDay[d].deviceModel || byDay[d].sourceBundleId || "");
+      const put = (act, antes) => res.push({d, kg, src, act, antes});
+      if(from && d < from){ put("antes-da-data"); return; }         // só a partir da data escolhida
+      if(!kg || kg < 20 || kg > 400){ put("fora-da-faixa"); return; }
       const e = bodyEntry(d);
-      if(typeof e.kg === "number" && e.kgSrc !== "health") return;   // peso digitado por você manda
-      if(e.kg !== kg){ e.kg = kg; e.kgSrc = "health"; n++; }
+      const manual = typeof e.kg === "number" && e.kgSrc !== "health";
+      /* "a balança manda" ligado: o valor da balança substitui o digitado (o antigo fica
+         registrado aqui no diagnóstico). Desligado: o que você digitou é preservado. */
+      if(manual && db.settings.scaleWins === false){ put("bloqueado", e.kg); return; }
+      if(e.kg === kg){ put("ja-estava"); return; }
+      const antes = typeof e.kg === "number" ? e.kg : null;
+      e.kg = kg; e.kgSrc = "health"; n++;
+      put(manual ? "substituiu" : antes != null ? "atualizou" : "novo", antes);
     });
+    db.settings.lastWeights = { when:Date.now(), n:list.length, aplicados:n,
+      dias:Object.keys(byDay).length, res:res.slice(-14),
+      det:list.slice(-10).map(w=>({d:localDateOf(w.time), kg:Math.round(Number(w.kg)*100)/100, src:String(w.deviceModel||w.sourceBundleId||"")})) };
     return n;
-  }catch(e){ console.warn("weight", e); db.settings.lastErr = "peso: " + ((e&&e.message)||e); return 0; }
+  }catch(e){ console.warn("weight", e); db.settings.lastErr = "peso: " + ((e&&e.message)||e);
+    db.settings.lastWeights = {when:Date.now(), n:0, erro:((e&&e.message)||String(e)), det:[], res:[]}; return 0; }
+}
+/* teste ao vivo, sem filtro nenhum: lê 365 dias e mostra tudo que o Health Connect entrega.
+   Serve para separar "não tem pesagem lá" de "tem, mas o app descartou". */
+async function weightProbe(){
+  const H = native.plugin("HealthPlugin");
+  if(!native.isNative || !H) return {ok:false, msg:"Só no app do celular."};
+  if(!H.queryWeight) return {ok:false, msg:"Este APK não tem a leitura de peso — instale a versão nova."};
+  const s = new Date(); s.setDate(s.getDate()-364); s.setHours(0,0,0,0);
+  try{
+    const r = await H.queryWeight({startDate:s.toISOString(), endDate:new Date().toISOString()});
+    const list = (r.weights||[]).slice().sort((a,b)=>String(a.time)<String(b.time)?1:-1);
+    return {ok:true, n:list.length, list:list.slice(0,12).map(w=>({
+      d:localDateOf(w.time), hm:fmtTime(new Date(w.time).getTime()),
+      kg:Math.round(Number(w.kg)*100)/100, src:String(w.deviceModel||w.sourceBundleId||"")}))};
+  }catch(e){ return {ok:false, msg:"Erro ao ler: " + ((e&&e.message)||e)}; }
 }
 /* a resposta de permissões vem em formatos diferentes conforme a versão do plugin —
    normaliza tudo para {READ_STEPS:true/false, READ_WORKOUTS:true/false} */
@@ -2532,6 +2641,13 @@ function permMap(res){
   put(res);
   return out;
 }
+/* o que o app fez com cada pesagem — em português, no 🔎 */
+const WACT = {
+  novo:"✅ entrou no app", atualizou:"✅ atualizou", substituiu:"✅ substituiu o digitado",
+  "ja-estava":"· já estava igual", bloqueado:"⛔ você digitou à mão (a balança não manda)",
+  "antes-da-data":"⛔ antes da data escolhida", "fora-da-faixa":"⛔ valor estranho, ignorado",
+  lido:"· lido"
+};
 async function healthStatus(){
   const H = native.plugin("HealthPlugin");
   if(!native.isNative || !H) return {native:false, available:false, perms:{}};
@@ -2548,6 +2664,8 @@ async function healthDiagForm(){
   const H0 = native.plugin("HealthPlugin");
   const hasW = !!(H0 && H0.queryWeight);
   const yn = v => v === true ? "✅ permitido" : "❌ NÃO permitido";
+  const wrows = (lw && lw.res && lw.res.length) ? lw.res
+    : (lw && lw.det && lw.det.length) ? lw.det.map(x=>Object.assign({act:"lido"}, x)) : [];
   const recTxt = r => r === 2 ? "🤖 automático" : r === 1 ? "▶️ você iniciou" : r === 3 ? "✍️ digitado" : "· origem não informada";
   openModal(`<h2>🔎 Diagnóstico do Samsung Health</h2>
     <div class="card" style="margin-bottom:12px">
@@ -2573,13 +2691,22 @@ async function healthDiagForm(){
         <span class="wdelta" style="color:var(--muted)">${w.min}min</span></div>`).join("")
         : `<div class="empty">Nenhum treino foi encontrado no Health Connect nos últimos 60 dias.</div>`}
     </div>` : `<div class="empty">Você ainda não importou nesta versão.</div>`}
-    ${lw ? `<div class="card" style="margin-bottom:12px">
-      <div class="sub" style="margin-bottom:6px">Pesagens encontradas: <b>${lw.noMethod?"—":lw.n}</b>${db.settings.weightFrom?` · importando de ${fmtDate(db.settings.weightFrom)} em diante`:""}</div>
-      ${lw.noMethod ? `<div class="empty" style="color:var(--bad)">Este APK não tem a leitura de peso. Atualize o app.</div>`
-        : lw.det && lw.det.length ? lw.det.slice().reverse().map(w=>`<div class="wkrow"><span class="wd">${fmtDate(w.d)}</span>
-        <span class="wv">${fmtW(w.kg)} kg</span><span class="wdelta" style="color:var(--muted)">${esc(w.src)}</span></div>`).join("")
-        : `<div class="empty">Nenhuma pesagem no Health Connect. No <b>Samsung Health → Configurações → Health Connect</b>, ligue <b>Peso</b> (o Samsung precisa ter permissão de <i>gravar</i> peso, senão a pesagem da Yunmai fica só dentro do Samsung).</div>`}
-    </div>` : ""}
+    <div class="card" style="margin-bottom:12px">
+      <div class="sub" style="margin-bottom:6px">⚖️ Peso — pesagens encontradas: <b>${!lw?"—":lw.noMethod?"—":lw.n}</b>${db.settings.weightFrom?` · aplicando de ${fmtDate(db.settings.weightFrom)} em diante`:""}${lw&&lw.aplicados!=null?` · ${lw.aplicados} aplicada(s)`:""}</div>
+      ${lw && lw.erro ? `<div class="empty" style="color:var(--bad)">Erro ao ler o peso: ${esc(lw.erro)}</div>` : ""}
+      ${!lw ? `<div class="empty">Você ainda não importou nesta versão.</div>`
+        : lw.noMethod ? `<div class="empty" style="color:var(--bad)">Este APK não tem a leitura de peso. Atualize o app.</div>`
+        : wrows.length ? wrows.slice().reverse().map(w=>`<div class="wkrow" style="align-items:flex-start">
+            <span class="wd">${fmtDate(w.d)}<br><span class="sub" style="font-size:.72rem">${esc(w.src||"—")}</span></span>
+            <span class="wv">${fmtW(w.kg)} kg</span>
+            <span class="wdelta" style="color:${/novo|atualizou|substituiu/.test(w.act)?"var(--good)":"var(--gold)"}; font-size:.72rem; text-align:right">${WACT[w.act]||w.act}${w.antes!=null?`<br><span class="sub" style="font-size:.7rem">antes: ${fmtW(w.antes)}</span>`:""}</span></div>`).join("")
+        : `<div class="empty">Nenhuma pesagem chegou ao Health Connect. No <b>Samsung Health → Configurações → Health Connect</b>, ligue <b>Peso</b> (o Samsung precisa de permissão de <i>gravar</i> peso, senão a pesagem da Yunmai fica só dentro do Samsung).</div>`}
+      <div class="btnrow" style="margin-top:10px">
+        <button class="btn ghost sm" data-action="w-probe">🧪 Testar leitura de peso (365 dias)</button>
+        ${st.perms.READ_WEIGHT === false ? `<button class="btn sm" data-action="w-ask" style="flex:none; width:auto">Pedir permissão</button>` : ""}
+      </div>
+      <div id="wprobe"></div>
+    </div>
     <div class="card" style="margin-bottom:12px">
       <div class="sub">Passos de hoje neste app: <b>${(()=>{const b=bodyByDate(todayStr())||{}; return typeof b.steps==="number"?b.steps.toLocaleString("pt-BR"):"—";})()}</b></div>
       <p class="sub" style="margin-top:6px; font-size:.76rem">O Samsung Health envia os passos para o Health Connect <b>de tempos em tempos</b>, não a cada passo — por isso o número do Samsung costuma estar na frente. Abrir o Samsung Health force a sincronização; depois toque em "Importar agora".</p>
@@ -2648,6 +2775,28 @@ document.addEventListener("click", ev => {
     else { delete it.done[foodDay]; }                                       // 3º toque: volta pro aberto
     save(); render();
   }
+  else if(a === "plan-all"){
+    const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
+    const marcar = el.dataset.v === "1";
+    m.items.forEach(it=>{ it.done=it.done||{};
+      if(marcar) it.done[foodDay]=true; else delete it.done[foodDay]; });
+    save(); render();
+    toast(marcar?`${m.name}: refeição inteira marcada ✓`:`${m.name}: desmarcada`);
+  }
+  else if(a === "plan-note"){
+    const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
+    const v=prompt(`Comentário para a refeição "${m.name}":`, m.note||"");
+    if(v===null) return;
+    m.note=v.trim()||undefined; save(); render();
+  }
+  else if(a === "meal-note"){
+    const k=mealNoteKey(foodDay, el.dataset.n);
+    db.mealNotes = db.mealNotes || {};
+    const v=prompt(`Comentário para "${el.dataset.n}" em ${fmtDate(foodDay)}:`, db.mealNotes[k]||"");
+    if(v===null) return;
+    if(v.trim()) db.mealNotes[k]=v.trim(); else delete db.mealNotes[k];
+    save(); render();
+  }
   else if(a === "plan-item-note"){
     const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
     const it=m.items.find(x=>x.id===el.dataset.i); if(!it) return;
@@ -2703,6 +2852,30 @@ document.addEventListener("click", ev => {
   else if(a === "health-sync"){ closeModal(); toast("Conectando ao Health Connect…"); importHealth(false); }
   else if(a === "health-diag"){ healthDiagForm(); }
   else if(a === "open-hc"){ const H = native.plugin("HealthPlugin"); if(H){ try{ H.openHealthConnectSettings(); }catch(e){ toast("Não deu para abrir."); } } }
+  else if(a === "w-ask"){
+    const H = native.plugin("HealthPlugin"); if(!H) return;
+    /* pede SÓ o peso: se o Health Connect não mostrar a tela, é porque a permissão foi
+       negada de vez e só dá para religar nas configurações dele */
+    H.requestHealthPermissions({permissions:["READ_WEIGHT"]}).then(async () => {
+      const ok = permMap(await H.checkHealthPermissions({permissions:["READ_WEIGHT"]})).READ_WEIGHT;
+      db.settings.wDenied = (ok === false); save(false);
+      if(ok){ toast("Permissão de peso concedida ✓ importando…"); importHealth(false); }
+      else toast("Continua negada — abra o Health Connect e ligue Peso para o Fitness Global.");
+    }).catch(e => toast("Não deu para pedir: " + ((e&&e.message)||e)));
+  }
+  else if(a === "w-probe"){
+    const box = document.getElementById("wprobe"); if(!box) return;
+    box.innerHTML = `<div class="empty">Lendo o Health Connect…</div>`;
+    weightProbe().then(p=>{
+      if(!p.ok){ box.innerHTML = `<div class="empty" style="color:var(--bad)">${esc(p.msg)}</div>`; return; }
+      box.innerHTML = p.n
+        ? `<div class="sub" style="margin:8px 0 4px"><b>${p.n}</b> pesagem(ns) no Health Connect nos últimos 365 dias:</div>`
+          + p.list.map(w=>`<div class="wkrow"><span class="wd">${fmtDate(w.d)} ${w.hm}</span>
+             <span class="wv">${fmtW(w.kg)} kg</span><span class="wdelta" style="color:var(--muted); font-size:.72rem">${esc(w.src||"—")}</span></div>`).join("")
+        : `<div class="empty" style="color:var(--bad)">O Health Connect não tem <b>nenhuma</b> pesagem. Então o problema não é o app: a Yunmai/Samsung não está gravando peso lá.<br><br>
+           Confira em <b>Health Connect → Dados e acesso → Peso → Ver todas as entradas</b>. Se estiver vazio, vá no <b>Samsung Health → Configurações → Health Connect</b> e ligue <b>Peso</b>; depois abra o Samsung Health e faça uma pesagem nova.</div>`;
+    });
+  }
   else if(a === "cycle-act"){
     const key = el.dataset.k;
     const order = ["musc","cardio","skip"];

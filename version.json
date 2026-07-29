@@ -1,5 +1,5 @@
 {
-  "version": 12,
-  "notes": "Aviso quando você esquece de preencher a dieta do dia anterior; a notificação do descanso não empilha mais e mostra em qual série você está (ex.: \"agora a série 3/4\"); contador de séries do dia na lista de exercícios (2/4, 4/4) que zera sozinho; comentário em refeição e em alimento; a tela não sobe mais ao marcar um alimento; musculação iniciada por você é reconhecida mesmo quando o Samsung manda sem nome; o diagnóstico avisa se o APK ainda não lê peso ou se falta a permissão de peso; passos reconferidos a cada 3 minutos com o app aberto.",
+  "version": 13,
+  "notes": "Marcar a refeição inteira de uma vez (✓ tudo) e comentário na refeição toda, planejada ou consumida; tabelas de atividade: semana a semana (musculação, cardio total e média por sessão, passos), passos por dia da semana e mês a mês; o diagnóstico agora mostra o que o app fez com CADA pesagem (entrou, já estava igual, antes da data escolhida, bloqueada por peso digitado à mão) e tem um teste de leitura de peso de 365 dias; nova opção \"A balança manda\" para a pesagem substituir o peso digitado; aviso fixo quando o Health Connect nega a permissão de peso.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
