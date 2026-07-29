@@ -243,7 +243,8 @@ table.xls thead th{background:var(--surface2); color:var(--muted); font-size:.7r
 table.xls tbody th{background:var(--surface2); color:var(--faint); font-weight:700; font-size:.74rem; text-align:left; padding-left:8px;}
 table.xls td.avg, table.xls th.avg{background:color-mix(in srgb, var(--accent) 12%, var(--surface)); font-weight:800;}
 table.xls td .nil{color:var(--faint);}
-table.xls td.dl{color:var(--muted); font-weight:700;}   /* sem cor: só o sinal, sem julgar se subir é bom ou ruim */
+table.xls td.dl{color:var(--muted); font-weight:700;}
+table.xls td.dl.up{color:var(--good);} table.xls td.dl.down{color:var(--bad);}   /* média subiu = verde, caiu = vermelho */
 .xbtn{width:32px;height:32px;border-radius:9px;background:none;border:1px solid var(--border);color:var(--bad);flex:none;font-size:.95rem;}
 .xbtn.wide{width:auto; padding:0 10px; color:var(--muted); font-size:.74rem; font-weight:800;}
 .xbtn.wide.on{color:var(--good); border-color:color-mix(in srgb, var(--good) 45%, var(--border)); background:color-mix(in srgb, var(--good) 10%, transparent);}
@@ -335,7 +336,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 14;
+const APP_VERSION = 15;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){

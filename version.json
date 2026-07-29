@@ -1,5 +1,5 @@
 {
-  "version": 14,
-  "notes": "Nova data de corte da atividade física: em Atividade dá para escolher \"Contar atividade a partir de\" — treinos e passos de dias anteriores não são importados nem entram no resumo de 7 dias, na faixa de 14 dias e nas tabelas de semana e mês. Nada é apagado: é só limpar a data que tudo volta a contar.",
+  "version": 15,
+  "notes": "Na tabela \"Semana a semana (peso por dia)\", a coluna Δ agora tem cor: média da semana maior que a da semana anterior fica verde, menor fica vermelha.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
