@@ -1,5 +1,5 @@
 {
-  "version": 13,
-  "notes": "Marcar a refeição inteira de uma vez (✓ tudo) e comentário na refeição toda, planejada ou consumida; tabelas de atividade: semana a semana (musculação, cardio total e média por sessão, passos), passos por dia da semana e mês a mês; o diagnóstico agora mostra o que o app fez com CADA pesagem (entrou, já estava igual, antes da data escolhida, bloqueada por peso digitado à mão) e tem um teste de leitura de peso de 365 dias; nova opção \"A balança manda\" para a pesagem substituir o peso digitado; aviso fixo quando o Health Connect nega a permissão de peso.",
+  "version": 14,
+  "notes": "Nova data de corte da atividade física: em Atividade dá para escolher \"Contar atividade a partir de\" — treinos e passos de dias anteriores não são importados nem entram no resumo de 7 dias, na faixa de 14 dias e nas tabelas de semana e mês. Nada é apagado: é só limpar a data que tudo volta a contar.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
