@@ -1,5 +1,5 @@
 {
-  "version": 16,
-  "notes": "O app agora importa também a GORDURA CORPORAL (BF) do Health Connect, junto com o peso — funciona com o openScale + openScale sync. Segue as mesmas regras do peso: última medição do dia, respeita a data de corte e a opção \"A balança manda\". O 🔎 ganhou um bloco de gordura corporal mostrando o que foi feito com cada medição, e a permissão de gordura aparece na lista.",
+  "version": 17,
+  "notes": "Conserta o botão Atualizar: agora ele é um link de verdade para o APK (o método antigo às vezes não abria o download e o toque parecia não fazer nada). Se mesmo assim não abrir, dá para copiar o link e colar no Chrome. Ajustes ganhou uma seção \"Atualizar o app\" com o botão de baixar e o link sempre à mão.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

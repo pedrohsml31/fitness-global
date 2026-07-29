@@ -336,7 +336,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 16;
+const APP_VERSION = 17;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -349,12 +349,29 @@ async function checkUpdate(){
 }
 function showUpdate(j){
   const slot = document.getElementById("updslot"); if(!slot) return;
+  /* no APK o botão é um LINK de verdade: o WebView entrega .apk ao navegador do sistema
+     sozinho. O window.open("_system") que havia aqui às vezes não abria nada e o toque
+     parecia não fazer efeito — daí o link visível e o "copiar link" logo abaixo. */
   slot.innerHTML = `<div class="updbanner">
     <span style="font-size:1.3rem">⬆️</span>
     <div class="grow"><b>Atualização disponível — v${APP_VERSION} → v${esc(j.version)}</b>
-      <div class="sub">${j.notes ? esc(j.notes) : "Nova versão do app."}</div></div>
-    <button class="btn sm" style="width:auto" data-action="do-update">Atualizar</button>
+      <div class="sub">${j.notes ? esc(j.notes) : "Nova versão do app."}</div>
+      ${native.isNative ? `<div class="sub" style="margin-top:6px">Não abriu o download? <span data-action="upd-copy" style="color:var(--accent); font-weight:700; text-decoration:underline; cursor:pointer">copie o link</span> e cole no Chrome.</div>` : ""}</div>
+    ${native.isNative
+      ? `<a class="btn sm" href="${APK_URL}" target="_blank" rel="noopener" data-action="upd-tip"
+           style="width:auto; text-decoration:none">Atualizar</a>`
+      : `<button class="btn sm" style="width:auto" data-action="do-update">Atualizar</button>`}
     <button class="xbtn" data-action="dismiss-update" aria-label="Dispensar">✕</button></div>`;
+}
+/* copiar para a área de transferência funcionando também em WebView sem permissão */
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); return true; }catch(e){}
+  try{
+    const ta = document.createElement("textarea");
+    ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand("copy"); ta.remove(); return ok;
+  }catch(e){ return false; }
 }
 
 /* padrões de vibração (duração/pulsos em ms) */
@@ -872,6 +889,15 @@ function renderSettings(){
         <button class="btn danger sm" style="width:auto" data-action="wipe">Apagar</button>
       </div>
     </div></div>
+    ${native.isNative ? `<div class="section"><h2>Atualizar o app</h2><div class="card">
+      <div class="setline"><div class="grow"><div class="t">Baixar o APK mais recente</div>
+        <div class="d">Instala por cima, sem perder dados. Se o download não abrir, copie o link e cole no Chrome.</div></div>
+        <a class="btn sm" href="${APK_URL}" target="_blank" rel="noopener" data-action="upd-tip"
+           style="width:auto; flex:none; text-decoration:none">⬇️ Baixar</a></div>
+      <div class="setline"><div class="grow"><div class="t">Link do APK</div>
+        <div class="d" style="word-break:break-all">${APK_URL}</div></div>
+        <button class="btn ghost sm" data-action="upd-copy" style="width:auto; flex:none">📋 Copiar</button></div>
+    </div></div>` : ""}
     <p class="sub" style="margin-top:10px">${native.isNative ? "Rodando como app instalado 📱" : "Rodando no navegador"} · <b>versão ${APP_VERSION}</b></p>`;
 }
 
@@ -2999,12 +3025,15 @@ document.addEventListener("click", ev => {
   }
   else if(a === "del-body"){ if(!confirm("Excluir o registro deste dia?")) return; db.body=db.body.filter(b=>b.date!==el.dataset.d); save(); closeModal(); render(); }
 
-  else if(a === "do-update"){
-    if(native.isNative){
-      try{ window.open(APK_URL, "_system"); }catch(e){ location.href = APK_URL; }
-      alert("Baixando a nova versão…\n\n1) Abra a notificação de download e toque no arquivo\n2) Confirme a instalação (é por cima, não perde dados)\n3) Feche e abra o app — a versão nova entra sozinha");
-    }
-    else { toast("Atualizando…"); setTimeout(()=>location.reload(), 400); }
+  else if(a === "do-update"){   // só no navegador: recarregar já traz a versão nova
+    toast("Atualizando…"); setTimeout(()=>location.reload(), 400);
+  }
+  /* o link já está baixando (não dá preventDefault aqui) — isto só explica o que fazer */
+  else if(a === "upd-tip"){
+    setTimeout(()=>toast("Abra a notificação de download e toque no arquivo para instalar por cima — não perde dados."), 600);
+  }
+  else if(a === "upd-copy"){
+    copyText(APK_URL).then(ok => toast(ok ? "Link copiado — cole no Chrome 📋" : APK_URL));
   }
   else if(a === "dismiss-update"){ const s=document.getElementById("updslot"); if(s) s.innerHTML=""; }
 });
