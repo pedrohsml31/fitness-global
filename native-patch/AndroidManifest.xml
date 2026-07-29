@@ -65,6 +65,7 @@
     <!-- Descanso exato mesmo com a tela apagada / celular em Doze -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <!-- Peso da balança (Yunmai -> Samsung Health -> Health Connect) -->
+    <!-- Peso e gordura corporal da balança (Yunmai -> openScale -> Health Connect) -->
     <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
 </manifest>

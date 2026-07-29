@@ -336,7 +336,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 15;
+const APP_VERSION = 16;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -2341,8 +2341,8 @@ function renderProgress(){
       </div>
       <button class="btn" data-action="body-entry" data-d="${todayStr()}">＋ Registrar hoje (peso, BF, medidas)</button>
       ${native.isNative?`<div class="card" style="margin-top:10px">
-        <div class="setline"><div class="grow"><div class="t">Peso da balança (Samsung Health)</div>
-          <div class="d">Puxa as pesagens da Yunmai a partir da data abaixo. Pesagens de dias anteriores a essa data são ignoradas.</div>
+        <div class="setline"><div class="grow"><div class="t">Peso e gordura da balança</div>
+          <div class="d">Puxa as pesagens e o BF do Health Connect a partir da data abaixo. Medições de dias anteriores a essa data são ignoradas.</div>
           <div class="row" style="gap:8px; margin-top:8px">
             <input id="wfrom" type="date" value="${db.settings.weightFrom||""}" style="width:auto">
             <button class="btn ghost sm" data-action="save-wfrom" style="width:auto">Salvar</button>
@@ -2352,7 +2352,7 @@ function renderProgress(){
           <button class="switch${db.settings.scaleWins!==false?" on":""}" data-action="tg" data-k="scaleWins" role="switch" aria-checked="${db.settings.scaleWins!==false}"></button></div>
         ${db.settings.wDenied ? `<div class="empty" style="color:var(--bad); margin-top:8px">O Health Connect está <b>negando</b> a leitura de peso para este app. Toque em 🔎 → <b>Abrir Health Connect</b> → <b>Permissões do app</b> → Fitness Global → ligue <b>Peso</b>.</div>` : ""}
         <div class="btnrow" style="margin-top:6px">
-          <button class="btn ghost sm" data-action="health-sync">🔄 Importar do Samsung Health</button>
+          <button class="btn ghost sm" data-action="health-sync">🔄 Importar do Health Connect</button>
           <button class="btn ghost sm" data-action="health-diag" style="flex:none; width:auto">🔎</button>
         </div>
       </div>`:""}
@@ -2538,7 +2538,7 @@ async function importHealth(silent){
   try{
     const av = await H.isHealthAvailable();
     if(!av || !av.available){ if(!silent && confirm("O Health Connect não está instalado/ativo. Abrir na Play Store?")) { try{ H.showHealthConnectInPlayStore(); }catch(e){} } return; }
-    await H.requestHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS","READ_WEIGHT"]});
+    await H.requestHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS","READ_WEIGHT","READ_BODY_FAT"]});
     db.settings.lastErr = null;                       // erro antigo não fica pendurado no 🔎
     /* se a permissão de PESO ficou de fora, avisa na lata — era o que estava travando */
     let wperm = null;
@@ -2583,6 +2583,7 @@ async function importHealth(silent){
           nome:String(w.title||"")})) };
     }catch(e){ console.warn("workouts", e); db.settings.lastErr = "treinos: " + ((e&&e.message)||e); }
     kgs = await importWeights(H, start, end);
+    const bfs = await importBodyFat(H, start, end);
     save();
     /* não redesenha por cima de um campo que você está preenchendo (a sync roda sozinha) */
     const busy = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
@@ -2592,7 +2593,7 @@ async function importHealth(silent){
       if(!H.queryWeight) toast("Passos e treinos ok — mas este APK ainda não lê peso. Instale a versão nova pelo botão Atualizar.");
       else if(wperm === false) toast("Falta permitir PESO no Health Connect — toque em 🔎 → Abrir Health Connect.");
       else if(!lwx.n) toast("Passos e treinos ok — mas o Health Connect não tem nenhuma pesagem. Toque em 🔎 → 🧪 Testar leitura de peso.");
-      else toast(days||kgs ? `Importado do Samsung Health ✓ (${days} dia(s)${kgs?`, ${kgs} peso(s)`:""})` : "Sincronizado — nada novo por enquanto.");
+      else toast(days||kgs||bfs ? `Importado do Health Connect ✓ (${days} dia(s)${kgs?`, ${kgs} peso(s)`:""}${bfs?`, ${bfs} BF`:""})` : "Sincronizado — nada novo por enquanto.");
     }
   }catch(err){ console.warn("health", err); db.settings.lastErr = "geral: " + ((err&&err.message)||err); save(false);
     if(!silent) toast("Não deu para importar. Verifique as permissões no Health Connect."); }
@@ -2634,6 +2635,39 @@ async function importWeights(H, start, end){
   }catch(e){ console.warn("weight", e); db.settings.lastErr = "peso: " + ((e&&e.message)||e);
     db.settings.lastWeights = {when:Date.now(), n:0, erro:((e&&e.message)||String(e)), det:[], res:[]}; return 0; }
 }
+/* gordura corporal (Yunmai -> openScale -> openScale sync -> Health Connect).
+   Mesmas regras do peso: fica com a última medição de cada dia, respeita a data de corte
+   e o "a balança manda", e registra o que fez com cada uma. */
+async function importBodyFat(H, start, end){
+  if(!H) return 0;
+  if(!H.queryBodyFat){ db.settings.lastBF = {when:Date.now(), n:0, noMethod:true, res:[]}; return 0; }
+  try{
+    const r = await H.queryBodyFat({startDate:start.toISOString(), endDate:end.toISOString()});
+    const list = r.bodyFat || [];
+    const from = db.settings.weightFrom || null;
+    const byDay = {};
+    list.forEach(w=>{ const d = localDateOf(w.time); if(!byDay[d] || byDay[d].time < w.time) byDay[d] = w; });
+    const res = []; let n = 0;
+    Object.keys(byDay).sort().forEach(d=>{
+      const pct = Math.round(Number(byDay[d].pct)*100)/100;
+      const src = String(byDay[d].deviceModel || byDay[d].sourceBundleId || "");
+      const put = (act, antes) => res.push({d, v:pct, src, act, antes});
+      if(from && d < from){ put("antes-da-data"); return; }
+      if(!pct || pct < 2 || pct > 75){ put("fora-da-faixa"); return; }
+      const e = bodyEntry(d);
+      const manual = typeof e.bf === "number" && e.bfSrc !== "health";
+      if(manual && db.settings.scaleWins === false){ put("bloqueado", e.bf); return; }
+      if(e.bf === pct){ put("ja-estava"); return; }
+      const antes = typeof e.bf === "number" ? e.bf : null;
+      e.bf = pct; e.bfSrc = "health"; n++;
+      put(manual ? "substituiu" : antes != null ? "atualizou" : "novo", antes);
+    });
+    db.settings.lastBF = { when:Date.now(), n:list.length, aplicados:n,
+      dias:Object.keys(byDay).length, res:res.slice(-14) };
+    return n;
+  }catch(e){ console.warn("bodyfat", e); db.settings.lastErr = "gordura: " + ((e&&e.message)||e);
+    db.settings.lastBF = {when:Date.now(), n:0, erro:((e&&e.message)||String(e)), res:[]}; return 0; }
+}
 /* teste ao vivo, sem filtro nenhum: lê 365 dias e mostra tudo que o Health Connect entrega.
    Serve para separar "não tem pesagem lá" de "tem, mas o app descartou". */
 async function weightProbe(){
@@ -2668,19 +2702,28 @@ const WACT = {
   "antes-da-data":"⛔ antes da data escolhida", "fora-da-faixa":"⛔ valor estranho, ignorado",
   lido:"· lido"
 };
+/* uma linha do 🔎: data, origem, valor e o que o app fez com a medição */
+function measRowHtml(w, unit){
+  const v = typeof w.kg === "number" ? w.kg : w.v;
+  const ok = /novo|atualizou|substituiu/.test(w.act);
+  return `<div class="wkrow" style="align-items:flex-start">
+    <span class="wd">${fmtDate(w.d)}<br><span class="sub" style="font-size:.72rem">${esc(w.src||"—")}</span></span>
+    <span class="wv">${fmtW(v)}${unit}</span>
+    <span class="wdelta" style="color:${ok?"var(--good)":"var(--gold)"}; font-size:.72rem; text-align:right">${WACT[w.act]||w.act}${w.antes!=null?`<br><span class="sub" style="font-size:.7rem">antes: ${fmtW(w.antes)}</span>`:""}</span></div>`;
+}
 async function healthStatus(){
   const H = native.plugin("HealthPlugin");
   if(!native.isNative || !H) return {native:false, available:false, perms:{}};
   try{
     const av = await H.isHealthAvailable();
-    const c = await H.checkHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS","READ_WEIGHT"]});
+    const c = await H.checkHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS","READ_WEIGHT","READ_BODY_FAT"]});
     return {native:true, available:!!(av && av.available), perms:permMap(c)};
   }catch(e){ return {native:true, available:false, perms:{}, err:(e&&e.message)||String(e)}; }
 }
 async function healthDiagForm(){
   openModal(`<h2>🔎 Diagnóstico do Samsung Health</h2><div class="empty">Verificando…</div>`);
   const st = await healthStatus();
-  const li = db.settings.lastImport, lw = db.settings.lastWeights;
+  const li = db.settings.lastImport, lw = db.settings.lastWeights, lbf = db.settings.lastBF;
   const H0 = native.plugin("HealthPlugin");
   const hasW = !!(H0 && H0.queryWeight);
   const yn = v => v === true ? "✅ permitido" : "❌ NÃO permitido";
@@ -2697,6 +2740,8 @@ async function healthDiagForm(){
         <div class="d">${yn(st.perms.READ_WORKOUTS)}</div></div>
       <div class="setline"><div class="grow"><div class="t">Permissão de peso</div></div>
         <div class="d">${yn(st.perms.READ_WEIGHT)}</div></div>
+      <div class="setline"><div class="grow"><div class="t">Permissão de gordura corporal</div></div>
+        <div class="d">${yn(st.perms.READ_BODY_FAT)}</div></div>
       <div class="setline"><div class="grow"><div class="t">Este APK sabe ler peso</div>
         ${hasW ? "" : `<div class="d" style="color:var(--bad)">Instale a versão nova (botão Atualizar na tela inicial) — a leitura da balança é código nativo, não entra sozinha.</div>`}</div>
         <div class="d">${hasW ? "✅ sim (v" + APP_VERSION + ")" : "❌ APK antigo"}</div></div>
@@ -2716,16 +2761,21 @@ async function healthDiagForm(){
       ${lw && lw.erro ? `<div class="empty" style="color:var(--bad)">Erro ao ler o peso: ${esc(lw.erro)}</div>` : ""}
       ${!lw ? `<div class="empty">Você ainda não importou nesta versão.</div>`
         : lw.noMethod ? `<div class="empty" style="color:var(--bad)">Este APK não tem a leitura de peso. Atualize o app.</div>`
-        : wrows.length ? wrows.slice().reverse().map(w=>`<div class="wkrow" style="align-items:flex-start">
-            <span class="wd">${fmtDate(w.d)}<br><span class="sub" style="font-size:.72rem">${esc(w.src||"—")}</span></span>
-            <span class="wv">${fmtW(w.kg)} kg</span>
-            <span class="wdelta" style="color:${/novo|atualizou|substituiu/.test(w.act)?"var(--good)":"var(--gold)"}; font-size:.72rem; text-align:right">${WACT[w.act]||w.act}${w.antes!=null?`<br><span class="sub" style="font-size:.7rem">antes: ${fmtW(w.antes)}</span>`:""}</span></div>`).join("")
-        : `<div class="empty">Nenhuma pesagem chegou ao Health Connect. No <b>Samsung Health → Configurações → Health Connect</b>, ligue <b>Peso</b> (o Samsung precisa de permissão de <i>gravar</i> peso, senão a pesagem da Yunmai fica só dentro do Samsung).</div>`}
+        : wrows.length ? wrows.slice().reverse().map(w=>measRowHtml(w," kg")).join("")
+        : `<div class="empty">Nenhuma pesagem chegou ao Health Connect. Se você usa o <b>openScale</b>, confira no <b>openScale sync</b> se o Health Connect está ligado e com permissão de <i>gravar</i> Peso.</div>`}
       <div class="btnrow" style="margin-top:10px">
         <button class="btn ghost sm" data-action="w-probe">🧪 Testar leitura de peso (365 dias)</button>
         ${st.perms.READ_WEIGHT === false ? `<button class="btn sm" data-action="w-ask" style="flex:none; width:auto">Pedir permissão</button>` : ""}
       </div>
       <div id="wprobe"></div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="sub" style="margin-bottom:6px">🧍 Gordura corporal — medições encontradas: <b>${!lbf?"—":lbf.noMethod?"—":lbf.n}</b>${lbf&&lbf.aplicados!=null?` · ${lbf.aplicados} aplicada(s)`:""}</div>
+      ${lbf && lbf.erro ? `<div class="empty" style="color:var(--bad)">Erro ao ler a gordura: ${esc(lbf.erro)}</div>` : ""}
+      ${!lbf ? `<div class="empty">Você ainda não importou nesta versão.</div>`
+        : lbf.noMethod ? `<div class="empty" style="color:var(--bad)">Este APK não lê gordura corporal. Atualize o app.</div>`
+        : lbf.res && lbf.res.length ? lbf.res.slice().reverse().map(w=>measRowHtml(w,"%")).join("")
+        : `<div class="empty">Nenhuma medição de gordura no Health Connect. No <b>openScale sync</b>, ligue o Health Connect e marque <b>Gordura corporal</b>.</div>`}
     </div>
     <div class="card" style="margin-bottom:12px">
       <div class="sub">Passos de hoje neste app: <b>${(()=>{const b=bodyByDate(todayStr())||{}; return typeof b.steps==="number"?b.steps.toLocaleString("pt-BR"):"—";})()}</b></div>
@@ -2874,10 +2924,11 @@ document.addEventListener("click", ev => {
   else if(a === "open-hc"){ const H = native.plugin("HealthPlugin"); if(H){ try{ H.openHealthConnectSettings(); }catch(e){ toast("Não deu para abrir."); } } }
   else if(a === "w-ask"){
     const H = native.plugin("HealthPlugin"); if(!H) return;
-    /* pede SÓ o peso: se o Health Connect não mostrar a tela, é porque a permissão foi
-       negada de vez e só dá para religar nas configurações dele */
-    H.requestHealthPermissions({permissions:["READ_WEIGHT"]}).then(async () => {
-      const ok = permMap(await H.checkHealthPermissions({permissions:["READ_WEIGHT"]})).READ_WEIGHT;
+    /* pede só o que vem da balança: se o Health Connect não mostrar a tela, é porque a
+       permissão foi negada de vez e só dá para religar nas configurações dele */
+    const balanca = ["READ_WEIGHT","READ_BODY_FAT"];
+    H.requestHealthPermissions({permissions:balanca}).then(async () => {
+      const ok = permMap(await H.checkHealthPermissions({permissions:balanca})).READ_WEIGHT;
       db.settings.wDenied = (ok === false); save(false);
       if(ok){ toast("Permissão de peso concedida ✓ importando…"); importHealth(false); }
       else toast("Continua negada — abra o Health Connect e ligue Peso para o Fitness Global.");
@@ -2892,8 +2943,8 @@ document.addEventListener("click", ev => {
         ? `<div class="sub" style="margin:8px 0 4px"><b>${p.n}</b> pesagem(ns) no Health Connect nos últimos 365 dias:</div>`
           + p.list.map(w=>`<div class="wkrow"><span class="wd">${fmtDate(w.d)} ${w.hm}</span>
              <span class="wv">${fmtW(w.kg)} kg</span><span class="wdelta" style="color:var(--muted); font-size:.72rem">${esc(w.src||"—")}</span></div>`).join("")
-        : `<div class="empty" style="color:var(--bad)">O Health Connect não tem <b>nenhuma</b> pesagem. Então o problema não é o app: a Yunmai/Samsung não está gravando peso lá.<br><br>
-           Confira em <b>Health Connect → Dados e acesso → Peso → Ver todas as entradas</b>. Se estiver vazio, vá no <b>Samsung Health → Configurações → Health Connect</b> e ligue <b>Peso</b>; depois abra o Samsung Health e faça uma pesagem nova.</div>`;
+        : `<div class="empty" style="color:var(--bad)">O Health Connect não tem <b>nenhuma</b> pesagem. Então o problema não é o app: nada está gravando peso lá.<br><br>
+           Confira em <b>Health Connect → Dados e acesso → Peso → Ver todas as entradas</b>. Se estiver vazio, abra o <b>openScale sync</b>, ligue o Health Connect e faça uma pesagem nova.</div>`;
     });
   }
   else if(a === "cycle-act"){

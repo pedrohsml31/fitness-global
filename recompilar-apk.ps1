@@ -30,6 +30,13 @@ if ((Test-Path "$src\native-patch\HealthPlugin.kt") -and (Test-Path $hp)) {
     Copy-Item "$src\native-patch\HealthPlugin.kt" $hp -Force
 }
 
+# O manifesto declara as permissoes de saude (peso, gordura corporal). Sem esta copia,
+# uma permissao nova em native-patch nunca chega ao APK.
+$mf = "$native\android\app\src\main\AndroidManifest.xml"
+if ((Test-Path "$src\native-patch\AndroidManifest.xml") -and (Test-Path $mf)) {
+    Copy-Item "$src\native-patch\AndroidManifest.xml" $mf -Force
+}
+
 Write-Host "2/3  Compilando o APK (pode levar alguns minutos)..." -ForegroundColor Cyan
 Set-Location "$native\android"
 & ".\gradlew.bat" assembleDebug --no-daemon | Out-Host

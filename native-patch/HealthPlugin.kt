@@ -12,6 +12,7 @@ import androidx.health.connect.client.aggregate.AggregateMetric
 import androidx.health.connect.client.aggregate.AggregationResult
 import androidx.health.connect.client.aggregate.AggregationResultGroupedByPeriod
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseRouteResult
 import androidx.health.connect.client.records.ExerciseSessionRecord
@@ -42,7 +43,7 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.jvm.optionals.getOrDefault
 
 enum class CapHealthPermission {
-    READ_STEPS, READ_WORKOUTS, READ_HEART_RATE, READ_ROUTE, READ_ACTIVE_CALORIES, READ_TOTAL_CALORIES, READ_DISTANCE, READ_WEIGHT;
+    READ_STEPS, READ_WORKOUTS, READ_HEART_RATE, READ_ROUTE, READ_ACTIVE_CALORIES, READ_TOTAL_CALORIES, READ_DISTANCE, READ_WEIGHT, READ_BODY_FAT;
 
     companion object {
         fun from(s: String): CapHealthPermission? {
@@ -90,6 +91,10 @@ enum class CapHealthPermission {
         Permission(
             alias = "READ_WEIGHT",
             strings = ["android.permission.health.READ_WEIGHT"]
+        ),
+        Permission(
+            alias = "READ_BODY_FAT",
+            strings = ["android.permission.health.READ_BODY_FAT"]
         )
     ]
 )
@@ -147,7 +152,8 @@ class HealthPlugin : Plugin() {
         Pair(CapHealthPermission.READ_TOTAL_CALORIES, "android.permission.health.READ_TOTAL_CALORIES_BURNED"),
         Pair(CapHealthPermission.READ_DISTANCE, "android.permission.health.READ_DISTANCE"),
         Pair(CapHealthPermission.READ_STEPS, "android.permission.health.READ_STEPS"),
-        Pair(CapHealthPermission.READ_WEIGHT, "android.permission.health.READ_WEIGHT")
+        Pair(CapHealthPermission.READ_WEIGHT, "android.permission.health.READ_WEIGHT"),
+        Pair(CapHealthPermission.READ_BODY_FAT, "android.permission.health.READ_BODY_FAT")
     )
 
     // Check if a set of permissions are granted
@@ -519,6 +525,40 @@ class HealthPlugin : Plugin() {
                 call.resolve(result)
             } catch (e: Exception) {
                 call.reject("Error querying weight: ${e.message}")
+            }
+        }
+    }
+
+    // Fitness Global: lê a gordura corporal (ex.: balança Yunmai -> openScale -> Health Connect)
+    @PluginMethod
+    fun queryBodyFat(call: PluginCall) {
+        val startDate = call.getString("startDate")
+        val endDate = call.getString("endDate")
+        if (startDate == null || endDate == null) {
+            call.reject("Missing required parameters: startDate or endDate")
+            return
+        }
+        val timeRange = TimeRangeFilter.between(Instant.parse(startDate), Instant.parse(endDate))
+        val request = ReadRecordsRequest(BodyFatRecord::class, timeRange, emptySet(), true, 1000)
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val response = healthConnectClient.readRecords(request)
+                val arr = JSArray()
+                for (r in response.records) {
+                    val o = JSObject()
+                    o.put("time", r.time.toString())
+                    o.put("pct", r.percentage.value)
+                    o.put("recordingMethod", r.metadata.recordingMethod)
+                    o.put("sourceBundleId", r.metadata.dataOrigin.packageName)
+                    o.put("deviceModel", r.metadata.device?.model ?: "")
+                    arr.put(o)
+                }
+                val result = JSObject()
+                result.put("bodyFat", arr)
+                call.resolve(result)
+            } catch (e: Exception) {
+                call.reject("Error querying body fat: ${e.message}")
             }
         }
     }

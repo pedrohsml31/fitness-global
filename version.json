@@ -1,5 +1,5 @@
 {
-  "version": 15,
-  "notes": "Na tabela \"Semana a semana (peso por dia)\", a coluna Δ agora tem cor: média da semana maior que a da semana anterior fica verde, menor fica vermelha.",
+  "version": 16,
+  "notes": "O app agora importa também a GORDURA CORPORAL (BF) do Health Connect, junto com o peso — funciona com o openScale + openScale sync. Segue as mesmas regras do peso: última medição do dia, respeita a data de corte e a opção \"A balança manda\". O 🔎 ganhou um bloco de gordura corporal mostrando o que foi feito com cada medição, e a permissão de gordura aparece na lista.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
