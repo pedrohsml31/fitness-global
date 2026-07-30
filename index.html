@@ -231,6 +231,13 @@ input[type=number]{font-variant-numeric:tabular-nums;}
 .fchip.skip{background:var(--surface2); color:var(--faint);}
 .fchip.pend{background:var(--surface2); color:var(--muted);}
 .fooditem.skipped .fn{color:var(--faint); text-decoration:line-through;}
+/* refeição livre: dourada e fora da conta da dieta */
+.fchip.free{background:color-mix(in srgb, var(--gold) 26%, var(--surface)); color:var(--gold);}
+.fooditem.freeitem{background:color-mix(in srgb, var(--gold) 7%, transparent);}
+.fooditem.freeitem .fn{color:var(--ink);}
+.mealcard.freemeal{border-color:color-mix(in srgb, var(--gold) 50%, var(--border));}
+.xbtn.free{color:var(--gold); border-color:color-mix(in srgb, var(--gold) 45%, var(--border));
+  background:color-mix(in srgb, var(--gold) 12%, transparent);}
 .ftick{width:34px; height:34px; border-radius:9px; background:var(--surface2); border:1px solid var(--border); flex:none; font-size:1rem; color:var(--muted);}
 .ftick.on{background:color-mix(in srgb, var(--good) 22%, var(--surface)); border-color:var(--good); color:var(--good);}
 .ftick.no{background:var(--surface2); border-color:var(--faint); color:var(--faint);}
@@ -336,7 +343,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 17;
+const APP_VERSION = 18;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -380,7 +387,7 @@ function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
 
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], logs:[], food:[], urges:[], plan:[], body:[], mealNotes:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], logs:[], food:[], urges:[], plan:[], body:[], mealNotes:{}, free:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0}, updatedAt:0}; }
 /* duração do bipe de fim de série (mesmo som, só mais longo) */
 const SOUNDLEN = { curto:0.45, medio:1.1, longo:2.4 };
 let db;
@@ -429,19 +436,74 @@ function todayLog(exId){ return db.logs.find(l => l.exerciseId === exId && l.dat
 function e1rm(w, r){ return r >= 1 ? w * (1 + r/30) : 0; }
 function bestE1rmOfSets(sets){ return Math.max(...sets.map(s => e1rm(s.weight, s.reps))); }
 
-/* melhor 1RM estimado por sessão (proxy de força) */
-function strengthSeries(exId){
-  return exLogs(exId).map(l => ({d:l.date, v:bestE1rmOfSets(l.sets)}));
+/* ---------- progressão de carga ----------
+   O placar de uma sessão NÃO é a melhor série: é a MÉDIA do e1RM das 3 séries mais
+   fortes. Assim uma série sozinha (de sorte, ou digitada errado) não manda no número,
+   e fazer uma série extra fraca não derruba o placar — as 3 melhores seguem as 3
+   melhores. Com menos de 3 séries usa as que tiver. */
+function sessionLoad(sets){
+  const v = sets.map(s => e1rm(s.weight, s.reps)).filter(x => x > 0).sort((a,b) => b-a).slice(0,3);
+  return v.length ? v.reduce((a,b) => a+b, 0) / v.length : 0;
 }
-function computeTrend(exId){
-  const s = strengthSeries(exId);
-  if(s.length < 2) return null;
-  const latest = s[s.length-1];
-  let base = s[0];
-  for(let i = s.length-2; i >= 0; i--){ if(daysBetween(s[i].d, latest.d) >= 21){ base = s[i]; break; } }
-  const pct = base.v ? (latest.v - base.v) / base.v * 100 : 0;
-  const dir = pct > 2.5 ? "up" : pct < -2.5 ? "down" : "flat";
-  return {pct, dir, latest:latest.v, base:base.v, span:daysBetween(base.d, latest.d)};
+function loadSeries(exId){
+  return exLogs(exId).map(l => ({d:l.date, v:sessionLoad(l.sets), n:l.sets.length}));
+}
+function median(v){
+  const a = v.slice().sort((x,y) => x-y), n = a.length;
+  if(!n) return 0;
+  return n % 2 ? a[(n-1)/2] : (a[n/2-1] + a[n/2]) / 2;
+}
+/* Tendência por regressão de THEIL-SEN: calcula a inclinação entre CADA PAR de sessões
+   e fica com a MEDIANA delas. Não é mínimos quadrados de propósito — com mínimos
+   quadrados uma única sessão muito fora (um dia péssimo, ou um peso digitado errado)
+   na ponta da série inverte o veredito inteiro, porque erro ao quadrado dá poder demais
+   a um ponto só. Na mediana das inclinações, um ponto esquisito é voto vencido.
+   O R² é calculado em cima dessa reta e serve de medida de consistência: alto =
+   evolução firme, baixo = está oscilando muito para cravar uma direção. */
+function loadTrend(exId, janela){
+  const all = loadSeries(exId);
+  if(all.length < 2) return null;
+  const fim = all[all.length-1].d;
+  let s = all.filter(p => daysBetween(p.d, fim) <= (janela || 56));
+  if(s.length < 2) s = all.slice(-3);              // treinou pouco na janela: usa as últimas
+  const x0 = s[0].d, n = s.length;
+  const xs = s.map(p => daysBetween(x0, p.d)), ys = s.map(p => p.v);
+  const pares = [];
+  for(let i = 0; i < n; i++) for(let j = i+1; j < n; j++)
+    if(xs[j] !== xs[i]) pares.push((ys[j]-ys[i]) / (xs[j]-xs[i]));
+  const slope = pares.length ? median(pares) : 0;   // kg de e1RM por dia
+  const b = median(ys.map((y,i) => y - slope*xs[i]));
+  const my = ys.reduce((a,c) => a+c, 0)/n;
+  let ssRes = 0, ssTot = 0;
+  for(let i = 0; i < n; i++){ ssRes += Math.pow(ys[i] - (slope*xs[i] + b), 2); ssTot += Math.pow(ys[i] - my, 2); }
+  const r2 = ssTot ? Math.max(0, 1 - ssRes/ssTot) : 0;
+  const pctMes = my ? (slope*30)/my*100 : 0;
+  const dir = pctMes > 1.5 ? "up" : pctMes < -1.5 ? "down" : "flat";
+  /* com 2 ou 3 sessões a reta passa quase em cima dos pontos por construção — o R² daria
+     100% e o app diria "evolução firme" sem ter base nenhuma. Abaixo de 4 sessões ele
+     mostra a direção, mas admite que ainda é pouco. */
+  return {dir, kgSem:slope*7, pctMes, r2, n, span:xs[n-1]-xs[0],
+          poucas:n < 4, firme:n >= 4 && r2 >= 0.5,
+          atual:ys[n-1], media:my, de:s[0].d, ate:s[n-1].d};
+}
+/* Comparação SÉRIE A SÉRIE na mesma posição: a 1ª série de agora contra a 1ª da última
+   vez, a 2ª contra a 2ª, e assim por diante. É o que responde "progredi de verdade?" —
+   comparar a 1ª série (descansado) com a 3ª (cansado) não diz nada. */
+function setBySet(exId){
+  const logs = exLogs(exId);
+  if(logs.length < 2) return null;
+  const cur = logs[logs.length-1], prev = logs[logs.length-2];
+  const n = Math.min(cur.sets.length, prev.sets.length);
+  const rows = [];
+  for(let i = 0; i < n; i++){
+    const a = prev.sets[i], b = cur.sets[i];
+    const ea = e1rm(a.weight, a.reps), eb = e1rm(b.weight, b.reps);
+    rows.push({i:i+1, a, b, pct: ea ? (eb-ea)/ea*100 : null});
+  }
+  const vals = rows.map(r => r.pct).filter(v => typeof v === "number");
+  return {cur, prev, rows, maisCur:cur.sets.length-n, maisPrev:prev.sets.length-n,
+          media: vals.length ? vals.reduce((a,b) => a+b, 0)/vals.length : null,
+          dias: daysBetween(prev.date, cur.date)};
 }
 function records(exId){
   const logs = exLogs(exId);
@@ -473,7 +535,7 @@ window.addEventListener("hashchange", () => { pendingExtra = 0; reorderMode = fa
 
 /* ===================== telas ===================== */
 const view = document.getElementById("view");
-const TREND = {up:{em:"📈", t:"Sua força está subindo"}, flat:{em:"➡️", t:"Força estável"}, down:{em:"📉", t:"Força caiu um pouco"}};
+const TREND = {up:{em:"📈", t:"Sua carga está subindo"}, flat:{em:"➡️", t:"Carga estável"}, down:{em:"📉", t:"Carga caiu um pouco"}};
 
 let _lastScrollKey = null;
 function render(){
@@ -550,7 +612,7 @@ function renderGym(g){
           <button class="ordbtn" data-action="move-ex" data-gym="${g.id}" data-id="${e.id}" data-dir="1" ${idx===exs.length-1?"disabled":""} aria-label="Mover para baixo">↓</button>
         </div></div>`;
     }
-    const t = computeTrend(e.id);
+    const t = loadTrend(e.id);
     const mini = t ? `<span class="trendmini" title="${TREND[t.dir].t}">${TREND[t.dir].em}</span>` : "";
     /* séries feitas HOJE (controle durante o treino) — zera sozinho quando o dia vira */
     const tl = todayLog(e.id), dn = tl ? tl.sets.length : 0;
@@ -613,7 +675,8 @@ function renderEx(g, e){
   const logs = exLogs(e.id);
   const rec = records(e.id);
   const prDates = new Set();
-  if(logs.length){ let m = 0; logs.forEach(l => { const v = bestE1rmOfSets(l.sets); if(v > m + 0.01){ m = v; prDates.add(l.date); } }); }
+  /* mesma margem de 1% do detectPR, senão o histórico fica coalhado de "recorde" */
+  if(logs.length){ let m = 0; logs.forEach(l => { const v = bestE1rmOfSets(l.sets); if(v > m * 1.01){ m = Math.max(m, v); prDates.add(l.date); } else if(v > m) m = v; }); }
 
   const hist = logs.slice(-40).reverse().map(l => `
     <div class="hist"><div class="d">${fmtDate(l.date)}${prDates.has(l.date) ? ' <span class="pill pr">🏆 recorde</span>' : ""}</div>
@@ -657,32 +720,49 @@ function renderEx(g, e){
   renderProg(e, rec);
 }
 
+const pctCls = v => v > 0.5 ? "up" : v < -0.5 ? "down" : "";
+const pctTxt = v => (v > 0 ? "+" : "") + fmtNum(v) + "%";
 function renderProg(e, rec){
   const card = document.getElementById("progcard");
-  const t = computeTrend(e.id);
+  const t = loadTrend(e.id);
   if(!t){
     card.innerHTML = `<div class="empty">Registre pelo menos <b>2 dias de treino</b> deste exercício para ver se você está evoluindo.</div>`;
     return;
   }
-  const dcls = t.dir, sign = t.pct >= 0 ? "+" : "";
-  const spanTxt = t.span >= 1 ? `nos últimos ${Math.round(t.span)} dias` : "hoje";
+  const sbs = setBySet(e.id);
   const metricHints = {
-    forca: "Força = quanto você levantaria em 1 repetição máxima (estimado). Linha subindo = você está ficando mais forte. É o número mais importante.",
+    forca: "Carga da sessão = média do 1RM estimado das suas 3 melhores séries do dia. Usa mais de uma série de propósito: uma série solta não faz o número pular.",
     peso: "Maior peso que você já colocou no exercício, sessão a sessão.",
     volume: "Volume = soma de (peso × reps) da sessão. Mede o total de trabalho do dia."
   };
+  /* comparação série a série: só faz sentido se as duas sessões tiverem séries alinhadas */
+  const sbsHtml = (sbs && sbs.rows.length) ? `
+    <div class="sub" style="margin-top:14px">Série a série, contra a última vez (${fmtDate(sbs.prev.date)}${sbs.dias>=1?` · ${Math.round(sbs.dias)} dia${sbs.dias>=2?"s":""} atrás`:""}):</div>
+    <div class="tblwrap" style="margin-top:6px"><table class="xls">
+      <thead><tr><th>Série</th><th>${fmtDate(sbs.prev.date)}</th><th>${fmtDate(sbs.cur.date)}</th><th class="avg">Δ</th></tr></thead>
+      <tbody>${sbs.rows.map(r => `<tr><th>${r.i}ª</th>
+        <td>${fmtW(r.a.weight)}×${r.a.reps}</td>
+        <td>${fmtW(r.b.weight)}×${r.b.reps}</td>
+        <td class="dl ${r.pct==null?"":pctCls(r.pct)}">${r.pct==null?"–":pctTxt(r.pct)}</td></tr>`).join("")}
+        ${sbs.media!=null?`<tr><th class="tot">Média</th><td class="tot"></td><td class="tot"></td>
+          <td class="dl tot ${pctCls(sbs.media)}">${pctTxt(sbs.media)}</td></tr>`:""}
+      </tbody></table></div>
+    ${sbs.maisCur||sbs.maisPrev ? `<div class="sub" style="margin-top:6px; font-size:.74rem">${sbs.maisCur?`Você fez ${sbs.maisCur} série(s) a mais agora`:`Você fez ${sbs.maisPrev} série(s) a menos agora`} — essas ficam de fora da comparação, porque não têm par.</div>` : ""}`
+    : "";
   card.innerHTML = `
     <div class="statushead">
-      <span class="em">${TREND[dcls].em}</span>
-      <div><div class="t ${dcls}">${TREND[dcls].t}</div>
-      <div class="sub">${sign}${fmtNum(t.pct)}% de força ${spanTxt}</div></div>
+      <span class="em">${TREND[t.dir].em}</span>
+      <div><div class="t ${t.dir}">${TREND[t.dir].t}</div>
+      <div class="sub">${(t.kgSem>0?"+":"")+fmtNum(t.kgSem)} kg por semana · ${pctTxt(t.pctMes)} por mês
+        <br>reta traçada em ${t.n} sessões${t.span>=1?` de ${Math.round(t.span)} dias`:""} · ${t.poucas?"ainda são poucas sessões para cravar":t.firme?`evolução firme (consistência ${Math.round(t.r2*100)}%)`:`bem irregular (consistência ${Math.round(t.r2*100)}%)`}</div></div>
     </div>
     <div class="row" style="margin-top:10px; gap:16px; flex-wrap:wrap">
-      <div><div class="sub">Força atual (1RM est.)</div><div class="bignum">${fmtNum(t.latest)} <small>kg</small></div></div>
-      ${rec ? `<div><div class="sub">🏆 Seu recorde</div><div class="bignum">${fmtNum(rec.rm.v)} <small>kg · ${fmtDate(rec.rm.d)}</small></div></div>` : ""}
+      <div><div class="sub">Carga da sessão</div><div class="bignum">${fmtNum(t.atual)} <small>kg</small></div></div>
+      ${rec ? `<div><div class="sub">🏆 Melhor série</div><div class="bignum">${fmtNum(rec.rm.v)} <small>kg · ${fmtDate(rec.rm.d)}</small></div></div>` : ""}
     </div>
-    <div class="seg" role="tablist">
-      <button data-action="metric" data-m="forca" class="${exUI.metric==="forca"?"on":""}">Força</button>
+    ${sbsHtml}
+    <div class="seg" role="tablist" style="margin-top:14px">
+      <button data-action="metric" data-m="forca" class="${exUI.metric==="forca"?"on":""}">Carga</button>
       <button data-action="metric" data-m="peso" class="${exUI.metric==="peso"?"on":""}">Peso máx</button>
       <button data-action="metric" data-m="volume" class="${exUI.metric==="volume"?"on":""}">Volume</button>
     </div>
@@ -696,7 +776,7 @@ function metricPoints(e){
   const pts = [];
   exLogs(e.id).forEach(l => {
     let v;
-    if(exUI.metric === "forca") v = bestE1rmOfSets(l.sets);
+    if(exUI.metric === "forca") v = sessionLoad(l.sets);
     else if(exUI.metric === "peso") v = Math.max(...l.sets.map(s => s.weight));
     else v = l.sets.reduce((a,s) => a + s.weight*s.reps, 0);
     pts.push({d:l.date, v});
@@ -884,6 +964,13 @@ function renderSettings(){
         <div class="grow"><div class="t">🏃 Atividades e passos</div><div class="d">Mantém peso, BF e medidas</div></div>
         <button class="btn danger sm" style="width:auto" data-action="reset-act">Zerar</button>
       </div>
+      <div class="setline">
+        <div class="grow"><div class="t">🎉 Refeições livres por semana</div>
+          <div class="d">Quantas refeições livres você pode fazer na semana (segunda a domingo). 0 = sem limite, só conta quantas você fez.</div>
+          <div class="row" style="gap:8px; margin-top:8px">
+            <input id="freeweek" type="number" inputmode="numeric" min="0" max="21" value="${Number(db.settings.freeWeek)||0}" style="width:80px; text-align:center">
+            <button class="btn ghost sm" data-action="save-freeweek" style="width:auto">Salvar</button>
+          </div></div></div>
       <div class="setline">
         <div class="grow"><div class="t">💣 Apagar tudo</div><div class="d">Zera o app inteiro neste aparelho (e na nuvem, se estiver sincronizado)</div></div>
         <button class="btn danger sm" style="width:auto" data-action="wipe">Apagar</button>
@@ -1212,8 +1299,12 @@ const Sync = {
     if(this.state === "error") return "Erro: " + (this.lastError || "sem conexão") + " — toque em Sincronizar para tentar de novo";
     return "Ativando…";
   },
+  /* lista campo a campo de propósito (o `sync` não pode subir). Campo novo no db TEM
+     que entrar aqui — o mealNotes ficou de fora na v13 e os comentários de refeição
+     nunca chegavam nos outros aparelhos. */
   data(){ return {gyms:db.gyms, exercises:db.exercises, logs:db.logs, food:db.food, urges:db.urges,
-    plan:db.plan, body:db.body, settings:Object.assign({}, db.settings, {sync:null}), updatedAt:db.updatedAt}; },
+    plan:db.plan, body:db.body, mealNotes:db.mealNotes, free:db.free,
+    settings:Object.assign({}, db.settings, {sync:null}), updatedAt:db.updatedAt}; },
   async getRemote(){
     const r = await fetch(this.url(), {cache:"no-store"});
     if(r.status === 404) return null;                       // ainda não existe esse código
@@ -1344,7 +1435,8 @@ function detectPR(exId, w, r){
   const rec = records(exId);
   if(!rec) return null; // primeira sessão não conta como recorde
   const newRm = e1rm(w, r);
-  if(newRm > rec.rm.v + 0.01) return {kind:"forca", value:fmtNum(newRm), unit:"kg (1RM est.)"};
+  /* margem de 1%: antes qualquer 0,01 kg virava "recorde" e a festa aparecia toda hora */
+  if(newRm > rec.rm.v * 1.01) return {kind:"forca", value:fmtNum(newRm), unit:"kg (1RM est.)"};
   if(w > rec.wt.v + 0.01) return {kind:"peso", value:fmtW(w), unit:"kg"};
   // recorde de reps no mesmo peso
   let bestRepsAtW = 0;
@@ -1593,7 +1685,7 @@ document.addEventListener("click", ev => {
   }
   else if(a === "reset-food"){
     if(!confirm("Zerar a ALIMENTAÇÃO?\n\nApaga o plano, os alimentos consumidos e os urges/binges.\nTreino, peso e medidas continuam.")) return;
-    db.food = []; db.urges = []; db.plan = []; db.mealNotes = {};
+    db.food = []; db.urges = []; db.plan = []; db.mealNotes = {}; db.free = {};
     save(); render(); toast("Alimentação zerada");
   }
   else if(a === "reset-body"){
@@ -1833,16 +1925,57 @@ function plannedForDay(date){ return db.plan.filter(m => m.fixed || m.date === d
    Em aberto só conta como "não consumido" depois que o dia passa. */
 function itemState(it, date){ const v = it.done && it.done[date]; return v === true ? "done" : v === "skip" ? "skip" : "open"; }
 function dayClosed(date){ return date < todayStr(); }
+/* ---------- refeição livre ----------
+   Marcar como livre TIRA o item da conta da dieta (não conta como acerto nem como erro),
+   em vez de contar como falha. O preço é o limite semanal: qualquer marca de livre numa
+   refeição gasta UMA livre da semana, seja a refeição toda ou um alimento só. */
+function freeKey(day, name){ return day + "|" + name; }
+function mealFree(day, name){ return !!(db.free||{})[freeKey(day, name)]; }
+function itemFree(it, day){ return !!(it.free && it.free[day]); }
+function isFree(m, it, day){ return mealFree(day, m.name) || itemFree(it, day); }
+/* nomes de refeição que têm alguma marca de livre no dia (refeição toda, item do plano
+   ou alimento registrado) — cada nome vale uma livre */
+function freeMealsOfDay(day){
+  const s = new Set(), f = db.free || {};
+  Object.keys(f).forEach(k=>{ const i = k.indexOf("|");
+    if(f[k] && k.slice(0, i) === day) s.add(k.slice(i+1)); });
+  plannedForDay(day).forEach(m=>{ if(m.items.some(it=>itemFree(it, day))) s.add(m.name); });
+  db.food.forEach(x=>{ if(x.date === day && x.free) s.add(x.meal); });
+  return s;
+}
+function freeWeek(day){
+  const wk = weekKeyOf(day), det = [];
+  for(let i=0;i<7;i++){ const d = shiftDay(wk, i);
+    freeMealsOfDay(d).forEach(name=>det.push({d, name})); }
+  return {n:det.length, det, limite:Number(db.settings.freeWeek) || 0, semana:wk};
+}
+function freeWeekHtml(day){
+  const w = freeWeek(day);
+  if(!w.limite && !w.n) return "";
+  const sobra = w.limite - w.n;
+  const cor = !w.limite ? "var(--muted)" : sobra < 0 ? "var(--bad)" : sobra === 0 ? "var(--gold)" : "var(--good)";
+  return `<div class="sub" style="margin:2px 0 8px">🎉 Refeições livres nesta semana:
+    <b style="color:${cor}">${w.n}${w.limite?` de ${w.limite}`:""}</b>${w.limite?(sobra>0?` · ainda pode ${sobra}`:sobra===0?" · acabou a cota":` · ${-sobra} além do combinado`):" · sem limite definido"}
+    ${w.det.length?`<br><span style="font-size:.74rem">${w.det.map(x=>esc(x.name)+" ("+fmtDate(x.d).slice(0,5)+")").join(" · ")}</span>`:""}</div>`;
+}
 function adherence(date){
-  let t=0, d=0, open=0;
+  let t=0, d=0, open=0, free=0;
   plannedForDay(date).forEach(m=>m.items.forEach(it=>{
+    if(isFree(m, it, date)){ free++; return; }   // livre: fora da conta, nem acerto nem erro
     const st = itemState(it, date);
     if(st === "done"){ t++; d++; }
     else if(st === "skip"){ t++; }
     else if(dayClosed(date)) t++;      // passou o dia sem marcar: conta como não ingerido
     else open++;
   }));
-  return {t, d, open, pct: t?Math.round(d/t*100):null};
+  return {t, d, open, free, pct: t?Math.round(d/t*100):null};
+}
+/* itens que ainda estão em aberto num dia (o que o botão "não consumi o resto" risca) */
+function openItemsOf(date){
+  let n = 0;
+  plannedForDay(date).forEach(m=>m.items.forEach(it=>{
+    if(!isFree(m, it, date) && itemState(it, date) === "open") n++; }));
+  return n;
 }
 
 /* dias já encerrados com itens do plano sem marcar (nem ✓ nem riscado) — para o app
@@ -1855,7 +1988,7 @@ function unfilledPlanDays(){
     let n=0;
     plannedForDay(d).forEach(m=>{
       if(m.created && m.created > d) return;
-      m.items.forEach(it=>{ if(itemState(it,d)==="open") n++; });
+      m.items.forEach(it=>{ if(!isFree(m, it, d) && itemState(it,d)==="open") n++; });
     });
     if(n) out.push({d,n});
   }
@@ -1871,6 +2004,8 @@ function dietWarnHtml(){
     <div class="grow"><b>${dayLabel(x.d)}</b> — ${x.n} ite${x.n===1?"m":"ns"} da dieta sem marcar
       <div class="sub">Preencha o que comeu (ou risque o que não comeu)${outros?` · mais ${outros} dia${outros>1?"s":""} em aberto`:""}</div></div>
     <button class="btn sm" style="width:auto" data-action="food-fill" data-d="${x.d}">Preencher</button>
+    <button class="btn ghost sm" style="width:auto" data-action="skip-rest" data-d="${x.d}"
+      title="Riscar de uma vez tudo o que ficou em aberto nesse dia">✕ Não comi o resto</button>
     <button class="xbtn" data-action="diet-dismiss" data-d="${x.d}" aria-label="Dispensar">✕</button></div>`;
 }
 
@@ -1883,6 +2018,7 @@ function renderFood(){
   const mealNames = Object.keys(groups);
   const urgesToday = db.urges.filter(u=>u.date===day).sort((a,b)=>a.ts-b.ts);
   const adh = adherence(day);
+  const abertosDia = openItemsOf(day);
 
   view.innerHTML = `
     <div class="topbar">
@@ -1897,10 +2033,12 @@ function renderFood(){
       <button class="navb" data-action="food-day" data-d="1">›</button>
     </div>
 
-    <div class="section"><h2>Plano do dia${adh.t?` · ${adh.pct}% seguido`:""}${adh.open?` · ${adh.open} em aberto`:""}</h2>
+    <div class="section"><h2>Plano do dia${adh.t?` · ${adh.pct}% seguido`:""}${adh.open?` · ${adh.open} em aberto`:""}${adh.free?` · 🎉 ${adh.free} livre${adh.free>1?"s":""}`:""}</h2>
+      ${planned.length ? freeWeekHtml(day) : ""}
       ${planned.length ? planned.map(m=>plannedMealHtml(m,day)).join("")
         : `<div class="empty">Nada planejado para este dia.</div>`}
-      ${planned.length?`<div class="sub" style="margin:2px 0 8px; font-size:.76rem">1 toque = comi ✓ · 2 toques = risca (não vou comer) · 3 toques volta ao normal. O que ficar em aberto só conta como não consumido depois que o dia passa.</div>`:""}
+      ${abertosDia?`<button class="btn ghost sm" data-action="skip-rest" data-d="${day}" style="margin-bottom:8px">✕ Não consumi o resto (${abertosDia} ite${abertosDia===1?"m":"ns"})</button>`:""}
+      ${planned.length?`<div class="sub" style="margin:2px 0 8px; font-size:.76rem">1 toque = comi ✓ · 2 toques = risca (não vou comer) · 3 toques volta ao normal. O que ficar em aberto só conta como não consumido depois que o dia passa. 🎉 marca como refeição livre: sai da conta da dieta e gasta uma livre da semana.</div>`:""}
       <button class="btn ghost sm" data-action="go" data-h="#/foodplan" style="margin-top:2px">🗓 Planejar alimentação</button>
     </div>
 
@@ -1927,23 +2065,29 @@ function plannedMealHtml(m,day){
   /* dá para fechar a refeição inteira de uma vez: se ainda falta algo, marca tudo;
      se já está tudo comido, desmarca tudo (para corrigir um toque errado) */
   const abertos = m.items.filter(it=>itemState(it,day)!=="done").length;
-  return `<div class="mealcard">
+  const mf = mealFree(day, m.name);
+  return `<div class="mealcard${mf?" freemeal":""}">
     <div class="mealhead">
       <span class="kindtag ${m.kind}">${m.kind==="lanche"?"Lanche":"Refeição"}</span>
       <span class="mt">${esc(m.name)}${m.fixed?" 📌":""}</span>
       <span class="tm">${m.time||""}</span>
-      ${m.items.length?`<button class="xbtn wide ${abertos?"":"on"}" data-action="plan-all" data-m="${m.id}" data-v="${abertos?"1":"0"}"
+      ${m.items.length&&!mf?`<button class="xbtn wide ${abertos?"":"on"}" data-action="plan-all" data-m="${m.id}" data-v="${abertos?"1":"0"}"
         title="${abertos?"Marcar a refeição inteira como comida":"Desmarcar a refeição inteira"}">${abertos?"✓ tudo":"✓ tudo ✔"}</button>`:""}
+      <button class="xbtn wide${mf?" free":""}" data-action="meal-free" data-n="${esc(m.name)}"
+        title="${mf?"Deixar de ser refeição livre":"Marcar a refeição inteira como livre"}">🎉${mf?" livre":""}</button>
       <button class="xbtn" data-action="plan-note" data-m="${m.id}" aria-label="Comentário da refeição" style="color:var(--faint)">💬</button>
     </div>
     ${m.note?`<div class="fnote" style="margin:2px 0 6px">💬 ${esc(m.note)}</div>`:""}
-    ${m.items.map(it=>{ const st=itemState(it,day);
-      const chip = st==="done" ? "" : st==="skip" ? `<span class="fchip skip">não vou comer</span>`
+    ${mf?`<div class="fnote" style="margin:2px 0 6px; color:var(--gold)">🎉 Refeição livre — não entra na conta da dieta</div>`:""}
+    ${m.items.map(it=>{ const st=itemState(it,day), itf=itemFree(it,day), livre=mf||itf;
+      const chip = livre ? `<span class="fchip free">livre</span>`
+        : st==="done" ? "" : st==="skip" ? `<span class="fchip skip">não vou comer</span>`
         : dayClosed(day) ? `<span class="fchip skip">não consumido</span>` : `<span class="fchip pend">em aberto</span>`;
-      return `<div class="fooditem ${st==="done"?"eaten":st==="skip"?"skipped":"pending"}">
+      return `<div class="fooditem ${livre?"freeitem":st==="done"?"eaten":st==="skip"?"skipped":"pending"}">
         <button class="ftick ${st==="done"?"on":st==="skip"?"no":""}" data-action="plan-tick" data-m="${m.id}" data-i="${it.id}" aria-label="Marcar consumido">${st==="done"?"✓":st==="skip"?"✕":""}</button>
         <span class="fn">${esc(it.name)}${it.note?`<div class="fnote">💬 ${esc(it.note)}</div>`:""}</span>
         ${chip}
+        ${mf?"":`<button class="xbtn${itf?" free":""}" data-action="item-free" data-m="${m.id}" data-i="${it.id}" aria-label="Alimento livre" style="${itf?"":"color:var(--faint)"}">🎉</button>`}
         <button class="xbtn" data-action="plan-item-note" data-m="${m.id}" data-i="${it.id}" aria-label="Comentário no alimento" style="color:var(--faint)">💬</button>
       </div>`; }).join("")}
   </div>`;
@@ -1962,11 +2106,12 @@ function consumedMealHtml(mealName,foods,day){
       <button class="xbtn" data-action="meal-note" data-n="${esc(mealName)}" aria-label="Comentário da refeição" style="color:var(--faint)">💬</button>
     </div>
     ${mn?`<div class="fnote" style="margin:2px 0 6px">💬 ${esc(mn)}</div>`:""}
-    ${foods.map(f=>`<div class="fooditem eaten">
+    ${foods.map(f=>`<div class="fooditem ${f.free?"freeitem":"eaten"}">
       <span class="tm" style="width:42px">${fmtTime(f.ts)}</span>
       <span class="fn">${esc(f.name)}${f.note?`<div class="fnote">💬 ${esc(f.note)}</div>`:""}</span>
       ${f.binge?`<span class="fchip binge">binge</span>`:""}
-      ${!f.planned?`<span class="fchip outside">fora do plano</span>`:""}
+      ${f.free?`<span class="fchip free">livre</span>`:!f.planned?`<span class="fchip outside">fora do plano</span>`:""}
+      <button class="xbtn${f.free?" free":""}" data-action="food-free" data-id="${f.id}" aria-label="Marcar como livre" style="${f.free?"":"color:var(--faint)"}">🎉</button>
       <button class="xbtn" data-action="edit-food" data-id="${f.id}" aria-label="Editar" style="color:var(--muted)">✎</button>
       <button class="xbtn" data-action="del-food" data-id="${f.id}" aria-label="Excluir">✕</button>
     </div>`).join("")}
@@ -2091,16 +2236,19 @@ function periodFoodStats(days, endDay){
   const inRange = d => d>=from && d<=endDay;
   const foods = db.food.filter(f=>inRange(f.date));
   const urges = db.urges.filter(u=>inRange(u.date));
-  let totPlan=0, donePlan=0, skipPlan=0;
-  for(let i=0;i<days;i++){ const d=shiftDay(endDay,-i); const ad=adherence(d); totPlan+=ad.t; donePlan+=ad.d;
-    plannedForDay(d).forEach(m=>m.items.forEach(it=>{ if(itemState(it,d)==="skip") skipPlan++; })); }
+  let totPlan=0, donePlan=0, skipPlan=0, freeItems=0, freeMeals=0;
+  for(let i=0;i<days;i++){ const d=shiftDay(endDay,-i); const ad=adherence(d);
+    totPlan+=ad.t; donePlan+=ad.d; freeItems+=ad.free; freeMeals+=freeMealsOfDay(d).size;
+    plannedForDay(d).forEach(m=>m.items.forEach(it=>{
+      if(!isFree(m,it,d) && itemState(it,d)==="skip") skipPlan++; })); }
   const intens = urges.map(u=>u.intensity);
   return {
     urges: urges.length,
     binges: urges.filter(u=>u.gaveIn).length,
     avgInt: intens.length ? (intens.reduce((a,b)=>a+b,0)/intens.length) : null,
     maxInt: intens.length ? Math.max(...intens) : null,
-    outside: foods.filter(f=>!f.planned).length,
+    outside: foods.filter(f=>!f.planned && !f.free).length,
+    freeItems, freeMeals,
     bingeFoods: foods.filter(f=>f.binge).length,
     refeicoes: foods.filter(f=>f.kind==="refeicao").length,
     lanches: foods.filter(f=>f.kind==="lanche").length,
@@ -2123,8 +2271,12 @@ function renderFoodReport(){
           <div class="bignumv">${w.adherence!=null?w.adherence+"%":"—"}${arrow(w.adherence,prev.adherence,false)}</div></div></div>
         <div class="bar"><span style="width:${w.adherence||0}%"></span></div>
         <div class="sub" style="margin-top:8px">${w.planDone} de ${w.planTot} itens planejados consumidos · ${w.notEaten} não consumidos${w.planSkip?` (${w.planSkip} você riscou de propósito)`:""}</div>
-        <div class="sub" style="margin-top:4px; font-size:.76rem">Itens de hoje ainda em aberto não entram na conta.</div>
+        <div class="sub" style="margin-top:4px; font-size:.76rem">Itens de hoje ainda em aberto não entram na conta.${w.freeItems?` ${w.freeItems} ite${w.freeItems===1?"m":"ns"} marcado${w.freeItems===1?"":"s"} como livre também ficaram de fora — é isso que protege a precisão.`:""}</div>
       </div>
+      ${(w.freeMeals || Number(db.settings.freeWeek)) ? `<div class="card" style="margin-top:10px">
+        <div class="row"><div class="grow"><div class="sub">🎉 Refeições livres (7 dias)</div>
+          <div class="bignumv">${w.freeMeals}${Number(db.settings.freeWeek)?`<small style="font-size:.7rem;color:var(--muted)"> de ${Number(db.settings.freeWeek)} por semana</small>`:""}${arrow(w.freeMeals,prev.freeMeals,true)}</div></div></div>
+      </div>` : ""}
     </div>
     <div class="section"><h2>Compulsão (binge / urges)</h2>
       <div class="statgrid">
@@ -2899,6 +3051,53 @@ document.addEventListener("click", ev => {
     const v=prompt(`Comentário para "${it.name}":`, it.note||"");
     if(v===null) return;
     it.note=v.trim()||undefined; save(); render();
+  }
+  /* risca de uma vez tudo o que ficou em aberto no dia — é o caminho vindo da
+     notificação de "preencha o que comeu ontem" */
+  else if(a === "skip-rest"){
+    const d = el.dataset.d, n = openItemsOf(d);
+    if(!n){ toast("Nada em aberto nesse dia."); return; }
+    if(!confirm(`Marcar ${n} ite${n===1?"m":"ns"} de ${fmtDate(d)} como NÃO consumido?`)) return;
+    plannedForDay(d).forEach(m=>m.items.forEach(it=>{
+      if(isFree(m, it, d)) return;
+      it.done = it.done || {};
+      if(itemState(it, d) === "open") it.done[d] = "skip";
+    }));
+    save(); render();
+    toast(`${n} ite${n===1?"m":"ns"} riscado${n===1?"":"s"} — dia fechado ✓`);
+  }
+  else if(a === "meal-free"){
+    const name = el.dataset.n, k = freeKey(foodDay, name);
+    db.free = db.free || {};
+    if(db.free[k]){ delete db.free[k]; save(); render(); toast(`${name}: não é mais livre`); return; }
+    const w = freeWeek(foodDay);
+    if(w.limite && w.n >= w.limite && !confirm(`Você já usou ${w.n} de ${w.limite} refeições livres nesta semana. Marcar assim mesmo?`)) return;
+    db.free[k] = true; save(); render();
+    toast(`🎉 ${name} marcada como livre`);
+  }
+  else if(a === "item-free"){
+    const m = db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
+    const it = m.items.find(x=>x.id===el.dataset.i); if(!it) return;
+    if(itemFree(it, foodDay)){ delete it.free[foodDay]; save(); render(); toast("Não é mais livre"); return; }
+    const w = freeWeek(foodDay);
+    /* só avisa se essa marca vai gastar uma livre NOVA (a refeição ainda não tem nenhuma) */
+    const gastaNova = !freeMealsOfDay(foodDay).has(m.name);
+    if(gastaNova && w.limite && w.n >= w.limite && !confirm(`Você já usou ${w.n} de ${w.limite} refeições livres nesta semana. Marcar assim mesmo?`)) return;
+    it.free = it.free || {}; it.free[foodDay] = true; save(); render();
+    toast(`🎉 ${it.name}: livre`);
+  }
+  else if(a === "food-free"){
+    const f = db.food.find(x=>x.id===el.dataset.id); if(!f) return;
+    if(f.free){ delete f.free; save(); render(); toast("Não é mais livre"); return; }
+    const w = freeWeek(f.date);
+    const gastaNova = !freeMealsOfDay(f.date).has(f.meal);
+    if(gastaNova && w.limite && w.n >= w.limite && !confirm(`Você já usou ${w.n} de ${w.limite} refeições livres nesta semana. Marcar assim mesmo?`)) return;
+    f.free = true; save(); render(); toast(`🎉 ${f.name}: livre`);
+  }
+  else if(a === "save-freeweek"){
+    const v = parseInt(document.getElementById("freeweek").value, 10);
+    db.settings.freeWeek = isNaN(v) || v < 0 ? 0 : v; save(); render();
+    toast(db.settings.freeWeek ? `${db.settings.freeWeek} refeição(ões) livre(s) por semana` : "Sem limite de refeições livres");
   }
   else if(a === "food-fill"){ foodDay = el.dataset.d; location.hash = "#/food"; render(); }
   else if(a === "diet-dismiss"){
