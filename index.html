@@ -255,6 +255,7 @@ table.xls td.dl.up{color:var(--good);} table.xls td.dl.down{color:var(--bad);}  
 .xbtn{width:32px;height:32px;border-radius:9px;background:none;border:1px solid var(--border);color:var(--bad);flex:none;font-size:.95rem;}
 .xbtn.wide{width:auto; padding:0 10px; color:var(--muted); font-size:.74rem; font-weight:800;}
 .xbtn.wide.on{color:var(--good); border-color:color-mix(in srgb, var(--good) 45%, var(--border)); background:color-mix(in srgb, var(--good) 10%, transparent);}
+.xbtn.wide.no{color:var(--bad); border-color:color-mix(in srgb, var(--bad) 45%, var(--border)); background:color-mix(in srgb, var(--bad) 10%, transparent);}
 table.xls td.warn{color:var(--gold);} table.xls td.good{color:var(--good);}
 table.xls td.tot, table.xls th.tot{background:var(--surface2); font-weight:800;}
 .urgebtn{background:color-mix(in srgb, var(--bad) 14%, var(--surface)); border:1px solid color-mix(in srgb,var(--bad) 45%, var(--border)); color:var(--bad); font-weight:800;}
@@ -343,7 +344,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 18;
+const APP_VERSION = 19;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -2065,6 +2066,8 @@ function plannedMealHtml(m,day){
   /* dá para fechar a refeição inteira de uma vez: se ainda falta algo, marca tudo;
      se já está tudo comido, desmarca tudo (para corrigir um toque errado) */
   const abertos = m.items.filter(it=>itemState(it,day)!=="done").length;
+  const riscados = m.items.filter(it=>itemState(it,day)==="skip").length;
+  const tudoRiscado = m.items.length > 0 && riscados === m.items.length;
   const mf = mealFree(day, m.name);
   return `<div class="mealcard${mf?" freemeal":""}">
     <div class="mealhead">
@@ -2072,7 +2075,9 @@ function plannedMealHtml(m,day){
       <span class="mt">${esc(m.name)}${m.fixed?" 📌":""}</span>
       <span class="tm">${m.time||""}</span>
       ${m.items.length&&!mf?`<button class="xbtn wide ${abertos?"":"on"}" data-action="plan-all" data-m="${m.id}" data-v="${abertos?"1":"0"}"
-        title="${abertos?"Marcar a refeição inteira como comida":"Desmarcar a refeição inteira"}">${abertos?"✓ tudo":"✓ tudo ✔"}</button>`:""}
+        title="${abertos?"Marcar a refeição inteira como comida":"Desmarcar a refeição inteira"}">${abertos?"✓ tudo":"✓ tudo ✔"}</button>
+      <button class="xbtn wide${tudoRiscado?" no":""}" data-action="plan-all" data-m="${m.id}" data-v="${tudoRiscado?"0":"skip"}"
+        title="${tudoRiscado?"Desfazer — voltar ao normal":"Marcar a refeição inteira como NÃO comida"}">${tudoRiscado?"✕ nada ✔":"✕ nada"}</button>`:""}
       <button class="xbtn wide${mf?" free":""}" data-action="meal-free" data-n="${esc(m.name)}"
         title="${mf?"Deixar de ser refeição livre":"Marcar a refeição inteira como livre"}">🎉${mf?" livre":""}</button>
       <button class="xbtn" data-action="plan-note" data-m="${m.id}" aria-label="Comentário da refeição" style="color:var(--faint)">💬</button>
@@ -2129,9 +2134,15 @@ function foodForm(food){
   const isEdit = !!food;
   const meals = mealSuggestions(day);
   const kind = food?food.kind:"refeicao";
-  openModal(`<h2>${isEdit?"Editar alimento":"Adicionar alimento"}</h2>
-    <div class="field"><label for="ff-name">Alimento</label>
-    <input id="ff-name" value="${food?esc(food.name):""}" placeholder="Ex.: 100g de arroz, 2 ovos…" maxlength="80"></div>
+  openModal(`<h2>${isEdit?"Editar alimento":"Adicionar alimentos"}</h2>
+    ${isEdit
+      ? `<div class="field"><label for="ff-name">Alimento</label>
+         <input id="ff-name" value="${esc(food.name)}" placeholder="Ex.: 100g de arroz, 2 ovos…" maxlength="80"></div>`
+      /* um por linha: tudo o que estiver marcado embaixo (refeição, horário, fora do
+         planejado, binge) vale para TODOS os alimentos de uma vez */
+      : `<div class="field"><label for="ff-name">Alimentos — <b>um por linha</b></label>
+         <textarea id="ff-name" rows="5" placeholder="100g de arroz&#10;150g de frango&#10;salada&#10;1 banana"></textarea>
+         <div class="sub" style="margin-top:4px; font-size:.76rem">Cada linha vira um alimento. As opções abaixo valem para todos eles.</div></div>`}
     <div class="btnrow">
       <div class="field" style="flex:2"><label for="ff-meal">Refeição / lanche (nome)</label>
       <input id="ff-meal" list="ff-meals" value="${food?esc(food.meal):""}" placeholder="Ex.: Almoço, Café, Lanche da tarde" maxlength="40">
@@ -2348,9 +2359,9 @@ function activitySection(){
         <div class="sub">Atividades que vieram do Samsung Health nesse dia:</div>
         <div class="pills" style="margin-top:6px">${t.acts.map(a => { const k = actKind(a);
           const tag = k==="musc" ? "conta como 🏋️" : k==="cardio" ? "conta como 🏃" : k==="skip" ? (isAuto(a)?"automática · não conta":"não conta") : "❓ toque p/ classificar";
-          return `<button class="pill" data-action="cycle-act" data-k="${esc(actKey(a))}" style="cursor:pointer${k==="ask"?";color:var(--gold);border-color:var(--gold)":""}${k==="skip"?";opacity:.6":""}">${esc(actLabel(a))} · ${a.min}min · ${tag}</button>`;
+          return `<button class="pill" data-action="cycle-act" data-k="${esc(actKey(a))}" data-cur="${k}" style="cursor:pointer${k==="ask"?";color:var(--gold);border-color:var(--gold)":""}${k==="skip"?";opacity:.6":""}">${esc(actLabel(a))} · ${a.min}min · ${tag}</button>`;
         }).join("")}</div>
-        <div class="sub" style="margin-top:6px; font-size:.76rem">🤖 = o relógio detectou sozinho, por isso não conta. Toque numa etiqueta para alternar entre musculação → cardio → não contar; o app lembra a escolha para esse tipo.</div>
+        <div class="sub" style="margin-top:6px; font-size:.76rem">🤖 = o relógio detectou sozinho, por isso não conta. <b>Caminhada e trilha</b> também não contam como cardio, a não ser que você tenha iniciado — os passos do dia já medem isso. Toque numa etiqueta para alternar entre musculação → cardio → não contar; o app lembra a escolha para esse tipo.</div>
       </div>` : `<div class="sub" style="margin-top:12px; font-size:.78rem">Nenhuma atividade importada nesse dia.</div>`}
       ${db.settings.lastImport ? `<div class="sub" style="margin-top:10px; font-size:.75rem">
         Última importação: ${db.settings.lastImport.workouts} treino(s) em ${db.settings.lastImport.dias} dia(s)
@@ -2660,11 +2671,21 @@ function guessByName(nome){
   if(/bicicl|bike|cycl|spinning|corrida|running|caminhad|walk|eliptic|remo|rowing|nata|swim|escada|stair|hiit|funcional|esteira/.test(n)) return "cardio";
   return null;
 }
+/* A caminhada é onde o relógio mais erra: ele detecta sozinho e o tipo chega como
+   WALKING, que é "cardio" por natureza. Só que nem sempre vem marcada como automática —
+   o Samsung manda várias com recordingMethod 0 ("origem não informada"), e aí a
+   caminhada do dia a dia entrava como sessão de cardio. Como os PASSOS já medem a
+   caminhada, ela só conta como cardio se VOCÊ tiver iniciado (recordingMethod 1).
+   Tocando na etiqueta você troca e o app lembra (o actMap tem prioridade). */
+function isPasseio(a){
+  return typeof a === "object" && /^(WALKING|HIKING)$/.test(String(a.t||"").toUpperCase()) && a.rec !== 1;
+}
 function actKind(a){
   const m = db.settings.actMap || {};
   const key = typeof a === "string" ? a : actKey(a);
   if(m[key]) return m[key];
   if(typeof a === "object" && isAuto(a) && db.settings.ignoreAuto !== false) return "skip";
+  if(isPasseio(a) && db.settings.ignoreAuto !== false) return "skip";
   const base = actInfo(typeof a === "string" ? a : a.t).k;
   if(base === "ask" && typeof a === "object"){
     const g = guessByName(a.nome); if(g) return g;
@@ -2704,6 +2725,14 @@ function migrateManualActs(){
 }
 /* migração v12: refeições do plano ganham data de criação — o aviso de "dia sem preencher"
    só olha dias a partir daí (não reclama de dias antes de o plano existir) */
+/* migração v19: a regra nova da caminhada muda dias que JÁ foram importados —
+   recalcula musc/cardio de todos eles uma vez */
+function migrateWalk19(){
+  if(db.settings.migWalk19) return;
+  deriveAllActs();
+  db.settings.migWalk19 = true;
+  save(false);
+}
 function migratePlan12(){
   if(db.settings.migPlan12) return;
   db.plan.forEach(m => { if(!m.created) m.created = todayStr(); });
@@ -2999,18 +3028,27 @@ document.addEventListener("click", ev => {
   else if(a === "add-food"){ foodForm(null); }
   else if(a === "edit-food"){ foodForm(db.food.find(f=>f.id===el.dataset.id)); }
   else if(a === "save-food"){
-    const name=document.getElementById("ff-name").value.trim();
+    const bruto=document.getElementById("ff-name").value;
     const meal=document.getElementById("ff-meal").value.trim()||"Refeição";
     const time=document.getElementById("ff-time").value||nowHM();
     const kind=document.getElementById("ff-kind").value;
     const binge=document.getElementById("ff-binge").checked;
     const planned=!document.getElementById("ff-outside").checked;
     const note=(document.getElementById("ff-note").value||"").trim()||undefined;
-    if(!name){ toast("Escreva o alimento."); return; }
     const ts=tsFor(foodDay,time);
-    if(el.dataset.id){ const f=db.food.find(x=>x.id===el.dataset.id); Object.assign(f,{name,meal,ts,kind,binge,planned,note}); }
-    else db.food.push({id:uid(), date:foodDay, ts, name, meal, kind, binge, planned, note});
+    if(el.dataset.id){
+      const name=bruto.trim();
+      if(!name){ toast("Escreva o alimento."); return; }
+      const f=db.food.find(x=>x.id===el.dataset.id); Object.assign(f,{name,meal,ts,kind,binge,planned,note});
+      save(); closeModal(); render(); return;
+    }
+    /* uma linha = um alimento; o resto do formulário vale para todos */
+    const nomes=bruto.split("\n").map(s=>s.trim()).filter(Boolean);
+    if(!nomes.length){ toast("Escreva ao menos um alimento."); return; }
+    /* 1s entre eles só para manter a ordem em que você digitou (o minuto exibido é o mesmo) */
+    nomes.forEach((name,i)=>db.food.push({id:uid(), date:foodDay, ts:ts+i*1000, name, meal, kind, binge, planned, note}));
     save(); closeModal(); render();
+    toast(nomes.length===1 ? "Alimento adicionado ✓" : `${nomes.length} alimentos adicionados em ${meal} ✓`);
   }
   else if(a === "del-food"){ db.food=db.food.filter(f=>f.id!==el.dataset.id); save(); render(); }
   else if(a === "plan-tick"){
@@ -3025,11 +3063,15 @@ document.addEventListener("click", ev => {
   }
   else if(a === "plan-all"){
     const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
-    const marcar = el.dataset.v === "1";
+    const v = el.dataset.v;   // "1" = comi tudo · "skip" = não comi nada · "0" = desfaz
     m.items.forEach(it=>{ it.done=it.done||{};
-      if(marcar) it.done[foodDay]=true; else delete it.done[foodDay]; });
+      if(v === "1") it.done[foodDay]=true;
+      else if(v === "skip") it.done[foodDay]="skip";
+      else delete it.done[foodDay]; });
     save(); render();
-    toast(marcar?`${m.name}: refeição inteira marcada ✓`:`${m.name}: desmarcada`);
+    toast(v === "1" ? `${m.name}: refeição inteira marcada ✓`
+      : v === "skip" ? `${m.name}: marcada como não comida ✕`
+      : `${m.name}: desmarcada`);
   }
   else if(a === "plan-note"){
     const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
@@ -3175,10 +3217,13 @@ document.addEventListener("click", ev => {
   else if(a === "cycle-act"){
     const key = el.dataset.k;
     const order = ["musc","cardio","skip"];
-    let curK = (db.settings.actMap||{})[key];
-    if(!curK){
-      if(key.endsWith("#auto") && db.settings.ignoreAuto!==false) curK = "skip";
-      else { curK = actInfo(key.replace(/#auto$/,"")).k; if(curK==="ask") curK = key.endsWith("#auto") ? "skip" : "musc"; }
+    /* o estado ATUAL vem da própria etiqueta (data-cur): calcular de novo a partir da
+       chave erra nos casos em que a regra depende do registro (caminhada não iniciada
+       por você, por exemplo), e o primeiro toque não fazia nada */
+    let curK = el.dataset.cur || (db.settings.actMap||{})[key];
+    if(!curK || curK === "ask"){
+      curK = actInfo(key.replace(/#auto$/,"")).k;
+      if(curK === "ask") curK = key.endsWith("#auto") ? "skip" : "musc";
     }
     const next = order[(order.indexOf(curK) + 1) % order.length] || "musc";
     db.settings.actMap = Object.assign({}, db.settings.actMap, {[key]: next});
@@ -3241,6 +3286,7 @@ native.init();
 normalizeOrders();
 migrateManualActs();
 migratePlan12();
+migrateWalk19();
 deriveAllActs();
 applyWake();
 render();

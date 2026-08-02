@@ -1,5 +1,5 @@
 {
-  "version": 18,
-  "notes": "Refeições livres: você define quantas pode fazer por semana e marca com 🎉 a refeição inteira, um alimento do plano ou algo que comeu fora — o que é livre sai da conta da dieta em vez de contar como erro, e o app mostra quantas você já usou da cota. Botão \"Não consumi o resto\" risca de uma vez tudo o que ficou em aberto num dia (também no aviso de dia anterior). Progressão de carga refeita: a carga da sessão passou a ser a média das 3 melhores séries, a tendência usa regressão de Theil-Sen (uma sessão fora da curva não inverte mais o veredito) e tem uma tabela comparando série a série na mesma posição contra a última vez. Comentários de refeição agora sincronizam na nuvem (estavam ficando só no aparelho).",
+  "version": 19,
+  "notes": "Caminhada e trilha não contam mais como cardio, a não ser que você tenha iniciado — o relógio detecta caminhada sozinho e os passos do dia já medem isso (dias já importados são recalculados). Adicionar alimento virou um campo de várias linhas: um alimento por linha, e refeição, horário, \"fora do planejado\" e binge valem para todos de uma vez. Novo botão \"✕ nada\" para marcar a refeição inteira como NÃO comida, igual ao \"✓ tudo\".",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
