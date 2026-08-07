@@ -16,7 +16,7 @@ $env:ANDROID_HOME = "$dev\android"
 
 Write-Host "1/3  Copiando arquivos web para o projeto..." -ForegroundColor Cyan
 $assets = "$native\android\app\src\main\assets\public"
-foreach ($f in @("index.html","manifest.webmanifest","sw.js","icon.svg","version.json")) {
+foreach ($f in @("index.html","manifest.webmanifest","sw.js","icon.svg","version.json","taco.json")) {
     if (Test-Path "$src\$f") {
         Copy-Item "$src\$f" "$native\www\$f" -Force
         Copy-Item "$src\$f" "$assets\$f" -Force

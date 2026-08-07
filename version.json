@@ -1,5 +1,5 @@
 {
-  "version": 19,
-  "notes": "Caminhada e trilha não contam mais como cardio, a não ser que você tenha iniciado — o relógio detecta caminhada sozinho e os passos do dia já medem isso (dias já importados são recalculados). Adicionar alimento virou um campo de várias linhas: um alimento por linha, e refeição, horário, \"fora do planejado\" e binge valem para todos de uma vez. Novo botão \"✕ nada\" para marcar a refeição inteira como NÃO comida, igual ao \"✓ tudo\".",
+  "version": 20,
+  "notes": "Novo modo \"Calorias e macros\" (liga e desliga nos Ajustes): calcula kcal, proteína, carboidrato e gordura de cada alimento, de cada refeição e do dia inteiro, usando a TACO 4ª edição (NEPA/UNICAMP) — 597 alimentos que vêm dentro do app e funcionam sem internet. Você liga o alimento à tabela uma vez e ele fica sabendo para sempre, inclusive nos próximos dias. Dá para digitar os valores do rótulo à mão quando o alimento não está na tabela. O relatório de 7 dias ganhou a média de kcal e macros por dia.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

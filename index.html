@@ -238,6 +238,14 @@ input[type=number]{font-variant-numeric:tabular-nums;}
 .mealcard.freemeal{border-color:color-mix(in srgb, var(--gold) 50%, var(--border));}
 .xbtn.free{color:var(--gold); border-color:color-mix(in srgb, var(--gold) 45%, var(--border));
   background:color-mix(in srgb, var(--gold) 12%, transparent);}
+/* calorias e macros */
+.fchip.nutri-ok{background:var(--surface2); color:var(--muted); cursor:pointer;}
+.fchip.nutri-pend{background:color-mix(in srgb, var(--gold) 22%, var(--surface)); color:var(--gold); cursor:pointer;}
+.fchip.nutri-tot{background:var(--surface2); color:var(--ink);}
+.nutri{font-size:.7rem; color:var(--faint); margin-top:2px;}
+.macrobar{display:flex; height:9px; border-radius:999px; overflow:hidden; background:var(--surface2);}
+.macrobar span{display:block; height:100%;}
+.macrobar .p{background:var(--good);} .macrobar .c{background:var(--gold);} .macrobar .g{background:var(--bad);}
 .ftick{width:34px; height:34px; border-radius:9px; background:var(--surface2); border:1px solid var(--border); flex:none; font-size:1rem; color:var(--muted);}
 .ftick.on{background:color-mix(in srgb, var(--good) 22%, var(--surface)); border-color:var(--good); color:var(--good);}
 .ftick.no{background:var(--surface2); border-color:var(--faint); color:var(--faint);}
@@ -344,7 +352,7 @@ const FIREBASE_CONFIG = {
 };
 
 /* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 19;
+const APP_VERSION = 20;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -388,7 +396,7 @@ function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
 
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], logs:[], food:[], urges:[], plan:[], body:[], mealNotes:{}, free:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], logs:[], food:[], urges:[], plan:[], body:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false}, updatedAt:0}; }
 /* duração do bipe de fim de série (mesmo som, só mais longo) */
 const SOUNDLEN = { curto:0.45, medio:1.1, longo:2.4 };
 let db;
@@ -966,6 +974,10 @@ function renderSettings(){
         <button class="btn danger sm" style="width:auto" data-action="reset-act">Zerar</button>
       </div>
       <div class="setline">
+        <div class="grow"><div class="t">🔢 Calorias e macros</div>
+          <div class="d">Calcula kcal, proteína, carboidrato e gordura do que você comeu, usando a <b>TACO 4ª edição</b> (NEPA/UNICAMP) que vem dentro do app. Você liga o alimento à tabela uma vez e ele fica sabendo para sempre.</div></div>
+        <button class="switch${macrosOn()?" on":""}" data-action="tg" data-k="macros" role="switch" aria-checked="${macrosOn()}"></button></div>
+      <div class="setline">
         <div class="grow"><div class="t">🎉 Refeições livres por semana</div>
           <div class="d">Quantas refeições livres você pode fazer na semana (segunda a domingo). 0 = sem limite, só conta quantas você fez.</div>
           <div class="row" style="gap:8px; margin-top:8px">
@@ -1304,7 +1316,7 @@ const Sync = {
      que entrar aqui — o mealNotes ficou de fora na v13 e os comentários de refeição
      nunca chegavam nos outros aparelhos. */
   data(){ return {gyms:db.gyms, exercises:db.exercises, logs:db.logs, food:db.food, urges:db.urges,
-    plan:db.plan, body:db.body, mealNotes:db.mealNotes, free:db.free,
+    plan:db.plan, body:db.body, mealNotes:db.mealNotes, free:db.free, foodMap:db.foodMap,
     settings:Object.assign({}, db.settings, {sync:null}), updatedAt:db.updatedAt}; },
   async getRemote(){
     const r = await fetch(this.url(), {cache:"no-store"});
@@ -1604,6 +1616,8 @@ document.addEventListener("click", ev => {
     const k = el.dataset.k;
     db.settings[k] = (k === "ignoreAuto") ? (db.settings[k] === false) : !db.settings[k];
     if(k === "ignoreAuto") deriveAllActs();
+    /* a tabela TACO só é lida quando o modo é ligado — não custa nada ficar desligado */
+    if(k === "macros" && db.settings.macros) loadTaco().then(render);
     save(); applyWake(); if(k === "sound") native.init(); render();
   }
   else if(a === "ask-notif"){ Notification.requestPermission().then(() => render()); }
@@ -1926,6 +1940,149 @@ function plannedForDay(date){ return db.plan.filter(m => m.fixed || m.date === d
    Em aberto só conta como "não consumido" depois que o dia passa. */
 function itemState(it, date){ const v = it.done && it.done[date]; return v === true ? "done" : v === "skip" ? "skip" : "open"; }
 function dayClosed(date){ return date < todayStr(); }
+/* ===================== calorias e macros (modo opcional) =====================
+   Fonte: TACO 4ª edição (NEPA/UNICAMP), 597 alimentos, valores por 100 g — é a tabela
+   de referência brasileira, vem junto no app e funciona sem internet.
+   Não usei a API do FatSecret de propósito: ela exige lista branca de IP e chave secreta,
+   e a chave teria que ficar dentro do index.html, que é público. */
+let TACO = null, tacoErr = null;
+async function loadTaco(){
+  if(TACO || tacoErr) return TACO;
+  try{
+    /* sem force-cache: são 33 KB uma vez por sessão, e com force-cache uma tabela
+       corrigida ficaria presa no cache antigo do aparelho */
+    const r = await fetch("taco.json?v=" + APP_VERSION);
+    if(!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    /* [id, nome, categoria, kcal, proteína, carboidrato, gordura, fibra, sódio] */
+    TACO = {cats:j.cats, list:j.alimentos.map(a=>({
+      id:a[0], nome:a[1], cat:a[2], kcal:a[3], p:a[4], c:a[5], g:a[6], fib:a[7], na:a[8],
+      norm:norm(a[1])}))};
+  }catch(e){ tacoErr = (e && e.message) || String(e); }
+  return TACO;
+}
+function tacoById(id){ return TACO ? TACO.list.find(a=>a.id===id) : null; }
+
+/* ---- quanto foi comido: separa a quantidade do nome ----
+   "100g de arroz" -> 100 g · "2 ovos" -> 2 unidades · "1/2 mamão" -> 0,5 unidade.
+   Sem grama explícita a conta só fecha quando você disser quanto pesa 1 unidade — o app
+   pergunta uma vez e guarda, em vez de eu chutar o peso da sua banana. */
+const FRAC = {meia:0.5, meio:0.5, "1/2":0.5, "1/4":0.25, "3/4":0.75, um:1, uma:1, dois:2, duas:2, tres:3, quatro:4};
+function parseQty(txt){
+  const t = String(txt||"").trim();
+  let m = t.match(/(\d+(?:[.,]\d+)?)\s*(kg|quilos?)\b/i);
+  if(m) return {g:parseFloat(m[1].replace(",","."))*1000, resto:t.replace(m[0],"")};
+  m = t.match(/(\d+(?:[.,]\d+)?)\s*(g|gr|gramas?)\b/i);
+  if(m) return {g:parseFloat(m[1].replace(",",".")), resto:t.replace(m[0],"")};
+  /* ml vira grama: vale para água, leite, sucos — não vale para óleo, e o app avisa */
+  m = t.match(/(\d+(?:[.,]\d+)?)\s*(ml|mls)\b/i);
+  if(m) return {g:parseFloat(m[1].replace(",",".")), ml:true, resto:t.replace(m[0],"")};
+  m = t.match(/(\d+(?:[.,]\d+)?)\s*(l|litros?)\b/i);
+  if(m) return {g:parseFloat(m[1].replace(",","."))*1000, ml:true, resto:t.replace(m[0],"")};
+  m = t.match(/^\s*(1\/2|1\/4|3\/4|\d+(?:[.,]\d+)?|meia|meio)\s+/i);
+  if(m){ const bruto = m[1].toLowerCase();       // "1/2" precisa vir cru: norm() come a barra
+    const v = FRAC[bruto] != null ? FRAC[bruto] : parseFloat(bruto.replace(",","."));
+    return {un: isFinite(v) ? v : 1, resto:t.slice(m[0].length)}; }
+  return {un:1, resto:t};
+}
+/* nome limpo (sem a quantidade) — é a chave do que o app aprende */
+function foodKey(txt){
+  return norm(parseQty(txt).resto).replace(/^(de|do|da|dos|das)\s+/,"").trim();
+}
+/* ---- busca na TACO ---- palavra-chave do começo do nome pesa mais ("Arroz, tipo 1,
+   cozido" tem "arroz" como cabeça), e nome mais curto ganha de nome mais específico
+   quando a busca é genérica. */
+function tacoSearch(q, lim){
+  if(!TACO) return [];
+  const qt = norm(q).split(/\s+/).filter(w=>w.length>2);
+  if(!qt.length) return [];
+  const res = [];
+  TACO.list.forEach(a=>{
+    const at = a.norm.split(/[\s,]+/).filter(Boolean);
+    let s = 0, casou = 0;
+    qt.forEach(w=>{
+      const i = at.findIndex(x => x === w || x.startsWith(w) || w.startsWith(x));
+      if(i >= 0){ casou++; s += (i === 0 ? 10 : 4); }
+      else if(a.norm.includes(w)){ casou++; s += 2; }
+    });
+    if(casou < qt.length) s -= (qt.length - casou) * 6;   // termo não encontrado penaliza
+    if(s <= 0) return;
+    s -= at.length * 0.25;                                 // desempata pelo nome mais curto
+    res.push({a, s});
+  });
+  return res.sort((x,y)=>y.s-x.s).slice(0, lim || 8).map(r=>r.a);
+}
+/* ---- nutrição de UM alimento registrado ----
+   devolve {kcal,p,c,g,gramas} ou {pendente:motivo} */
+function foodNutri(f){
+  const map = db.foodMap || {};
+  const key = foodKey(f.name);
+  const m = f.nutri || map[key];                 // f.nutri = ajuste só daquele registro
+  if(!m) return {pendente:"sem-tabela", key};
+  const q = parseQty(f.name);
+  let gramas = q.g;
+  if(gramas == null){
+    if(!m.g) return {pendente:"sem-peso", key, un:q.un};
+    gramas = (q.un || 1) * m.g;
+  }
+  let base;
+  if(m.t){ const a = tacoById(m.t); if(!a) return {pendente:"sem-tabela", key}; base = a; }
+  else if(typeof m.kcal === "number") base = {kcal:m.kcal, p:m.p, c:m.c, g:m.g100};
+  else return {pendente:"sem-tabela", key};
+  const k = gramas / 100;
+  return {gramas, key,
+    kcal:(base.kcal||0)*k, p:(base.p||0)*k, c:(base.c||0)*k, g:(base.g||0)*k,
+    nome: m.t ? (tacoById(m.t)||{}).nome : (m.nome || "valor digitado")};
+}
+function sumNutri(foods){
+  const t = {kcal:0, p:0, c:0, g:0, pend:0, n:0};
+  foods.forEach(f=>{ const x = foodNutri(f);
+    if(x.pendente){ t.pend++; return; }
+    t.kcal += x.kcal; t.p += x.p; t.c += x.c; t.g += x.g; t.n++; });
+  return t;
+}
+const macrosOn = () => db.settings.macros === true;
+const kcalTxt = v => Math.round(v).toLocaleString("pt-BR");
+/* alimentos do dia que ainda não têm nutrição, agrupados por nome (para resolver em lote) */
+function pendingFoods(day){
+  const map = {};
+  db.food.filter(f=>!day || f.date===day).forEach(f=>{
+    const x = foodNutri(f);
+    if(!x.pendente) return;
+    const k = x.key || norm(f.name);
+    (map[k] = map[k] || {key:k, motivo:x.pendente, exemplo:f.name, ids:[]}).ids.push(f.id);
+  });
+  return Object.values(map).sort((a,b)=>b.ids.length-a.ids.length);
+}
+/* cartão do dia: total de kcal, barra de macros e o que ainda falta resolver */
+function macroDayHtml(day, foods){
+  if(tacoErr) return `<div class="section"><h2>Calorias e macros</h2><div class="card">
+    <div class="empty" style="color:var(--bad)">Não consegui abrir a tabela de alimentos (${esc(tacoErr)}). Reinstale o app pelo botão Atualizar.</div></div></div>`;
+  if(!TACO) return `<div class="section"><h2>Calorias e macros</h2><div class="card"><div class="empty">Carregando a tabela…</div></div></div>`;
+  const t = sumNutri(foods);
+  const kc = 4*t.p + 4*t.c + 9*t.g;      // energia vinda dos macros, para a proporção da barra
+  const pct = v => kc ? Math.round(v/kc*100) : 0;
+  const pend = pendingFoods(day);
+  return `<div class="section"><h2>Calorias e macros do dia</h2>
+    <div class="card">
+      <div class="row" style="gap:16px; flex-wrap:wrap; align-items:flex-end">
+        <div><div class="sub">Total do dia</div><div class="bignumv">${kcalTxt(t.kcal)} <small style="font-size:.7rem;color:var(--muted)">kcal</small></div></div>
+        <div><div class="sub">Proteína</div><div class="bignumv" style="font-size:1.1rem">${fmtNum(t.p)}<small style="font-size:.7rem;color:var(--muted)"> g</small></div></div>
+        <div><div class="sub">Carboidrato</div><div class="bignumv" style="font-size:1.1rem">${fmtNum(t.c)}<small style="font-size:.7rem;color:var(--muted)"> g</small></div></div>
+        <div><div class="sub">Gordura</div><div class="bignumv" style="font-size:1.1rem">${fmtNum(t.g)}<small style="font-size:.7rem;color:var(--muted)"> g</small></div></div>
+      </div>
+      ${kc ? `<div class="macrobar" style="margin-top:10px">
+        <span class="p" style="width:${pct(4*t.p)}%"></span><span class="c" style="width:${pct(4*t.c)}%"></span><span class="g" style="width:${pct(9*t.g)}%"></span></div>
+        <div class="sub" style="margin-top:5px; font-size:.74rem">
+          <b style="color:var(--good)">■</b> proteína ${pct(4*t.p)}% ·
+          <b style="color:var(--gold)">■</b> carboidrato ${pct(4*t.c)}% ·
+          <b style="color:var(--bad)">■</b> gordura ${pct(9*t.g)}%</div>` : ""}
+      ${t.pend ? `<div class="sub" style="margin-top:10px; color:var(--gold)">⚠️ ${t.pend} alimento${t.pend>1?"s":""} sem nutrição — o total está incompleto.</div>
+        <button class="btn ghost sm" data-action="nutri-pick" data-id="${pend[0].ids[0]}" style="margin-top:6px">Resolver "${esc(pend[0].exemplo)}"${pend.length>1?` (+${pend.length-1})`:""}</button>` : ""}
+      <div class="sub" style="margin-top:8px; font-size:.73rem">Valores da <b>TACO 4ª edição</b> (NEPA/UNICAMP), por 100 g. São médias de laboratório — servem para acompanhar tendência, não são o valor exato do seu prato.</div>
+    </div></div>`;
+}
+
 /* ---------- refeição livre ----------
    Marcar como livre TIRA o item da conta da dieta (não conta como acerto nem como erro),
    em vez de contar como falha. O preço é o limite semanal: qualquer marca de livre numa
@@ -2043,6 +2200,8 @@ function renderFood(){
       <button class="btn ghost sm" data-action="go" data-h="#/foodplan" style="margin-top:2px">🗓 Planejar alimentação</button>
     </div>
 
+    ${macrosOn() ? macroDayHtml(day, foods) : ""}
+
     <div class="section"><h2>O que eu comi</h2>
       ${mealNames.length ? mealNames.map(mn=>consumedMealHtml(mn,groups[mn],day)).join("")
         : `<div class="empty">Nenhum alimento registrado neste dia.</div>`}
@@ -2108,18 +2267,24 @@ function consumedMealHtml(mealName,foods,day){
       <span class="kindtag ${kind}">${kind==="lanche"?"Lanche":"Refeição"}</span>
       <span class="mt">${esc(mealName)}</span>
       <span class="tm">${t0}</span>
+      ${macrosOn() ? (()=>{ const t = sumNutri(foods);
+        return `<span class="fchip nutri-tot" title="Total desta refeição">${kcalTxt(t.kcal)} kcal${t.pend?" +?":""}</span>`; })() : ""}
       <button class="xbtn" data-action="meal-note" data-n="${esc(mealName)}" aria-label="Comentário da refeição" style="color:var(--faint)">💬</button>
     </div>
     ${mn?`<div class="fnote" style="margin:2px 0 6px">💬 ${esc(mn)}</div>`:""}
-    ${foods.map(f=>`<div class="fooditem ${f.free?"freeitem":"eaten"}">
+    ${foods.map(f=>{ const nu = macrosOn() ? foodNutri(f) : null; return `<div class="fooditem ${f.free?"freeitem":"eaten"}">
       <span class="tm" style="width:42px">${fmtTime(f.ts)}</span>
-      <span class="fn">${esc(f.name)}${f.note?`<div class="fnote">💬 ${esc(f.note)}</div>`:""}</span>
+      <span class="fn">${esc(f.name)}${f.note?`<div class="fnote">💬 ${esc(f.note)}</div>`:""}${
+        nu && !nu.pendente ? `<div class="nutri">P ${fmtNum(nu.p)} · C ${fmtNum(nu.c)} · G ${fmtNum(nu.g)} · ${Math.round(nu.gramas)}g</div>` : ""}</span>
+      ${nu ? (nu.pendente
+        ? `<button class="fchip nutri-pend" data-action="nutri-pick" data-id="${f.id}" title="${nu.pendente==="sem-peso"?"Falta dizer quanto pesa 1 unidade":"Falta ligar a um alimento da tabela"}">kcal ?</button>`
+        : `<button class="fchip nutri-ok" data-action="nutri-pick" data-id="${f.id}" title="${esc(nu.nome||"")} — toque para ajustar">${kcalTxt(nu.kcal)} kcal</button>`) : ""}
       ${f.binge?`<span class="fchip binge">binge</span>`:""}
       ${f.free?`<span class="fchip free">livre</span>`:!f.planned?`<span class="fchip outside">fora do plano</span>`:""}
       <button class="xbtn${f.free?" free":""}" data-action="food-free" data-id="${f.id}" aria-label="Marcar como livre" style="${f.free?"":"color:var(--faint)"}">🎉</button>
       <button class="xbtn" data-action="edit-food" data-id="${f.id}" aria-label="Editar" style="color:var(--muted)">✎</button>
       <button class="xbtn" data-action="del-food" data-id="${f.id}" aria-label="Excluir">✕</button>
-    </div>`).join("")}
+    </div>`; }).join("")}
   </div>`;
 }
 function mealSuggestions(day){
@@ -2165,6 +2330,44 @@ function foodForm(food){
     <input type="hidden" id="ff-kind" value="${kind}">
     <button class="btn" data-action="save-food" data-id="${food?food.id:""}">${isEdit?"Salvar":"Adicionar"}</button>`);
   setTimeout(()=>document.getElementById("ff-name").focus(),50);
+}
+/* escolher o alimento da TACO (ou digitar os valores à mão) e, quando o texto não tem
+   grama, dizer quanto pesa 1 unidade. O que você escolher fica valendo para TODO alimento
+   com esse mesmo nome, hoje e nos próximos dias. */
+let nutriBusca = "";
+function nutriForm(foodId){
+  const f = db.food.find(x=>x.id===foodId); if(!f) return;
+  const q = parseQty(f.name), key = foodKey(f.name);
+  const atual = f.nutri || (db.foodMap||{})[key] || {};
+  const busca = nutriBusca || q.resto.trim() || f.name;
+  const hits = tacoSearch(busca, 10);
+  const quantos = db.food.filter(x=>foodKey(x.name)===key).length;
+  openModal(`<h2>Nutrição de "${esc(f.name)}"</h2>
+    <div class="sub" style="margin-bottom:10px">${q.g!=null
+      ? `Você escreveu <b>${fmtNum(q.g)} g</b>${q.ml?" (ml contado como g — vale para líquidos aguados, não para óleo)":""}.`
+      : `Você escreveu <b>${fmtNum(q.un||1)} unidade(s)</b>, então preciso saber quanto pesa uma.`}
+      ${quantos>1?`<br>Vale para os <b>${quantos}</b> registros de "${esc(key)}".`:""}</div>
+    ${q.g==null?`<div class="field"><label for="nu-g">Quanto pesa 1 unidade (g)</label>
+      <input id="nu-g" type="number" inputmode="decimal" step="any" min="1" value="${atual.g||""}" placeholder="Ex.: 50"></div>`:""}
+    <div class="field"><label for="nu-q">Procurar na tabela TACO</label>
+      <input id="nu-q" value="${esc(busca)}" placeholder="arroz cozido, frango grelhado…">
+      <button class="btn ghost sm" data-action="nutri-search" style="margin-top:6px; width:auto">🔎 Procurar</button></div>
+    <div style="max-height:250px; overflow:auto; margin-bottom:10px">
+      ${hits.length ? hits.map(a=>`<div class="wkrow" style="cursor:pointer${atual.t===a.id?";border-color:var(--good)":""}" data-action="nutri-set" data-id="${foodId}" data-t="${a.id}">
+        <span class="wd">${esc(a.nome)}<br><span class="sub" style="font-size:.7rem">${esc((TACO.cats||{})[a.cat]||"")}</span></span>
+        <span class="wv">${a.kcal} kcal</span>
+        <span class="wdelta" style="color:var(--muted); font-size:.72rem">P ${fmtNum(a.p)} · C ${fmtNum(a.c)} · G ${fmtNum(a.g)}<br><span class="sub" style="font-size:.68rem">por 100 g</span></span></div>`).join("")
+        : `<div class="empty">Nada encontrado. Ajuste a busca ou digite os valores abaixo.</div>`}
+    </div>
+    <div class="sub" style="margin-bottom:6px">Ou digite você mesmo (por 100 g, como vem no rótulo):</div>
+    <div class="btnrow">
+      <div class="field" style="flex:1"><label for="nu-kcal">kcal</label><input id="nu-kcal" type="number" inputmode="decimal" step="any" min="0" value="${atual.kcal!=null?atual.kcal:""}"></div>
+      <div class="field" style="flex:1"><label for="nu-p">Prot.</label><input id="nu-p" type="number" inputmode="decimal" step="any" min="0" value="${atual.p!=null?atual.p:""}"></div>
+      <div class="field" style="flex:1"><label for="nu-c">Carb.</label><input id="nu-c" type="number" inputmode="decimal" step="any" min="0" value="${atual.c!=null?atual.c:""}"></div>
+      <div class="field" style="flex:1"><label for="nu-f">Gord.</label><input id="nu-f" type="number" inputmode="decimal" step="any" min="0" value="${atual.g100!=null?atual.g100:""}"></div>
+    </div>
+    <button class="btn" data-action="nutri-manual" data-id="${foodId}">Salvar valores digitados</button>
+    ${(db.foodMap||{})[key]?`<button class="btn ghost sm" data-action="nutri-clear" data-id="${foodId}" style="margin-top:8px">🗑 Esquecer o que aprendi sobre "${esc(key)}"</button>`:""}`);
 }
 function urgeForm(){
   openModal(`<h2>⚡ Registrar vontade (urge)</h2>
@@ -2260,6 +2463,14 @@ function periodFoodStats(days, endDay){
     maxInt: intens.length ? Math.max(...intens) : null,
     outside: foods.filter(f=>!f.planned && !f.free).length,
     freeItems, freeMeals,
+    /* média por DIA COM REGISTRO — dividir por 7 puxaria a média para baixo nos dias vazios */
+    nutri: (()=>{ const dias = [...new Set(foods.map(f=>f.date))];
+      const t = sumNutri(foods);
+      return {dias:dias.length, pend:t.pend,
+        kcal: dias.length ? t.kcal/dias.length : null,
+        p: dias.length ? t.p/dias.length : null,
+        c: dias.length ? t.c/dias.length : null,
+        g: dias.length ? t.g/dias.length : null}; })(),
     bingeFoods: foods.filter(f=>f.binge).length,
     refeicoes: foods.filter(f=>f.kind==="refeicao").length,
     lanches: foods.filter(f=>f.kind==="lanche").length,
@@ -2289,6 +2500,17 @@ function renderFoodReport(){
           <div class="bignumv">${w.freeMeals}${Number(db.settings.freeWeek)?`<small style="font-size:.7rem;color:var(--muted)"> de ${Number(db.settings.freeWeek)} por semana</small>`:""}${arrow(w.freeMeals,prev.freeMeals,true)}</div></div></div>
       </div>` : ""}
     </div>
+    ${macrosOn() && w.nutri.dias ? `<div class="section"><h2>Calorias e macros · média por dia</h2>
+      <div class="card">
+        <div class="row" style="gap:16px; flex-wrap:wrap; align-items:flex-end">
+          <div><div class="sub">kcal/dia</div><div class="bignumv">${kcalTxt(w.nutri.kcal)}${arrow(Math.round(w.nutri.kcal), prev.nutri.kcal!=null?Math.round(prev.nutri.kcal):null, false)}</div></div>
+          <div><div class="sub">Proteína</div><div class="bignumv" style="font-size:1.1rem">${fmtNum(w.nutri.p)}<small style="font-size:.7rem;color:var(--muted)"> g</small></div></div>
+          <div><div class="sub">Carboidrato</div><div class="bignumv" style="font-size:1.1rem">${fmtNum(w.nutri.c)}<small style="font-size:.7rem;color:var(--muted)"> g</small></div></div>
+          <div><div class="sub">Gordura</div><div class="bignumv" style="font-size:1.1rem">${fmtNum(w.nutri.g)}<small style="font-size:.7rem;color:var(--muted)"> g</small></div></div>
+        </div>
+        <div class="sub" style="margin-top:8px; font-size:.76rem">Média dos <b>${w.nutri.dias}</b> dia(s) com alimento registrado${w.nutri.pend?` · ⚠️ ${w.nutri.pend} alimento(s) sem nutrição ficaram de fora`:""}.</div>
+      </div>
+    </div>` : ""}
     <div class="section"><h2>Compulsão (binge / urges)</h2>
       <div class="statgrid">
         <div class="statbox"><div class="v">${w.urges}${arrow(w.urges,prev.urges,true)}</div><div class="k">Urges na semana</div></div>
@@ -3051,6 +3273,45 @@ document.addEventListener("click", ev => {
     toast(nomes.length===1 ? "Alimento adicionado ✓" : `${nomes.length} alimentos adicionados em ${meal} ✓`);
   }
   else if(a === "del-food"){ db.food=db.food.filter(f=>f.id!==el.dataset.id); save(); render(); }
+  else if(a === "nutri-pick"){
+    nutriBusca = "";
+    loadTaco().then(()=>{ if(tacoErr){ toast("Tabela de alimentos indisponível: " + tacoErr); return; } nutriForm(el.dataset.id); });
+  }
+  else if(a === "nutri-search"){
+    nutriBusca = document.getElementById("nu-q").value;
+    const id = document.querySelector('[data-action="nutri-manual"]').dataset.id;
+    const g = document.getElementById("nu-g");
+    const pesoDigitado = g ? g.value : null;      // redesenhar a lista não pode perder o peso
+    nutriForm(id);
+    const g2 = document.getElementById("nu-g");
+    if(g2 && pesoDigitado) g2.value = pesoDigitado;
+  }
+  else if(a === "nutri-set" || a === "nutri-manual"){
+    const f = db.food.find(x=>x.id===el.dataset.id); if(!f) return;
+    const key = foodKey(f.name), q = parseQty(f.name);
+    const gEl = document.getElementById("nu-g");
+    const gramas = gEl ? parseFloat(gEl.value) : null;
+    if(q.g == null && !(gramas > 0)){ toast("Diga quanto pesa 1 unidade (em gramas)."); if(gEl) gEl.focus(); return; }
+    let entrada;
+    if(a === "nutri-set"){ entrada = {t: Number(el.dataset.t)}; }
+    else {
+      const nv = id => { const v = parseFloat((document.getElementById(id)||{}).value); return isFinite(v) ? v : null; };
+      const kcal = nv("nu-kcal");
+      if(kcal == null){ toast("Escreva ao menos as kcal por 100 g."); return; }
+      entrada = {kcal, p:nv("nu-p")||0, c:nv("nu-c")||0, g100:nv("nu-f")||0, nome:"valor digitado"};
+    }
+    if(q.g == null) entrada.g = gramas;
+    db.foodMap = Object.assign({}, db.foodMap, {[key]: entrada});
+    save(); closeModal(); render();
+    const quantos = db.food.filter(x=>foodKey(x.name)===key).length;
+    toast(quantos>1 ? `Aprendido — vale para os ${quantos} registros de "${key}" ✓` : "Nutrição definida ✓");
+  }
+  else if(a === "nutri-clear"){
+    const f = db.food.find(x=>x.id===el.dataset.id); if(!f) return;
+    const key = foodKey(f.name);
+    const m = Object.assign({}, db.foodMap); delete m[key]; db.foodMap = m;
+    save(); closeModal(); render(); toast(`Esqueci "${key}"`);
+  }
   else if(a === "plan-tick"){
     const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
     const it=m.items.find(x=>x.id===el.dataset.i); if(!it) return;
@@ -3287,6 +3548,7 @@ normalizeOrders();
 migrateManualActs();
 migratePlan12();
 migrateWalk19();
+if(macrosOn()) loadTaco().then(render);
 deriveAllActs();
 applyWake();
 render();
