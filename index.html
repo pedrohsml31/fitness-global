@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global</title>
+<title>Fitness Global v2.1</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -263,6 +263,8 @@ table.xls td.dl.up{color:var(--good);} table.xls td.dl.down{color:var(--bad);}  
 .xbtn{width:32px;height:32px;border-radius:9px;background:none;border:1px solid var(--border);color:var(--bad);flex:none;font-size:.95rem;}
 .xbtn.wide{width:auto; padding:0 10px; color:var(--muted); font-size:.74rem; font-weight:800;}
 .xbtn.wide.on{color:var(--good); border-color:color-mix(in srgb, var(--good) 45%, var(--border)); background:color-mix(in srgb, var(--good) 10%, transparent);}
+.vtag{font-size:.62rem; font-weight:800; color:var(--faint); vertical-align:middle;
+  border:1px solid var(--border); border-radius:999px; padding:1px 6px; margin-left:4px;}
 .xbtn.wide.no{color:var(--bad); border-color:color-mix(in srgb, var(--bad) 45%, var(--border)); background:color-mix(in srgb, var(--bad) 10%, transparent);}
 table.xls td.warn{color:var(--gold);} table.xls td.good{color:var(--good);}
 table.xls td.tot, table.xls th.tot{background:var(--surface2); font-weight:800;}
@@ -351,8 +353,13 @@ const FIREBASE_CONFIG = {
   appId: "1:882333150773:web:79880305549b1975bc8b7c"
 };
 
-/* versão do app (bump a cada release; version.json no site guarda a última) */
-const APP_VERSION = 20;
+/* Versão que VOCÊ vê (1.0, 1.1, 2.0…) e o número de build usado só para comparar se há
+   atualização. São dois porque o Android exige um inteiro crescente (versionCode) e
+   porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
+   achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
+   versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
+const APP_NAME_VERSION = "2.1";
+const APP_VERSION = 21;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -370,7 +377,7 @@ function showUpdate(j){
      parecia não fazer efeito — daí o link visível e o "copiar link" logo abaixo. */
   slot.innerHTML = `<div class="updbanner">
     <span style="font-size:1.3rem">⬆️</span>
-    <div class="grow"><b>Atualização disponível — v${APP_VERSION} → v${esc(j.version)}</b>
+    <div class="grow"><b>Atualização disponível — v${APP_NAME_VERSION} → v${esc(j.name || j.version)}</b>
       <div class="sub">${j.notes ? esc(j.notes) : "Nova versão do app."}</div>
       ${native.isNative ? `<div class="sub" style="margin-top:6px">Não abriu o download? <span data-action="upd-copy" style="color:var(--accent); font-weight:700; text-decoration:underline; cursor:pointer">copie o link</span> e cole no Chrome.</div>` : ""}</div>
     ${native.isNative
@@ -589,8 +596,8 @@ function renderHome(){
   const glob = db.exercises.filter(e => e.gymId === null).length;
   view.innerHTML = `
     <div class="topbar">
-      <h1><span class="brand">▮</span> Fitness Global</h1>
-      <span class="pill" title="Versão do app">v${APP_VERSION}</span>
+      <h1><span class="brand">▮</span> Fitness Global <span class="vtag">v${APP_NAME_VERSION}</span></h1>
+      <span class="pill" title="Versão do app (build ${APP_VERSION})">v${APP_NAME_VERSION}</span>
       <button class="iconbtn" data-action="go" data-h="#/settings" aria-label="Ajustes">⚙️</button>
     </div>
     ${dietWarnHtml()}
@@ -998,7 +1005,7 @@ function renderSettings(){
         <div class="d" style="word-break:break-all">${APK_URL}</div></div>
         <button class="btn ghost sm" data-action="upd-copy" style="width:auto; flex:none">📋 Copiar</button></div>
     </div></div>` : ""}
-    <p class="sub" style="margin-top:10px">${native.isNative ? "Rodando como app instalado 📱" : "Rodando no navegador"} · <b>versão ${APP_VERSION}</b></p>`;
+    <p class="sub" style="margin-top:10px">${native.isNative ? "Rodando como app instalado 📱" : "Rodando no navegador"} · <b>Fitness Global v${APP_NAME_VERSION}</b> <span class="sub">(build ${APP_VERSION})</span></p>`;
 }
 
 /* ===================== modal ===================== */
@@ -2961,6 +2968,22 @@ function migratePlan12(){
   db.settings.migPlan12 = true;
   save(false);
 }
+/* O Health Connect só libera 30 dias para trás, contados de quando a permissão foi
+   concedida — e, se você pedir uma janela maior, ele REJEITA a leitura inteira em vez de
+   devolver o que pode. Era isso que zerava a importação: eu pedia 60 dias.
+   Com READ_HISTORY concedida o limite some. Sem ela, a leitura larga falha e aqui a
+   gente tenta de novo com 27 dias, para pelo menos os dados recentes entrarem. */
+let janelaCurta = false;
+async function readWindow(fn, start, end){
+  try{ return {r: await fn(start, end)}; }
+  catch(e){
+    const s2 = new Date(); s2.setDate(s2.getDate()-27); s2.setHours(0,0,0,0);
+    if(s2 <= start) throw e;                       // já era janela curta: o erro é outro
+    const r = await fn(s2, end);                   // se esta também falhar, o erro sobe
+    janelaCurta = true;
+    return {r, cortou:true, erroLargo:(e && e.message) || String(e)};
+  }
+}
 async function importHealth(silent){
   const H = native.plugin("HealthPlugin");
   if(!native.isNative || !H){ if(!silent) toast("Disponível só no app do celular 📱"); return; }
@@ -2968,6 +2991,10 @@ async function importHealth(silent){
     const av = await H.isHealthAvailable();
     if(!av || !av.available){ if(!silent && confirm("O Health Connect não está instalado/ativo. Abrir na Play Store?")) { try{ H.showHealthConnectInPlayStore(); }catch(e){} } return; }
     await H.requestHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS","READ_WEIGHT","READ_BODY_FAT"]});
+    /* pedida à parte e engolindo erro: se o Health Connect do aparelho for antigo e não
+       conhecer essa permissão, isso não pode derrubar o pedido das outras */
+    try{ await H.requestHealthPermissions({permissions:["READ_HISTORY"]}); }catch(e){ console.warn("history", e); }
+    try{ db.settings.hist = permMap(await H.checkHealthPermissions({permissions:["READ_HISTORY"]})).READ_HISTORY; }catch(e){ db.settings.hist = null; }
     db.settings.lastErr = null;                       // erro antigo não fica pendurado no 🔎
     /* se a permissão de PESO ficou de fora, avisa na lata — era o que estava travando */
     let wperm = null;
@@ -2977,13 +3004,14 @@ async function importHealth(silent){
     const start = new Date(); start.setDate(start.getDate()-59); start.setHours(0,0,0,0);   // 60 dias
     const end = new Date();
     let days=0, kgs=0;
+    janelaCurta = false;
     try{
-      const sr = await H.queryAggregated({startDate:start.toISOString(), endDate:end.toISOString(), dataType:"steps", bucket:"day"});
+      const sr = (await readWindow((s,e)=>H.queryAggregated({startDate:s.toISOString(), endDate:e.toISOString(), dataType:"steps", bucket:"day"}), start, end)).r;
       (sr.aggregatedData||[]).forEach(s=>{ const d=localDateOf(s.startDate);
         if(s.value>0 && actFromOk(d)){ const e=bodyEntry(d); e.steps=Math.round(s.value); days++; } });
     }catch(e){ console.warn("steps", e); }
     try{
-      const wr = await H.queryWorkouts({startDate:start.toISOString(), endDate:end.toISOString(), includeHeartRate:false, includeRoute:false, includeSteps:false});
+      const wr = (await readWindow((s,e)=>H.queryWorkouts({startDate:s.toISOString(), endDate:e.toISOString(), includeHeartRate:false, includeRoute:false, includeSteps:false}), start, end)).r;
       const byDay = {};   // idempotente: cada importação REESCREVE as atividades do dia
       (wr.workouts||[]).forEach(w=>{
         const d = localDateOf(w.startDate);
@@ -3035,8 +3063,8 @@ async function importWeights(H, start, end){
   /* o APK antigo não tem esse método nativo — sem isso não há como ler a balança */
   if(!H.queryWeight){ db.settings.lastWeights = {when:Date.now(), n:0, noMethod:true, det:[], res:[]}; return 0; }
   try{
-    const r = await H.queryWeight({startDate:start.toISOString(), endDate:end.toISOString()});
-    const list = r.weights || [];
+    const out = await readWindow((s,e)=>H.queryWeight({startDate:s.toISOString(), endDate:e.toISOString()}), start, end);
+    const list = out.r.weights || [];
     const from = db.settings.weightFrom || null;
     const byDay = {};
     list.forEach(w=>{ const d = localDateOf(w.time); if(!byDay[d] || byDay[d].time < w.time) byDay[d] = w; });
@@ -3058,6 +3086,7 @@ async function importWeights(H, start, end){
       put(manual ? "substituiu" : antes != null ? "atualizou" : "novo", antes);
     });
     db.settings.lastWeights = { when:Date.now(), n:list.length, aplicados:n,
+      cortou:out.cortou, erroLargo:out.erroLargo,
       dias:Object.keys(byDay).length, res:res.slice(-14),
       det:list.slice(-10).map(w=>({d:localDateOf(w.time), kg:Math.round(Number(w.kg)*100)/100, src:String(w.deviceModel||w.sourceBundleId||"")})) };
     return n;
@@ -3071,8 +3100,8 @@ async function importBodyFat(H, start, end){
   if(!H) return 0;
   if(!H.queryBodyFat){ db.settings.lastBF = {when:Date.now(), n:0, noMethod:true, res:[]}; return 0; }
   try{
-    const r = await H.queryBodyFat({startDate:start.toISOString(), endDate:end.toISOString()});
-    const list = r.bodyFat || [];
+    const out = await readWindow((s,e)=>H.queryBodyFat({startDate:s.toISOString(), endDate:e.toISOString()}), start, end);
+    const list = out.r.bodyFat || [];
     const from = db.settings.weightFrom || null;
     const byDay = {};
     list.forEach(w=>{ const d = localDateOf(w.time); if(!byDay[d] || byDay[d].time < w.time) byDay[d] = w; });
@@ -3105,9 +3134,11 @@ async function weightProbe(){
   if(!H.queryWeight) return {ok:false, msg:"Este APK não tem a leitura de peso — instale a versão nova."};
   const s = new Date(); s.setDate(s.getDate()-364); s.setHours(0,0,0,0);
   try{
-    const r = await H.queryWeight({startDate:s.toISOString(), endDate:new Date().toISOString()});
-    const list = (r.weights||[]).slice().sort((a,b)=>String(a.time)<String(b.time)?1:-1);
-    return {ok:true, n:list.length, list:list.slice(0,12).map(w=>({
+    /* 365 dias quase sempre estoura o limite do Health Connect — o readWindow cai para
+       27 dias sozinho, e o "cortou" avisa que foi isso que aconteceu */
+    const out = await readWindow((a,b)=>H.queryWeight({startDate:a.toISOString(), endDate:b.toISOString()}), s, new Date());
+    const list = (out.r.weights||[]).slice().sort((a,b)=>String(a.time)<String(b.time)?1:-1);
+    return {ok:true, n:list.length, cortou:out.cortou, erroLargo:out.erroLargo, list:list.slice(0,12).map(w=>({
       d:localDateOf(w.time), hm:fmtTime(new Date(w.time).getTime()),
       kg:Math.round(Number(w.kg)*100)/100, src:String(w.deviceModel||w.sourceBundleId||"")}))};
   }catch(e){ return {ok:false, msg:"Erro ao ler: " + ((e&&e.message)||e)}; }
@@ -3145,7 +3176,7 @@ async function healthStatus(){
   if(!native.isNative || !H) return {native:false, available:false, perms:{}};
   try{
     const av = await H.isHealthAvailable();
-    const c = await H.checkHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS","READ_WEIGHT","READ_BODY_FAT"]});
+    const c = await H.checkHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS","READ_WEIGHT","READ_BODY_FAT","READ_HISTORY"]});
     return {native:true, available:!!(av && av.available), perms:permMap(c)};
   }catch(e){ return {native:true, available:false, perms:{}, err:(e&&e.message)||String(e)}; }
 }
@@ -3171,6 +3202,9 @@ async function healthDiagForm(){
         <div class="d">${yn(st.perms.READ_WEIGHT)}</div></div>
       <div class="setline"><div class="grow"><div class="t">Permissão de gordura corporal</div></div>
         <div class="d">${yn(st.perms.READ_BODY_FAT)}</div></div>
+      <div class="setline"><div class="grow"><div class="t">Ler histórico além de 30 dias</div>
+        ${st.perms.READ_HISTORY === true ? "" : `<div class="d">Sem ela o Health Connect só entrega os últimos 30 dias — e <b>rejeita a leitura inteira</b> se o app pedir mais. O app já contorna lendo uma janela curta, mas o histórico antigo não vem.</div>`}</div>
+        <div class="d">${yn(st.perms.READ_HISTORY)}</div></div>
       <div class="setline"><div class="grow"><div class="t">Este APK sabe ler peso</div>
         ${hasW ? "" : `<div class="d" style="color:var(--bad)">Instale a versão nova (botão Atualizar na tela inicial) — a leitura da balança é código nativo, não entra sozinha.</div>`}</div>
         <div class="d">${hasW ? "✅ sim (v" + APP_VERSION + ")" : "❌ APK antigo"}</div></div>
@@ -3188,6 +3222,7 @@ async function healthDiagForm(){
     <div class="card" style="margin-bottom:12px">
       <div class="sub" style="margin-bottom:6px">⚖️ Peso — pesagens encontradas: <b>${!lw?"—":lw.noMethod?"—":lw.n}</b>${db.settings.weightFrom?` · aplicando de ${fmtDate(db.settings.weightFrom)} em diante`:""}${lw&&lw.aplicados!=null?` · ${lw.aplicados} aplicada(s)`:""}</div>
       ${lw && lw.erro ? `<div class="empty" style="color:var(--bad)">Erro ao ler o peso: ${esc(lw.erro)}</div>` : ""}
+      ${lw && lw.cortou ? `<div class="empty" style="color:var(--gold)">O Health Connect recusou a leitura de 60 dias e o app leu só os últimos 27 — por isso as pesagens antigas não vieram. Conceda <b>"Ler histórico além de 30 dias"</b> acima.<br><span class="sub" style="font-size:.7rem">recusa: ${esc(lw.erroLargo||"")}</span></div>` : ""}
       ${!lw ? `<div class="empty">Você ainda não importou nesta versão.</div>`
         : lw.noMethod ? `<div class="empty" style="color:var(--bad)">Este APK não tem a leitura de peso. Atualize o app.</div>`
         : wrows.length ? wrows.slice().reverse().map(w=>measRowHtml(w," kg")).join("")
@@ -3454,7 +3489,7 @@ document.addEventListener("click", ev => {
     const H = native.plugin("HealthPlugin"); if(!H) return;
     /* pede só o que vem da balança: se o Health Connect não mostrar a tela, é porque a
        permissão foi negada de vez e só dá para religar nas configurações dele */
-    const balanca = ["READ_WEIGHT","READ_BODY_FAT"];
+    const balanca = ["READ_WEIGHT","READ_BODY_FAT","READ_HISTORY"];
     H.requestHealthPermissions({permissions:balanca}).then(async () => {
       const ok = permMap(await H.checkHealthPermissions({permissions:balanca})).READ_WEIGHT;
       db.settings.wDenied = (ok === false); save(false);
@@ -3467,12 +3502,13 @@ document.addEventListener("click", ev => {
     box.innerHTML = `<div class="empty">Lendo o Health Connect…</div>`;
     weightProbe().then(p=>{
       if(!p.ok){ box.innerHTML = `<div class="empty" style="color:var(--bad)">${esc(p.msg)}</div>`; return; }
-      box.innerHTML = p.n
-        ? `<div class="sub" style="margin:8px 0 4px"><b>${p.n}</b> pesagem(ns) no Health Connect nos últimos 365 dias:</div>`
+      box.innerHTML = (p.cortou ? `<div class="sub" style="margin:8px 0 0; color:var(--gold)">O Health Connect recusou ler 365 dias, então li só os últimos 27. Conceda "Ler histórico além de 30 dias" para ver o resto.</div>` : "")
+        + (p.n
+        ? `<div class="sub" style="margin:8px 0 4px"><b>${p.n}</b> pesagem(ns) encontradas${p.cortou?" nos últimos 27 dias":" nos últimos 365 dias"}:</div>`
           + p.list.map(w=>`<div class="wkrow"><span class="wd">${fmtDate(w.d)} ${w.hm}</span>
              <span class="wv">${fmtW(w.kg)} kg</span><span class="wdelta" style="color:var(--muted); font-size:.72rem">${esc(w.src||"—")}</span></div>`).join("")
         : `<div class="empty" style="color:var(--bad)">O Health Connect não tem <b>nenhuma</b> pesagem. Então o problema não é o app: nada está gravando peso lá.<br><br>
-           Confira em <b>Health Connect → Dados e acesso → Peso → Ver todas as entradas</b>. Se estiver vazio, abra o <b>openScale sync</b>, ligue o Health Connect e faça uma pesagem nova.</div>`;
+           Confira em <b>Health Connect → Dados e acesso → Peso → Ver todas as entradas</b>. Se estiver vazio, abra o <b>openScale sync</b>, ligue o Health Connect e faça uma pesagem nova.</div>`);
     });
   }
   else if(a === "cycle-act"){

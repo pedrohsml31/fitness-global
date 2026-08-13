@@ -37,6 +37,31 @@ if ((Test-Path "$src\native-patch\AndroidManifest.xml") -and (Test-Path $mf)) {
     Copy-Item "$src\native-patch\AndroidManifest.xml" $mf -Force
 }
 
+# A versao mora SO no index.html (APP_NAME_VERSION + APP_VERSION) e e escrita daqui para
+# todos os outros lugares: nome do app no celular, titulo da activity, versionName e
+# versionCode do Android. Assim nao tem como um deles ficar para tras.
+$idx  = Get-Content "$src\index.html" -Raw
+$vName = [regex]::Match($idx, 'APP_NAME_VERSION\s*=\s*"([^"]+)"').Groups[1].Value
+$vCode = [regex]::Match($idx, 'APP_VERSION\s*=\s*(\d+)').Groups[1].Value
+if (-not $vName -or -not $vCode) { Write-Host "Nao achei a versao no index.html." -ForegroundColor Red; exit 1 }
+$rotulo = "Fitness Global v$vName"
+Write-Host "     versao: $rotulo (build $vCode)" -ForegroundColor DarkGray
+
+$strings = "$native\android\app\src\main\res\values\strings.xml"
+$sx = Get-Content $strings -Raw
+$sx = [regex]::Replace($sx, '(<string name="app_name">)[^<]*(</string>)', "`${1}$rotulo`${2}")
+$sx = [regex]::Replace($sx, '(<string name="title_activity_main">)[^<]*(</string>)', "`${1}$rotulo`${2}")
+# UTF-8 SEM BOM: o Set-Content -Encoding utf8 do PowerShell 5.1 grava BOM e o Gradle
+# quebra com "Unexpected character: '?'" na primeira linha do build.gradle.
+$semBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($strings, $sx, $semBom)
+
+$gradle = "$native\android\app\build.gradle"
+$gx = Get-Content $gradle -Raw
+$gx = [regex]::Replace($gx, 'versionCode\s+\d+', "versionCode $vCode")
+$gx = [regex]::Replace($gx, 'versionName\s+"[^"]*"', "versionName ""$vName""")
+[System.IO.File]::WriteAllText($gradle, $gx, $semBom)
+
 Write-Host "2/3  Compilando o APK (pode levar alguns minutos)..." -ForegroundColor Cyan
 Set-Location "$native\android"
 & ".\gradlew.bat" assembleDebug --no-daemon | Out-Host

@@ -43,7 +43,7 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.jvm.optionals.getOrDefault
 
 enum class CapHealthPermission {
-    READ_STEPS, READ_WORKOUTS, READ_HEART_RATE, READ_ROUTE, READ_ACTIVE_CALORIES, READ_TOTAL_CALORIES, READ_DISTANCE, READ_WEIGHT, READ_BODY_FAT;
+    READ_STEPS, READ_WORKOUTS, READ_HEART_RATE, READ_ROUTE, READ_ACTIVE_CALORIES, READ_TOTAL_CALORIES, READ_DISTANCE, READ_WEIGHT, READ_BODY_FAT, READ_HISTORY;
 
     companion object {
         fun from(s: String): CapHealthPermission? {
@@ -95,6 +95,12 @@ enum class CapHealthPermission {
         Permission(
             alias = "READ_BODY_FAT",
             strings = ["android.permission.health.READ_BODY_FAT"]
+        ),
+        // Sem esta, o Health Connect só entrega 30 dias contados da concessão da permissão
+        // — e passando disso ele REJEITA a leitura inteira em vez de devolver o que pode.
+        Permission(
+            alias = "READ_HISTORY",
+            strings = ["android.permission.health.READ_HEALTH_DATA_HISTORY"]
         )
     ]
 )
@@ -153,7 +159,8 @@ class HealthPlugin : Plugin() {
         Pair(CapHealthPermission.READ_DISTANCE, "android.permission.health.READ_DISTANCE"),
         Pair(CapHealthPermission.READ_STEPS, "android.permission.health.READ_STEPS"),
         Pair(CapHealthPermission.READ_WEIGHT, "android.permission.health.READ_WEIGHT"),
-        Pair(CapHealthPermission.READ_BODY_FAT, "android.permission.health.READ_BODY_FAT")
+        Pair(CapHealthPermission.READ_BODY_FAT, "android.permission.health.READ_BODY_FAT"),
+        Pair(CapHealthPermission.READ_HISTORY, "android.permission.health.READ_HEALTH_DATA_HISTORY")
     )
 
     // Check if a set of permissions are granted

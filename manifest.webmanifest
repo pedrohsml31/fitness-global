@@ -1,6 +1,6 @@
 {
-  "name": "Fitness Global",
-  "short_name": "Fitness Global",
+  "name": "Fitness Global v2.1",
+  "short_name": "Fitness v2.1",
   "description": "Registro de academias, exercícios, séries, alimentação e evolução",
   "start_url": "./",
   "scope": "./",

@@ -68,4 +68,6 @@
     <!-- Peso e gordura corporal da balança (Yunmai -> openScale -> Health Connect) -->
     <uses-permission android:name="android.permission.health.READ_WEIGHT" />
     <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+    <!-- sem esta, o Health Connect só entrega 30 dias e ERRA a leitura se pedirem mais -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
 </manifest>

@@ -1,5 +1,6 @@
 {
-  "version": 20,
-  "notes": "Novo modo \"Calorias e macros\" (liga e desliga nos Ajustes): calcula kcal, proteína, carboidrato e gordura de cada alimento, de cada refeição e do dia inteiro, usando a TACO 4ª edição (NEPA/UNICAMP) — 597 alimentos que vêm dentro do app e funcionam sem internet. Você liga o alimento à tabela uma vez e ele fica sabendo para sempre, inclusive nos próximos dias. Dá para digitar os valores do rótulo à mão quando o alimento não está na tabela. O relatório de 7 dias ganhou a média de kcal e macros por dia.",
+  "version": 21,
+  "name": "2.1",
+  "notes": "Conserta o peso que parou de vir do Health Connect. O Health Connect só libera 30 dias para trás contados de quando você concedeu a permissão — e, se o app pedir uma janela maior, ele REJEITA a leitura inteira em vez de devolver o que pode. Era isso que zerava a importação. Agora o app pede a permissão \"ler histórico além de 30 dias\" e, se ela for negada, tenta de novo com uma janela curta para ao menos as pesagens recentes entrarem; o 🔎 avisa quando isso acontece. O app também passou a ter versão no nome (Fitness Global v2.1) no celular, no navegador e na tela.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
