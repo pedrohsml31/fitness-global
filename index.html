@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v2.1</title>
+<title>Fitness Global v2.2</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -314,6 +314,13 @@ input[type=range]{accent-color:var(--accent);}
 .exthumb{width:44px; height:44px; border-radius:9px; object-fit:cover; background:var(--surface2); flex:none;}
 .photoprev{display:flex; align-items:center; gap:10px; background:var(--surface2); border:1px solid var(--border); border-radius:11px; padding:8px; margin-bottom:12px;}
 .photoprev img{width:56px; height:56px; border-radius:8px; object-fit:cover; flex:none;}
+.galgrid{display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:8px; max-height:52vh; overflow:auto;}
+.galcard{display:flex; flex-direction:column; gap:4px; text-align:left; padding:6px;
+  background:var(--surface2); border:1px solid var(--border); border-radius:11px; cursor:pointer;}
+.galcard img{width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:8px; background:var(--surface);}
+.galcard .gt{font-size:.8rem; font-weight:700; color:var(--ink); line-height:1.2;}
+.galcard .gd{font-size:.66rem; color:var(--muted); line-height:1.2;}
+.galcard:active{border-color:var(--accent);}
 </style>
 
 <div id="app"><div id="updslot"></div><div id="view"></div></div>
@@ -358,8 +365,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "2.1";
-const APP_VERSION = 21;
+const APP_NAME_VERSION = "2.2";
+const APP_VERSION = 22;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -403,7 +410,7 @@ function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
 
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], logs:[], food:[], urges:[], plan:[], body:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false}, updatedAt:0}; }
 /* duração do bipe de fim de série (mesmo som, só mais longo) */
 const SOUNDLEN = { curto:0.45, medio:1.1, longo:2.4 };
 let db;
@@ -617,8 +624,25 @@ function summaryLine(exId){
   return `${fmtDate(l.date)} · ${fmtW(best.weight)} kg × ${best.reps}`;
 }
 
+/* ---- rotinas (Treino A, B, C…) dentro de uma academia ----
+   A rotina guarda a LISTA de exercícios (exIds), não o contrário: assim o mesmo
+   exercício pode estar em mais de um treino e os exercícios globais funcionam igual. */
+function gymRoutines(gymId){
+  return (db.routines||[]).filter(r=>r.gymId===gymId).sort((a,b)=>(a.order||0)-(b.order||0));
+}
+function routineById(id){ return (db.routines||[]).find(r=>r.id===id); }
+/* exercícios de uma rotina, na ordem em que ela guarda; ignora id que não existe mais */
+function routineExercises(r, gymId){
+  const todos = gymExercises(gymId);
+  return (r.exIds||[]).map(id=>todos.find(e=>e.id===id)).filter(Boolean);
+}
+let gymRoutine = "";      // "" = Todos
+
 function renderGym(g){
-  const exs = gymExercises(g.id);
+  const rts = gymRoutines(g.id);
+  if(gymRoutine && !routineById(gymRoutine)) gymRoutine = "";      // rotina apagada
+  const rAtiva = gymRoutine ? routineById(gymRoutine) : null;
+  const exs = rAtiva ? routineExercises(rAtiva, g.id) : gymExercises(g.id);
   const items = exs.map((e, idx) => {
     if(reorderMode){
       return `<div class="card row">
@@ -648,12 +672,22 @@ function renderGym(g){
         ? `<button class="iconbtn" data-action="reorder-done" aria-label="Concluir">✓</button>`
         : `<button class="iconbtn" data-action="gym-menu" data-id="${g.id}" aria-label="Opções da academia">⋮</button>`}
     </div>
-    <div class="section"><h2>Exercícios</h2>
-      ${items || `<div class="empty">Nenhum exercício nesta academia ainda.</div>`}
+    ${reorderMode ? "" : `<div class="pills" style="margin:-2px 0 10px">
+      <button class="pill${gymRoutine?"":" on"}" data-action="rt-sel" data-v="" style="cursor:pointer">Todos (${gymExercises(g.id).length})</button>
+      ${rts.map(r=>`<button class="pill${gymRoutine===r.id?" on":""}" data-action="rt-sel" data-v="${r.id}" style="cursor:pointer">${esc(r.name)} (${routineExercises(r,g.id).length})</button>`).join("")}
+      <button class="pill" data-action="rt-new" data-gym="${g.id}" style="cursor:pointer; color:var(--accent)">＋ treino</button>
+    </div>`}
+    <div class="section"><h2>${rAtiva ? esc(rAtiva.name) : "Exercícios"}${rAtiva?` <button class="xbtn" data-action="rt-menu" data-id="${rAtiva.id}" aria-label="Opções do treino" style="vertical-align:middle">⋮</button>`:""}</h2>
+      ${items || `<div class="empty">${rAtiva
+        ? "Este treino ainda não tem exercício.<br>Toque em <b>Escolher exercícios</b> abaixo."
+        : "Nenhum exercício nesta academia ainda."}</div>`}
       ${reorderMode
-        ? `<p class="sub" style="margin-top:8px">Use ↑ ↓ para mudar a ordem. Toque em ✓ quando terminar.</p>`
-        : `<button class="btn" data-action="add-ex" data-gym="${g.id}">＋ Adicionar exercício</button>
-           ${canReorder ? `<button class="btn ghost sm" data-action="reorder-on" style="margin-top:8px">⇅ Reordenar exercícios</button>` : ""}`}
+        ? `<p class="sub" style="margin-top:8px">Use ↑ ↓ para mudar a ordem${rAtiva?" dentro deste treino":""}. Toque em ✓ quando terminar.</p>`
+        : rAtiva
+          ? `<button class="btn" data-action="rt-pick" data-id="${rAtiva.id}" data-gym="${g.id}">☑ Escolher exercícios do ${esc(rAtiva.name)}</button>
+             ${canReorder ? `<button class="btn ghost sm" data-action="reorder-on" style="margin-top:8px">⇅ Reordenar neste treino</button>` : ""}`
+          : `<button class="btn" data-action="add-ex" data-gym="${g.id}">＋ Adicionar exercício</button>
+             ${canReorder ? `<button class="btn ghost sm" data-action="reorder-on" style="margin-top:8px">⇅ Reordenar exercícios</button>` : ""}`}
     </div>`;
 }
 
@@ -1042,12 +1076,22 @@ function exForm(gymId, e, pre){
   openModal(`<h2>${e ? "Editar exercício" : "Novo exercício"}</h2>
     <div class="field"><label for="f-name">Nome</label>
     <input id="f-name" value="${esc(v.name)}" placeholder="Ex.: Supino reto" maxlength="60">
-    <button class="btn ghost sm" data-action="suggest-name" style="margin-top:8px">🔍 Sugerir nome certo + foto</button>
-    <div class="hint">Escreva como você chama (ex.: "supino maquina") e toque acima.</div></div>
-    ${v.photo ? `<div class="photoprev"><img src="${esc(v.photo)}" alt="">
+    <div class="btnrow" style="margin-top:8px">
+      <button class="btn ghost sm" data-action="suggest-name">🔍 Nome + foto</button>
+      <button class="btn ghost sm" data-action="open-gallery">🖼 Galeria</button>
+    </div>
+    <div class="hint">Escreva como você chama (ex.: "supino maquina") e toque em 🔍, ou abra a 🖼 galeria para procurar por músculo e equipamento.</div></div>
+    ${v.photo ? `<div class="photoprev"><img src="${esc(v.photo)}" alt="" onerror="this.style.visibility='hidden'">
       <div class="grow"><div class="t" style="font-size:.88rem">Foto do exercício</div>
-      <div class="d" style="font-size:.76rem;color:var(--muted)">Aparece na tela do exercício</div></div>
+      <div class="d" style="font-size:.76rem;color:var(--muted)">${v.photo.startsWith("data:") ? "Foto sua · " + Math.round(v.photo.length/1024) + " KB" : "Aparece na tela do exercício"}</div></div>
       <button class="xbtn" data-action="rm-photo" aria-label="Remover foto">✕</button></div>` : ""}
+    <div class="field"><label>Foto própria (para máquina que não está no catálogo)</label>
+      <div class="btnrow">
+        <button class="btn ghost sm" data-action="pick-photo">📷 Tirar / escolher foto</button>
+        <button class="btn ghost sm" data-action="url-photo">🔗 Colar link</button>
+      </div>
+      <input type="file" id="f-file" accept="image/*" style="display:none">
+      <div class="hint">A foto é reduzida para caber na sincronização — vale para qualquer exercício que você criou, mesmo sem nome oficial.</div></div>
     <input type="hidden" id="f-photo" value="${esc(v.photo)}">
     <div class="btnrow">
       <div class="field" style="flex:1"><label for="f-sets">Séries alvo</label>
@@ -1065,6 +1109,24 @@ function exForm(gymId, e, pre){
     </label>
     <button class="btn" data-action="save-ex" data-gym="${gymId}" data-id="${e ? e.id : ""}">Salvar</button>`);
   setTimeout(() => { const n = document.getElementById("f-name"); if(n) n.focus(); }, 50);
+}
+/* marcar quais exercícios da academia entram neste treino */
+function routinePickForm(rid, gymId){
+  const r = routineById(rid); if(!r) return;
+  const todos = gymExercises(gymId || r.gymId);
+  const dentro = r.exIds || [];
+  openModal(`<h2>Exercícios do ${esc(r.name)}</h2>
+    <p class="sub" style="margin-bottom:10px">Marque o que faz parte deste treino. Os exercícios continuam existindo na academia — o treino é só um agrupamento.</p>
+    ${todos.length ? todos.map(e=>{
+      const on = dentro.includes(e.id);
+      return `<div class="fooditem ${on?"eaten":"pending"}" data-action="rt-toggle-ex" data-id="${r.id}" data-ex="${e.id}" style="cursor:pointer">
+        <button class="ftick ${on?"on":""}" tabindex="-1">${on?"✓":""}</button>
+        ${e.photo?`<img class="exthumb" src="${esc(e.photo)}" alt="" loading="lazy" style="width:34px;height:34px" onerror="this.style.display='none'">`:""}
+        <span class="fn">${esc(e.name)}${e.gymId===null?' <span class="pill glob">🌐</span>':""}</span>
+      </div>`;
+    }).join("") : `<div class="empty">Esta academia ainda não tem exercício. Crie um primeiro.</div>`}
+    <div class="sub" style="margin:10px 0">${dentro.length} de ${todos.length} marcados${dentro.length?" · a ordem do treino segue a ordem em que você marcou":""}</div>
+    <button class="btn" data-action="rt-done">Pronto</button>`);
 }
 function syncForm(){
   const cur = db.settings.sync || {};
@@ -1322,7 +1384,7 @@ const Sync = {
   /* lista campo a campo de propósito (o `sync` não pode subir). Campo novo no db TEM
      que entrar aqui — o mealNotes ficou de fora na v13 e os comentários de refeição
      nunca chegavam nos outros aparelhos. */
-  data(){ return {gyms:db.gyms, exercises:db.exercises, logs:db.logs, food:db.food, urges:db.urges,
+  data(){ return {gyms:db.gyms, exercises:db.exercises, routines:db.routines, logs:db.logs, food:db.food, urges:db.urges,
     plan:db.plan, body:db.body, mealNotes:db.mealNotes, free:db.free, foodMap:db.foodMap,
     settings:Object.assign({}, db.settings, {sync:null}), updatedAt:db.updatedAt}; },
   async getRemote(){
@@ -1501,6 +1563,48 @@ document.addEventListener("click", ev => {
     save(); closeModal(); location.hash = "";
   }
 
+  else if(a === "rt-sel"){ gymRoutine = el.dataset.v; reorderMode = false; render(); }
+  else if(a === "rt-new"){
+    const gymId = el.dataset.gym;
+    const usados = gymRoutines(gymId).map(r=>r.name);
+    /* sugere a próxima letra: Treino A, B, C… */
+    let sug = "Treino A";
+    for(const L of "ABCDEFGH"){ if(!usados.includes("Treino "+L)){ sug = "Treino "+L; break; } }
+    const nome = prompt("Nome do treino:", sug);
+    if(nome === null || !nome.trim()) return;
+    db.routines = db.routines || [];
+    const r = {id:uid(), gymId, name:nome.trim(), exIds:[], order:(gymRoutines(gymId).length)};
+    db.routines.push(r);
+    gymRoutine = r.id;
+    save(); render(); toast(`${r.name} criado — agora escolha os exercícios`);
+  }
+  else if(a === "rt-menu"){
+    const r = routineById(el.dataset.id); if(!r) return;
+    openModal(`<h2>${esc(r.name)}</h2>
+      <button class="menuitem" data-action="rt-ren" data-id="${r.id}"><span class="mi">✏️</span> Renomear treino</button>
+      <button class="menuitem danger" data-action="rt-del" data-id="${r.id}"><span class="mi">🗑</span> Excluir treino</button>`);
+  }
+  else if(a === "rt-ren"){
+    const r = routineById(el.dataset.id); if(!r) return;
+    const n = prompt("Novo nome do treino:", r.name);
+    if(n === null || !n.trim()) return;
+    r.name = n.trim(); save(); closeModal(); render();
+  }
+  else if(a === "rt-del"){
+    const r = routineById(el.dataset.id); if(!r) return;
+    if(!confirm(`Excluir "${r.name}"?\n\nOs exercícios continuam na academia — some só o agrupamento.`)) return;
+    db.routines = (db.routines||[]).filter(x=>x.id!==r.id);
+    gymRoutine = ""; save(); closeModal(); render(); toast("Treino excluído");
+  }
+  else if(a === "rt-pick"){ routinePickForm(el.dataset.id, el.dataset.gym); }
+  else if(a === "rt-done"){ closeModal(); render(); }
+  else if(a === "rt-toggle-ex"){
+    const r = routineById(el.dataset.id); if(!r) return;
+    r.exIds = r.exIds || [];
+    const i = r.exIds.indexOf(el.dataset.ex);
+    if(i >= 0) r.exIds.splice(i, 1); else r.exIds.push(el.dataset.ex);
+    save(); routinePickForm(r.id, r.gymId);
+  }
   else if(a === "add-ex") exForm(el.dataset.gym, null);
   else if(a === "suggest-name"){ openSuggest(); }
   else if(a === "sugg-lang"){ suggState.lang = el.dataset.v; renderSuggest(); }
@@ -1514,6 +1618,27 @@ document.addEventListener("click", ev => {
     toast("Nome e foto aplicados ✓");
   }
   else if(a === "rm-photo"){ exFormSnapshot(); const c = exFormCtx; c.photo = ""; exForm(c.gymId, c.id ? exById(c.id) : null, c); }
+  else if(a === "open-gallery"){ openGallery(); }
+  else if(a === "gal-eq"){ galState.eq = el.dataset.v; renderGallery(); }
+  else if(a === "gal-mus"){ galState.mus = el.dataset.v; renderGallery(); }
+  else if(a === "pick-gal"){
+    const x = (ExDb.list||[])[+el.dataset.i]; if(!x) return;
+    const c = exFormCtx || {gymId: route().gymId, id: ""};
+    if(!c.name || !c.name.trim()) c.name = ptNameOf(x.n, x.e);   // não sobrescreve nome que ele já digitou
+    c.photo = ExDb.img(x.i);
+    exForm(c.gymId, c.id ? exById(c.id) : null, c);
+    toast("Foto aplicada ✓");
+  }
+  else if(a === "pick-photo"){ exFormSnapshot(); const f = document.getElementById("f-file"); if(f) f.click(); }
+  else if(a === "url-photo"){
+    exFormSnapshot();
+    const c = exFormCtx;
+    const atual = c.photo && c.photo.slice(0,5) !== "data:" ? c.photo : "";
+    const u = prompt("Cole o link da imagem (começa com http):", atual);
+    if(u === null) return;
+    c.photo = u.trim();
+    exForm(c.gymId, c.id ? exById(c.id) : null, c);
+  }
   else if(a === "save-ex"){
     const name = document.getElementById("f-name").value.trim();
     const sets = Math.max(1, parseInt(document.getElementById("f-sets").value, 10) || 3);
@@ -1602,6 +1727,15 @@ document.addEventListener("click", ev => {
   else if(a === "reorder-done"){ reorderMode = false; render(); }
   else if(a === "move-ex"){
     const gymId = el.dataset.gym, id = el.dataset.id, dir = +el.dataset.dir;
+    /* dentro de um treino a ordem é a do próprio treino (r.exIds), não a da academia */
+    const rAt = gymRoutine ? routineById(gymRoutine) : null;
+    if(rAt){
+      const ids = rAt.exIds || [];
+      const i = ids.indexOf(id), j = i + dir;
+      if(i < 0 || j < 0 || j >= ids.length) return;
+      ids.splice(j, 0, ids.splice(i, 1)[0]);
+      save(); render(); return;
+    }
     const list = gymExercises(gymId);
     const i = list.findIndex(x => x.id === id), j = i + dir;
     if(i < 0 || j < 0 || j >= list.length) return;
@@ -1736,6 +1870,25 @@ document.addEventListener("click", ev => {
   }
 });
 
+/* foto escolhida no seletor de arquivo do celular */
+document.addEventListener("change", ev => {
+  if(!ev.target || ev.target.id !== "f-file") return;
+  const file = ev.target.files && ev.target.files[0];
+  if(!file) return;
+  exFormSnapshot();
+  toast("Reduzindo a foto…");
+  photoFromFile(file).then(url => {
+    const total = photoKb(url.length);
+    if(total > PHOTO_BUDGET_KB){
+      toast(`Suas fotos passariam de ${total} KB. Apague a foto de algum exercício antes — acima disso a sincronização não cabe.`);
+      return;
+    }
+    const c = exFormCtx; c.photo = url;
+    exForm(c.gymId, c.id ? exById(c.id) : null, c);
+    toast(`Foto pronta (${Math.round(url.length/1024)} KB) ✓`);
+  }).catch(e => toast((e && e.message) || "Não deu para usar essa foto."));
+});
+
 /* editar uma série já registrada, sem mexer nas outras */
 document.addEventListener("change", ev => {
   const el = ev.target.closest("[data-edit]");
@@ -1804,7 +1957,19 @@ const PT2EN = {
   "martelo":"hammer","inverso":"reverse","invertida":"reverse","invertido":"reverse","alternada":"alternate","alternado":"alternate",
   "scott":"preacher","concentrada":"concentration","frontal":"front","nuca":"behind neck",
   "romeno":"romanian","sumo":"sumo","stiff":"stiff","peito":"chest","costas":"back","ombro":"shoulders",
-  "biceps":"biceps","quadriceps":"quadriceps","posterior":"hamstrings","perna":"leg","pernas":"legs"
+  "biceps":"biceps","quadriceps":"quadriceps","posterior":"hamstrings","perna":"leg","pernas":"legs",
+  /* nomes de máquina como as academias daqui chamam (Ironberg e afins) */
+  "remada baixa":"seated cable row","remada sentada":"seated cable row","remada articulada":"machine row",
+  "remada maquina":"machine row","puxada alta":"lat pulldown","puxada frente":"lat pulldown",
+  "puxada aberta":"wide grip lat pulldown","puxada triangulo":"v-bar pulldown","triangulo":"v-bar",
+  "graviton":"assisted","crossover":"cable crossover","cross over":"cable crossover","crucifixo maquina":"pec deck",
+  "supino maquina":"chest press","desenvolvimento maquina":"shoulder press machine",
+  "panturrilha sentado":"seated calf raise","panturrilha em pe":"standing calf raise",
+  "abdominal maquina":"ab crunch machine","gluteo maquina":"glute","coice maquina":"kickback",
+  "articulada":"machine","convergente":"machine","guiada":"machine","aparelho":"machine",
+  "leg press 45":"leg press","leg 45":"leg press","agachamento smith":"smith machine squat",
+  "scott maquina":"preacher curl machine","banco scott":"preacher","polia alta":"high cable",
+  "polia baixa":"low cable","corda triceps":"rope pushdown","barra reta":"straight bar"
 };
 /* movimento em inglês -> nome usual em português (frases longas primeiro) */
 const EN2PT_MOVE = [
@@ -1814,8 +1979,10 @@ const EN2PT_MOVE = [
   ["push-up","Flexão"],["pushup","Flexão"],["push up","Flexão"],["dip","Paralelas"],["pullover","Pullover"],
   ["front squat","Agachamento frontal"],["hack squat","Agachamento hack"],["split squat","Agachamento unilateral"],
   ["full squat","Agachamento completo"],["squat","Agachamento"],
-  ["leg press","Leg press"],["leg extension","Cadeira extensora"],["leg curl","Mesa flexora"],
+  /* "calf press" antes de "leg press": "Calf Press On The Leg Press Machine" casava com
+     "leg press" e virava "Leg press", que é outro exercício */
   ["calf press","Panturrilha no leg press"],["calf raise","Panturrilha"],
+  ["leg press","Leg press"],["leg extension","Cadeira extensora"],["leg curl","Mesa flexora"],
   ["lunge","Afundo"],["step-up","Step-up"],["hip thrust","Elevação pélvica"],["glute bridge","Ponte de glúteo"],
   ["hip adduction","Cadeira adutora"],["hip abduction","Cadeira abdutora"],
   ["romanian deadlift","Terra romeno"],["stiff leg deadlift","Stiff"],["sumo deadlift","Terra sumô"],["deadlift","Levantamento terra"],
@@ -1884,6 +2051,53 @@ const ExDb = {
   img(path){ return path ? EXDB_IMG + path : ""; }
 };
 
+/* ---- foto própria ----
+   A foto viaja junto no pacote da sincronização, e o documento da nuvem tem limite de
+   tamanho. Por isso a imagem é reduzida para 400px no maior lado e salva em JPEG: uma
+   foto de celular de 3 MB vira uns 25 KB. */
+const PHOTO_MAX = 400, PHOTO_Q = 0.72, PHOTO_BUDGET_KB = 600;
+function photoFromFile(file){
+  return new Promise((ok, fail)=>{
+    if(!file || !/^image\//.test(file.type||"")) return fail(new Error("Isso não é uma imagem."));
+    const fr = new FileReader();
+    fr.onerror = () => fail(new Error("Não deu para ler o arquivo."));
+    fr.onload = () => {
+      const img = new Image();
+      img.onerror = () => fail(new Error("Não deu para abrir essa imagem."));
+      img.onload = () => {
+        try{
+          const k = Math.min(1, PHOTO_MAX / Math.max(img.width, img.height));
+          const c = document.createElement("canvas");
+          c.width = Math.max(1, Math.round(img.width * k));
+          c.height = Math.max(1, Math.round(img.height * k));
+          const ctx = c.getContext("2d");
+          ctx.fillStyle = "#1E1A18"; ctx.fillRect(0, 0, c.width, c.height);  // PNG transparente não vira preto
+          ctx.drawImage(img, 0, 0, c.width, c.height);
+          ok(c.toDataURL("image/jpeg", PHOTO_Q));
+        }catch(e){ fail(new Error("Não deu para reduzir a imagem.")); }
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+/* quanto as fotos próprias já ocupam (as do catálogo são só link, não pesam) */
+function photoKb(extra){
+  const n = db.exercises.reduce((s,e)=> s + ((e.photo && e.photo.slice(0,5) === "data:") ? e.photo.length : 0), 0);
+  return Math.round((n + (extra || 0)) / 1024);
+}
+
+/* ---- galeria: procurar por músculo e equipamento, sem precisar saber o nome ---- */
+const MUS_PT = {chest:"Peito", lats:"Dorsal", "middle back":"Costas (meio)", "lower back":"Lombar",
+  traps:"Trapézio", shoulders:"Ombros", biceps:"Bíceps", triceps:"Tríceps", forearms:"Antebraço",
+  quadriceps:"Quadríceps", hamstrings:"Posterior", glutes:"Glúteos", calves:"Panturrilha",
+  abdominals:"Abdômen", adductors:"Adutores", abductors:"Abdutores", neck:"Pescoço"};
+const EQ_PT_FILTRO = {machine:"Máquina", cable:"Polia", "smith machine":"Smith", barbell:"Barra",
+  dumbbell:"Halteres", "e-z curl bar":"Barra W", "body only":"Peso do corpo", kettlebells:"Kettlebell",
+  bands:"Elástico", "exercise ball":"Bola", "medicine ball":"Medicine ball", "foam roll":"Rolo", other:"Outros"};
+let galState = {mus:"", eq:"machine", q:""};      // abre no que ele mais precisa: máquinas
+
+/* ===================== SUGESTÃO: estado ===================== */
 let suggState = {lang:"pt", results:[], query:""};
 async function openSuggest(){
   const q = (document.getElementById("f-name") || {}).value || "";
@@ -1923,6 +2137,55 @@ function renderSuggest(){
     }).join("")}
     <button class="btn ghost" data-action="sugg-back" style="margin-top:12px">Voltar sem escolher</button>
     <p class="sub" style="margin-top:8px">Fotos e nomes: base pública free-exercise-db.</p>`);
+}
+
+async function openGallery(){
+  exFormSnapshot();
+  openModal(`<h2>🖼 Galeria de exercícios</h2><div class="empty">Carregando o catálogo…</div>`);
+  try{ await ExDb.load(); }
+  catch(e){ openModal(`<h2>🖼 Galeria</h2><div class="empty">Não deu para carregar o catálogo. Confira a internet.</div>
+    <button class="btn ghost" data-action="sugg-back">Voltar</button>`); return; }
+  renderGallery();
+}
+function galFiltered(){
+  const q = norm(galState.q);
+  return (ExDb.list||[]).filter(x=>{
+    if(galState.eq && norm(x.e) !== norm(galState.eq)) return false;
+    if(galState.mus && norm(x.m) !== norm(galState.mus)) return false;
+    if(q && !norm(x.n + " " + ptNameOf(x.n, x.e)).includes(q)) return false;
+    return true;
+  });
+}
+function renderGallery(){
+  const list = galFiltered();
+  /* só mostra filtro que existe no catálogo, com a contagem do que está selecionado */
+  const musDisp = Object.keys(MUS_PT).filter(k => (ExDb.list||[]).some(x=>norm(x.m)===k));
+  const eqDisp  = Object.keys(EQ_PT_FILTRO).filter(k => (ExDb.list||[]).some(x=>norm(x.e)===k));
+  const chip = (val, cur, label, act) =>
+    `<button class="pill${norm(val)===norm(cur)?" on":""}" data-action="${act}" data-v="${esc(val)}" style="cursor:pointer">${esc(label)}</button>`;
+  openModal(`<h2>🖼 Galeria · ${list.length} exercício${list.length===1?"":"s"}</h2>
+    <div class="field"><label for="gal-q">Procurar pelo nome</label>
+      <input id="gal-q" value="${esc(galState.q)}" placeholder="cadeira, remada, peck…" oninput="galState.q=this.value; clearTimeout(window._galT); window._galT=setTimeout(renderGallery,250)"></div>
+    <div class="sub" style="margin-bottom:4px">Equipamento</div>
+    <div class="pills" style="margin-bottom:10px">
+      ${chip("", galState.eq, "Todos", "gal-eq")}
+      ${eqDisp.map(k=>chip(k, galState.eq, EQ_PT_FILTRO[k], "gal-eq")).join("")}</div>
+    <div class="sub" style="margin-bottom:4px">Músculo</div>
+    <div class="pills" style="margin-bottom:12px">
+      ${chip("", galState.mus, "Todos", "gal-mus")}
+      ${musDisp.map(k=>chip(k, galState.mus, MUS_PT[k], "gal-mus")).join("")}</div>
+    <div class="galgrid">
+      ${list.length ? list.slice(0,120).map(x=>{
+        const i = (ExDb.list||[]).indexOf(x);
+        return `<button class="galcard" data-action="pick-gal" data-i="${i}">
+          <img src="${ExDb.img(x.i)}" alt="" loading="lazy" onerror="this.style.opacity=.15">
+          <span class="gt">${esc(ptNameOf(x.n, x.e))}</span>
+          <span class="gd">${esc(x.n)}</span></button>`;
+      }).join("") : `<div class="empty">Nada com esses filtros. Tire um filtro ou procure por outro nome.</div>`}
+    </div>
+    ${list.length>120?`<p class="sub" style="margin-top:8px">Mostrando os primeiros 120. Use a busca para afinar.</p>`:""}
+    <button class="btn ghost" data-action="sugg-back" style="margin-top:12px">Voltar sem escolher</button>
+    <p class="sub" style="margin-top:8px">Catálogo público free-exercise-db · 873 exercícios. Máquina que não estiver aqui: crie o exercício e use <b>📷 Tirar / escolher foto</b>.</p>`);
 }
 
 /* ===================== ALIMENTAÇÃO & EVOLUÇÃO ===================== */

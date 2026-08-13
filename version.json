@@ -1,6 +1,6 @@
 {
-  "version": 21,
-  "name": "2.1",
-  "notes": "Conserta o peso que parou de vir do Health Connect. O Health Connect só libera 30 dias para trás contados de quando você concedeu a permissão — e, se o app pedir uma janela maior, ele REJEITA a leitura inteira em vez de devolver o que pode. Era isso que zerava a importação. Agora o app pede a permissão \"ler histórico além de 30 dias\" e, se ela for negada, tenta de novo com uma janela curta para ao menos as pesagens recentes entrarem; o 🔎 avisa quando isso acontece. O app também passou a ter versão no nome (Fitness Global v2.1) no celular, no navegador e na tela.",
+  "version": 22,
+  "name": "2.2",
+  "notes": "Foto própria para exercício: dá para tirar ou escolher uma foto do celular (ou colar um link) em qualquer exercício que você criou, mesmo sem nome oficial do catálogo — a imagem é reduzida para caber na sincronização. Nova galeria de exercícios: procure por equipamento (máquina, polia, barra…) e por músculo, com foto, sem precisar acertar o nome; abre já filtrada em máquinas. O dicionário de nomes ganhou termos de máquina usados nas academias daqui (remada baixa, puxada alta, crossover, graviton, articulada, leg press 45…). E rotinas de treino: crie Treino A, B, C dentro da mesma academia, escolha os exercícios de cada um e reordene dentro do treino.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
