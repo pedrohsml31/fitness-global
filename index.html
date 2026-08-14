@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v2.2</title>
+<title>Fitness Global v2.3</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -365,8 +365,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "2.2";
-const APP_VERSION = 22;
+const APP_NAME_VERSION = "2.3";
+const APP_VERSION = 23;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -624,6 +624,103 @@ function summaryLine(exId){
   return `${fmtDate(l.date)} · ${fmtW(best.weight)} kg × ${best.reps}`;
 }
 
+/* ===================== TREINOS PRONTOS =====================
+   Modelos que criam as rotinas e os exercícios de uma vez. O descanso NÃO vem no modelo
+   (o plano não dizia), então fica o padrão do app, 90s — dá para mudar exercício a
+   exercício depois. */
+const TEMPLATES = [{
+  id: "fullbody-abc-gpt",
+  nome: "Full Body A / B / C",
+  autor: "ChatGPT",
+  desc: "3 treinos de corpo inteiro focados em máquina — quadríceps, posterior, peito, costas, ombro, bíceps, tríceps, panturrilha, antebraço e abdômen.",
+  nota: "O * do plano original estava nos exercícios de ombro; como a legenda não veio junto, mantive o nome sem o asterisco.",
+  treinos: [
+    {nome:"Full Body A", itens:[
+      {g:"Quadríceps",  n:"Hack squat",                              s:2, r:"6–10"},
+      {g:"Posterior",   n:"Flexora sentada",                         s:2, r:"8–12"},
+      {g:"Peito",       n:"Chest press horizontal confortável",      s:3, r:"8–12"},
+      {g:"Costas",      n:"Remada máquina, cotovelo mais junto",     s:3, r:"8–12"},
+      {g:"Ombro",       n:"Elevação lateral máquina",                s:2, r:"10–15"},
+      {g:"Bíceps",      n:"Scott máquina",                           s:2, r:"8–12"},
+      {g:"Tríceps",     n:"Pushdown/máquina",                        s:2, r:"8–12"},
+      {g:"Panturrilha", n:"Standing calf",                           s:3, r:"8–12"},
+      {g:"Antebraço",   n:"Wrist curl",                              s:2, r:"10–15"},
+      {g:"Abdômen",     n:"Crunch máquina",                          s:1, r:"10–20"}]},
+    {nome:"Full Body B", itens:[
+      {g:"Quadríceps",  n:"Leg press",                               s:2, r:"8–12"},
+      {g:"Posterior",   n:"Flexora deitada",                         s:2, r:"8–12"},
+      {g:"Peito",       n:"Outra chest press horizontal segura",     s:3, r:"8–12"},
+      {g:"Costas",      n:"Remada unilateral máquina",               s:3, r:"8–12"},
+      {g:"Ombro",       n:"Reverse fly máquina",                     s:2, r:"10–15"},
+      {g:"Bíceps",      n:"Rosca máquina",                           s:2, r:"8–12"},
+      {g:"Tríceps",     n:"Outra máquina/pushdown",                  s:2, r:"8–12"},
+      {g:"Panturrilha", n:"Calf no leg press",                       s:3, r:"10–15"},
+      {g:"Abdômen",     n:"Crunch",                                  s:1, r:"10–20"}]},
+    {nome:"Full Body C", itens:[
+      {g:"Quadríceps",  n:"Extensora ou pendulum",                   s:2, r:"10–15"},
+      {g:"Posterior",   n:"Sua melhor flexora",                      s:2, r:"10–15"},
+      {g:"Peito",       n:"Chest press horizontal segura",           s:3, r:"8–12"},
+      {g:"Costas",      n:"Remada articulada/lat-biased",            s:3, r:"8–12"},
+      {g:"Ombro",       n:"Elevação lateral máquina",                s:2, r:"10–15"},
+      {g:"Bíceps",      n:"Rosca cabo/máquina",                      s:2, r:"10–15"},
+      {g:"Tríceps",     n:"Pushdown/máquina",                        s:2, r:"10–15"},
+      {g:"Panturrilha", n:"Standing calf",                           s:3, r:"10–15"},
+      {g:"Antebraço",   n:"Reverse curl/extensão de punho",          s:2, r:"10–15"},
+      {g:"Abdômen",     n:"Crunch",                                  s:1, r:"10–20"}]}
+  ]
+}];
+function templateById(id){ return TEMPLATES.find(t=>t.id===id); }
+/* quantos exercícios DIFERENTES o modelo tem (o mesmo nome repete entre treinos) */
+function templateExCount(t){
+  const s = new Set(); t.treinos.forEach(tr=>tr.itens.forEach(i=>s.add(norm(i.n)))); return s.size;
+}
+/* aplica o modelo na academia: reaproveita exercício que já existe pelo nome, cria o que
+   falta e monta as rotinas. Tenta pegar foto do catálogo, mas é chute — dá para trocar. */
+async function applyTemplate(tplId, gymId){
+  const tpl = templateById(tplId); if(!tpl) return null;
+  let cat = null;
+  try{ cat = await ExDb.load(); }catch(e){}                    // sem internet: segue sem foto
+  const jaTem = gymExercises(gymId);
+  const achaEx = n => jaTem.find(e => norm(e.name) === norm(n)) || db.exercises.find(e => norm(e.name) === norm(n) && (e.gymId === gymId || e.gymId === null));
+  const criados = [], reusados = [], porNome = {};
+  let ordem = nextOrder();
+  tpl.treinos.forEach(tr=>tr.itens.forEach(i=>{
+    const k = norm(i.n);
+    if(porNome[k]) return;
+    const ex = achaEx(i.n);
+    if(ex){ porNome[k] = ex; reusados.push(ex.name); return; }
+    let foto = "";
+    if(cat){ const hit = ExDb.search(i.n)[0]; if(hit) foto = ExDb.img(hit.i); }
+    const novo = {id:uid(), gymId, name:i.n, targetSets:i.s, restSec:90, reps:i.r,
+      notes:`${i.g} · ${tpl.autor}`, photo:foto, order: ordem++};
+    db.exercises.push(novo); porNome[k] = novo; criados.push(novo.name);
+  }));
+  db.routines = db.routines || [];
+  const rotinas = [];
+  tpl.treinos.forEach((tr, idx)=>{
+    /* nome livre se já existir um treino com o mesmo nome nesta academia */
+    let nome = tr.nome, i = 2;
+    while(gymRoutines(gymId).some(r=>r.name === nome)) nome = `${tr.nome} (${i++})`;
+    const r = {id:uid(), gymId, name:nome, src:tpl.autor,
+      exIds: tr.itens.map(it=>porNome[norm(it.n)].id), order: gymRoutines(gymId).length + idx};
+    db.routines.push(r); rotinas.push(r);
+  });
+  save();
+  return {criados, reusados, rotinas, comFoto: criados.length && cat};
+}
+function templateForm(gymId){
+  openModal(`<h2>🤖 Treinos prontos</h2>
+    <p class="sub" style="margin-bottom:12px">Cria os treinos e os exercícios de uma vez nesta academia. Exercício que você já tem com o mesmo nome é reaproveitado, não duplicado.</p>
+    ${TEMPLATES.map(t=>`<div class="card" style="margin-bottom:10px">
+      <h3>${esc(t.nome)} <span class="pill">por ${esc(t.autor)}</span></h3>
+      <div class="sub" style="margin:6px 0">${esc(t.desc)}</div>
+      <div class="sub" style="font-size:.76rem">${t.treinos.length} treinos · ${templateExCount(t)} exercícios diferentes</div>
+      ${t.nota?`<div class="sub" style="font-size:.74rem; margin-top:6px; color:var(--gold)">⚠️ ${esc(t.nota)}</div>`:""}
+      <button class="btn sm" data-action="tpl-apply" data-id="${t.id}" data-gym="${gymId}" style="margin-top:10px">Adicionar nesta academia</button>
+    </div>`).join("")}
+    <p class="sub">As fotos são um chute do catálogo — confira e troque pela 🖼 galeria ou por uma foto sua.</p>`);
+}
+
 /* ---- rotinas (Treino A, B, C…) dentro de uma academia ----
    A rotina guarda a LISTA de exercícios (exIds), não o contrário: assim o mesmo
    exercício pode estar em mais de um treino e os exercícios globais funcionam igual. */
@@ -660,7 +757,7 @@ function renderGym(g){
     return `<div class="card tap row" data-action="open-ex" data-gym="${g.id}" data-id="${e.id}">
       ${e.photo ? `<img class="exthumb" src="${esc(e.photo)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ""}
       <div class="grow"><h3>${esc(e.name)}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}${e.notes ? " 📝" : ""}</h3>
-      <div class="sub">${e.targetSets} séries · descanso ${e.restSec}s · ${summaryLine(e.id)}</div></div>
+      <div class="sub">${e.targetSets} séries${e.reps?` × ${esc(e.reps)}`:""} · descanso ${e.restSec}s · ${summaryLine(e.id)}</div></div>
       ${sc}${mini}<span class="chev">›</span></div>`;
   }).join("");
   const canReorder = exs.length > 1;
@@ -676,8 +773,9 @@ function renderGym(g){
       <button class="pill${gymRoutine?"":" on"}" data-action="rt-sel" data-v="" style="cursor:pointer">Todos (${gymExercises(g.id).length})</button>
       ${rts.map(r=>`<button class="pill${gymRoutine===r.id?" on":""}" data-action="rt-sel" data-v="${r.id}" style="cursor:pointer">${esc(r.name)} (${routineExercises(r,g.id).length})</button>`).join("")}
       <button class="pill" data-action="rt-new" data-gym="${g.id}" style="cursor:pointer; color:var(--accent)">＋ treino</button>
+      <button class="pill" data-action="tpl-open" data-gym="${g.id}" style="cursor:pointer">🤖 pronto</button>
     </div>`}
-    <div class="section"><h2>${rAtiva ? esc(rAtiva.name) : "Exercícios"}${rAtiva?` <button class="xbtn" data-action="rt-menu" data-id="${rAtiva.id}" aria-label="Opções do treino" style="vertical-align:middle">⋮</button>`:""}</h2>
+    <div class="section"><h2>${rAtiva ? esc(rAtiva.name) : "Exercícios"}${rAtiva&&rAtiva.src?` <span class="pill">por ${esc(rAtiva.src)}</span>`:""}${rAtiva?` <button class="xbtn" data-action="rt-menu" data-id="${rAtiva.id}" aria-label="Opções do treino" style="vertical-align:middle">⋮</button>`:""}</h2>
       ${items || `<div class="empty">${rAtiva
         ? "Este treino ainda não tem exercício.<br>Toque em <b>Escolher exercícios</b> abaixo."
         : "Nenhum exercício nesta academia ainda."}</div>`}
@@ -740,6 +838,7 @@ function renderEx(g, e){
     </div>
     <div class="pills" style="margin-top:-4px">
       <span class="pill" style="${done.length>=e.targetSets?"color:var(--good);border-color:var(--good)":done.length?"color:var(--gold);border-color:var(--gold)":""}">${done.length}/${e.targetSets} séries hoje</span>
+      ${e.reps?`<span class="pill" title="Faixa de repetições alvo">alvo ${esc(e.reps)} reps</span>`:""}
       <span class="pill">descanso ${e.restSec}s</span>
       ${e.gymId === null ? '<span class="pill glob">🌐 em todas as academias</span>' : ""}
       <button class="pill" data-action="edit-ex" data-gym="${g.id}" data-id="${e.id}" style="cursor:pointer">✏️ editar</button>
@@ -1062,6 +1161,7 @@ function exFormSnapshot(){
   const g = id => document.getElementById(id);
   if(g("f-name")) exFormCtx.name = g("f-name").value;
   if(g("f-sets")) exFormCtx.sets = g("f-sets").value;
+  if(g("f-reps")) exFormCtx.reps = g("f-reps").value;
   if(g("f-rest")) exFormCtx.rest = g("f-rest").value;
   if(g("f-notes")) exFormCtx.notes = g("f-notes").value;
   if(g("f-global")) exFormCtx.global = g("f-global").checked;
@@ -1070,9 +1170,10 @@ function exFormSnapshot(){
 function exForm(gymId, e, pre){
   const v = Object.assign({
     name: e ? e.name : "", sets: e ? e.targetSets : 3, rest: e ? e.restSec : 90,
-    notes: (e && e.notes) || "", global: e ? e.gymId === null : false, photo: (e && e.photo) || ""
+    notes: (e && e.notes) || "", global: e ? e.gymId === null : false, photo: (e && e.photo) || "",
+    reps: (e && e.reps) || ""
   }, pre || {});
-  exFormCtx = {gymId, id: e ? e.id : "", name:v.name, sets:v.sets, rest:v.rest, notes:v.notes, global:v.global, photo:v.photo};
+  exFormCtx = {gymId, id: e ? e.id : "", name:v.name, sets:v.sets, rest:v.rest, notes:v.notes, global:v.global, photo:v.photo, reps:v.reps};
   openModal(`<h2>${e ? "Editar exercício" : "Novo exercício"}</h2>
     <div class="field"><label for="f-name">Nome</label>
     <input id="f-name" value="${esc(v.name)}" placeholder="Ex.: Supino reto" maxlength="60">
@@ -1096,6 +1197,8 @@ function exForm(gymId, e, pre){
     <div class="btnrow">
       <div class="field" style="flex:1"><label for="f-sets">Séries alvo</label>
       <input id="f-sets" type="number" inputmode="numeric" min="1" max="20" value="${esc(v.sets)}"></div>
+      <div class="field" style="flex:1"><label for="f-reps">Reps alvo</label>
+      <input id="f-reps" value="${esc(v.reps)}" placeholder="8–12" maxlength="12"></div>
       <div class="field" style="flex:1"><label for="f-rest">Descanso (s)</label>
       <input id="f-rest" type="number" inputmode="numeric" min="5" max="900" step="5" value="${esc(v.rest)}"></div>
     </div>
@@ -1596,6 +1699,19 @@ document.addEventListener("click", ev => {
     db.routines = (db.routines||[]).filter(x=>x.id!==r.id);
     gymRoutine = ""; save(); closeModal(); render(); toast("Treino excluído");
   }
+  else if(a === "tpl-open"){ templateForm(el.dataset.gym); }
+  else if(a === "tpl-apply"){
+    const gymId = el.dataset.gym, tpl = templateById(el.dataset.id);
+    if(!tpl) return;
+    if(!confirm(`Adicionar "${tpl.nome}" nesta academia?\n\nCria ${tpl.treinos.length} treinos e até ${templateExCount(tpl)} exercícios.`)) return;
+    openModal(`<h2>Montando ${esc(tpl.nome)}…</h2><div class="empty">Criando exercícios e buscando fotos…</div>`);
+    applyTemplate(tpl.id, gymId).then(res=>{
+      if(!res){ closeModal(); toast("Não deu para montar o treino."); return; }
+      gymRoutine = res.rotinas[0] ? res.rotinas[0].id : "";
+      closeModal(); render();
+      toast(`${res.rotinas.map(r=>r.name).join(", ")} criados · ${res.criados.length} exercício(s) novo(s)${res.reusados.length?` · ${res.reusados.length} reaproveitado(s)`:""}`);
+    });
+  }
   else if(a === "rt-pick"){ routinePickForm(el.dataset.id, el.dataset.gym); }
   else if(a === "rt-done"){ closeModal(); render(); }
   else if(a === "rt-toggle-ex"){
@@ -1643,15 +1759,16 @@ document.addEventListener("click", ev => {
     const name = document.getElementById("f-name").value.trim();
     const sets = Math.max(1, parseInt(document.getElementById("f-sets").value, 10) || 3);
     const restS = Math.max(5, parseInt(document.getElementById("f-rest").value, 10) || 90);
+    const reps = ((document.getElementById("f-reps")||{value:""}).value || "").trim();
     const glob = document.getElementById("f-global").checked;
     const notes = document.getElementById("f-notes").value.trim();
     const photo = (document.getElementById("f-photo") || {value:""}).value;
     if(!name){ toast("Dê um nome ao exercício."); return; }
     if(el.dataset.id){
       const e = exById(el.dataset.id);
-      e.name = name; e.targetSets = sets; e.restSec = restS; e.notes = notes; e.photo = photo; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
+      e.name = name; e.targetSets = sets; e.restSec = restS; e.reps = reps; e.notes = notes; e.photo = photo; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
     } else {
-      db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, targetSets:sets, restSec:restS, notes, photo, order: nextOrder()});
+      db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, targetSets:sets, restSec:restS, reps, notes, photo, order: nextOrder()});
     }
     exFormCtx = null;
     save(); closeModal(); render();
@@ -1952,7 +2069,8 @@ const PT2EN = {
   "cadeira":"machine","mesa":"lying","maquina":"machine","halteres":"dumbbell","halter":"dumbbell","haltere":"dumbbell",
   "barra":"barbell","barra w":"e-z curl bar","polia":"cable","pulley":"cable","cabo":"cable","corda":"rope",
   "smith":"smith machine","hack":"hack","livre":"barbell","guiado":"machine",
-  "inclinado":"incline","declinado":"decline","reto":"flat","sentado":"seated","em pe":"standing","deitado":"lying",
+  "inclinado":"incline","declinado":"decline","reto":"flat","sentado":"seated","sentada":"seated",
+  "em pe":"standing","deitado":"lying","deitada":"lying","flexora":"leg curl","extensora":"leg extension",
   "pegada":"grip","aberta":"wide","fechada":"close","neutra":"neutral","unilateral":"one arm",
   "martelo":"hammer","inverso":"reverse","invertida":"reverse","invertido":"reverse","alternada":"alternate","alternado":"alternate",
   "scott":"preacher","concentrada":"concentration","frontal":"front","nuca":"behind neck",
@@ -2042,9 +2160,16 @@ const ExDb = {
     const toks = [...new Set((en + " " + query).split(/\s+/).filter(t => t.length > 2))];
     if(!toks.length) return [];
     return this.list.map(x => {
-      const hay = norm(x.n + " " + x.e + " " + x.m);
+      const nome = norm(x.n), hay = norm(nome + " " + x.e + " " + x.m);
       let sc = 0;
-      toks.forEach(t => { if(hay.includes(t)) sc += t.length + (norm(x.n).includes(t) ? 3 : 0); });
+      toks.forEach(t => { if(hay.includes(t)) sc += t.length + (nome.includes(t) ? 3 : 0); });
+      /* nome idêntico tem que ganhar de nome que só CONTÉM o termo: "leg press" estava
+         trazendo "Calf Press On The Leg Press Machine", que é outro exercício */
+      if(sc > 0){
+        if(nome === query || norm(ptNameOf(x.n, x.e)) === query) sc += 60;
+        else if(nome.startsWith(query + " ") || nome.endsWith(" " + query)) sc += 20;
+        sc -= nome.split(/\s+/).length * 0.6;        // desempata pelo nome mais curto
+      }
       return {x, sc};
     }).filter(r => r.sc > 0).sort((a,b) => b.sc - a.sc).slice(0, 12).map(r => r.x);
   },

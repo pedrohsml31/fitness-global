@@ -1,6 +1,6 @@
 {
-  "version": 22,
-  "name": "2.2",
-  "notes": "Foto própria para exercício: dá para tirar ou escolher uma foto do celular (ou colar um link) em qualquer exercício que você criou, mesmo sem nome oficial do catálogo — a imagem é reduzida para caber na sincronização. Nova galeria de exercícios: procure por equipamento (máquina, polia, barra…) e por músculo, com foto, sem precisar acertar o nome; abre já filtrada em máquinas. O dicionário de nomes ganhou termos de máquina usados nas academias daqui (remada baixa, puxada alta, crossover, graviton, articulada, leg press 45…). E rotinas de treino: crie Treino A, B, C dentro da mesma academia, escolha os exercícios de cada um e reordene dentro do treino.",
+  "version": 23,
+  "name": "2.3",
+  "notes": "Treinos prontos: novo botão 🤖 na academia que monta um plano inteiro de uma vez — cria os treinos e os exercícios, reaproveitando os que você já tem com o mesmo nome. Já vem com o Full Body A / B / C (por ChatGPT), focado em máquina, com as séries e a faixa de repetições de cada exercício. Os exercícios também ganharam campo de repetições alvo (ex.: 8–12), que aparece na lista e na tela do exercício.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
