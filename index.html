@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v2.4</title>
+<title>Fitness Global v2.5</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -382,8 +382,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "2.4";
-const APP_VERSION = 24;
+const APP_NAME_VERSION = "2.5";
+const APP_VERSION = 25;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -1256,6 +1256,16 @@ function renderSettings(){
         <div class="grow"><div class="t">🔢 Calorias e macros</div>
           <div class="d">Calcula kcal, proteína, carboidrato e gordura do que você comeu, usando a <b>TACO 4ª edição</b> (NEPA/UNICAMP) que vem dentro do app. Você liga o alimento à tabela uma vez e ele fica sabendo para sempre.</div></div>
         <button class="switch${macrosOn()?" on":""}" data-action="tg" data-k="macros" role="switch" aria-checked="${macrosOn()}"></button></div>
+      <div class="setline">
+        <div class="grow"><div class="t">🤖 IA para estimar nutrição (Gemini)</div>
+          <div class="d">Para alimentos que não estão na TACO. Use a chave <b>gratuita</b> do <b>Google AI Studio</b> (aistudio.google.com/apikey) — assinatura do Gemini, ChatGPT ou Claude <b>não</b> serve, é outra coisa. Só o nome do alimento é enviado.
+            ${db.settings.aiModel?`<br>Modelo em uso: <b>${esc(db.settings.aiModel)}</b>`:""}</div>
+          <div class="row" style="gap:8px; margin-top:8px">
+            <input id="aikey" type="password" value="${esc(db.settings.aiKey||"")}" placeholder="Cole a chave aqui" style="flex:1; min-width:0">
+            <button class="btn ghost sm" data-action="save-aikey" style="width:auto">Salvar e testar</button>
+          </div>
+          ${db.settings.aiKey?`<button class="btn ghost sm" data-action="clear-aikey" style="width:auto; margin-top:8px">Remover chave</button>`:""}
+        </div></div>
       <div class="setline">
         <div class="grow"><div class="t">🎉 Refeições livres por semana</div>
           <div class="d">Quantas refeições livres você pode fazer na semana (segunda a domingo). 0 = sem limite, só conta quantas você fez.</div>
@@ -2673,6 +2683,84 @@ function macroDayHtml(day, foods){
     </div></div>`;
 }
 
+/* ===================== IA para estimar nutrição (Gemini) =====================
+   Usa a SUA chave do Google AI Studio, que é gratuita. Assinatura do Gemini/ChatGPT/
+   Claude NÃO dá acesso de API — o que vale aqui é a chave do AI Studio.
+   O app escolhe sozinho um modelo Flash (é o que fica no plano gratuito) consultando a
+   lista de modelos da própria chave, para não quebrar quando a Google renomeia modelo.
+   Só o NOME do alimento é enviado. */
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
+function geminiKey(){ return (db.settings.aiKey || "").trim(); }
+async function geminiFetch(path, opts){
+  const r = await fetch(GEMINI_BASE + path, Object.assign({}, opts, {
+    headers: Object.assign({"Content-Type":"application/json", "x-goog-api-key":geminiKey()}, (opts||{}).headers)
+  }));
+  const j = await r.json().catch(()=>({}));
+  if(j && j.error){
+    const m = j.error.message || "erro";
+    if(j.error.code === 429) throw new Error("Cota do dia esgotada. O plano gratuito tem limite diário — tente amanhã.");
+    if(j.error.code === 400 && /api key/i.test(m)) throw new Error("Chave inválida. Confira se copiou inteira do AI Studio.");
+    if(j.error.code === 403) throw new Error("A chave não tem acesso. Gere uma nova no AI Studio.");
+    throw new Error(m);
+  }
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return j;
+}
+/* prefere o Flash-Lite (maior cota diária no gratuito) e evita "preview"/"exp",
+   que a Google remove sem aviso */
+function pickAiModel(ids){
+  const ver = s => { const m = s.match(/(\d+)[.-](\d+)/); return m ? (+m[1])*100 + (+m[2]) : 0; };
+  const ok = ids.filter(id => /flash/.test(id) && !/(preview|exp|thinking|image|audio|tts|live|vision)/.test(id));
+  const ordena = a => a.slice().sort((x,y) => ver(y) - ver(x));
+  return ordena(ok.filter(id=>/lite/.test(id)))[0] || ordena(ok)[0] || null;
+}
+async function aiConnect(){
+  const j = await geminiFetch("/models?pageSize=200", {method:"GET"});
+  const ids = (j.models||[])
+    .filter(m => (m.supportedGenerationMethods||[]).includes("generateContent"))
+    .map(m => String(m.name||"").replace(/^models\//, ""));
+  const escolhido = pickAiModel(ids);
+  if(!escolhido) throw new Error("Nenhum modelo Flash disponível para esta chave.");
+  db.settings.aiModel = escolhido;
+  save();
+  return {modelo:escolhido, total:ids.length};
+}
+/* devolve {alimento, kcal, p, c, g, gUn, conf} por 100 g */
+async function aiNutri(nome){
+  if(!geminiKey()) throw new Error("Sem chave da IA. Configure nos Ajustes.");
+  const model = db.settings.aiModel || (await aiConnect()).modelo;
+  const j = await geminiFetch("/models/" + encodeURIComponent(model) + ":generateContent", {
+    method:"POST",
+    body: JSON.stringify({
+      contents:[{parts:[{text:
+        `Estime a composição nutricional do alimento: "${nome}".\n` +
+        `Responda os valores POR 100 GRAMAS do alimento pronto para consumo.\n` +
+        `Prefira a tabela TACO (NEPA/UNICAMP) como referência quando for comida brasileira.\n` +
+        `Em "gramas_por_unidade", diga quanto pesa 1 unidade típica se o alimento for contável ` +
+        `(1 ovo, 1 banana, 1 fatia); se não fizer sentido, responda 0.\n` +
+        `Se não reconhecer o alimento, use confianca "nenhuma" e zeros.`}]}],
+      generationConfig:{
+        temperature: 0,
+        responseMimeType: "application/json",
+        responseSchema: { type:"OBJECT", properties:{
+          alimento:{type:"STRING"}, kcal:{type:"NUMBER"}, proteina:{type:"NUMBER"},
+          carboidrato:{type:"NUMBER"}, gordura:{type:"NUMBER"},
+          gramas_por_unidade:{type:"NUMBER"},
+          confianca:{type:"STRING", enum:["alta","media","baixa","nenhuma"]}
+        }, required:["alimento","kcal","proteina","carboidrato","gordura","confianca"] }
+      }
+    })
+  });
+  const txt = (((j.candidates||[])[0]||{}).content||{}).parts;
+  const raw = txt && txt[0] && txt[0].text;
+  if(!raw) throw new Error("A IA não respondeu nada. Tente de novo.");
+  let d; try{ d = JSON.parse(raw); }catch(e){ throw new Error("Resposta da IA veio ilegível."); }
+  if(d.confianca === "nenhuma") throw new Error(`A IA não reconheceu "${nome}". Digite os valores do rótulo.`);
+  const n = v => { const x = Number(v); return isFinite(x) && x >= 0 ? Math.round(x*10)/10 : 0; };
+  return {alimento:d.alimento || nome, kcal:n(d.kcal), p:n(d.proteina), c:n(d.carboidrato),
+    g:n(d.gordura), gUn:n(d.gramas_por_unidade), conf:d.confianca || "baixa", model};
+}
+
 /* ---------- refeição livre ----------
    Marcar como livre TIRA o item da conta da dieta (não conta como acerto nem como erro),
    em vez de contar como falha. O preço é o limite semanal: qualquer marca de livre numa
@@ -2924,8 +3012,9 @@ function foodForm(food){
 /* escolher o alimento da TACO (ou digitar os valores à mão) e, quando o texto não tem
    grama, dizer quanto pesa 1 unidade. O que você escolher fica valendo para TODO alimento
    com esse mesmo nome, hoje e nos próximos dias. */
-let nutriBusca = "";
+let nutriBusca = "", aiUltimo = null;   // aiUltimo: rotula no foodMap o que veio da IA
 function nutriForm(foodId){
+  aiUltimo = null;
   const f = db.food.find(x=>x.id===foodId); if(!f) return;
   const q = parseQty(f.name), key = foodKey(f.name);
   const atual = f.nutri || (db.foodMap||{})[key] || {};
@@ -2949,6 +3038,10 @@ function nutriForm(foodId){
         <span class="wdelta" style="color:var(--muted); font-size:.72rem">P ${fmtNum(a.p)} · C ${fmtNum(a.c)} · G ${fmtNum(a.g)}<br><span class="sub" style="font-size:.68rem">por 100 g</span></span></div>`).join("")
         : `<div class="empty">Nada encontrado. Ajuste a busca ou digite os valores abaixo.</div>`}
     </div>
+    ${geminiKey()
+      ? `<button class="btn ghost sm" data-action="ai-nutri" data-id="${foodId}" style="margin-bottom:10px">🤖 Estimar com IA</button>
+         <div id="ai-out"></div>`
+      : `<div class="sub" style="margin-bottom:10px">🤖 Dá para a IA estimar quando o alimento não está na TACO — configure a chave gratuita nos <b>Ajustes</b>.</div>`}
     <div class="sub" style="margin-bottom:6px">Ou digite você mesmo (por 100 g, como vem no rótulo):</div>
     <div class="btnrow">
       <div class="field" style="flex:1"><label for="nu-kcal">kcal</label><input id="nu-kcal" type="number" inputmode="decimal" step="any" min="0" value="${atual.kcal!=null?atual.kcal:""}"></div>
@@ -3916,13 +4009,47 @@ document.addEventListener("click", ev => {
       const nv = id => { const v = parseFloat((document.getElementById(id)||{}).value); return isFinite(v) ? v : null; };
       const kcal = nv("nu-kcal");
       if(kcal == null){ toast("Escreva ao menos as kcal por 100 g."); return; }
-      entrada = {kcal, p:nv("nu-p")||0, c:nv("nu-c")||0, g100:nv("nu-f")||0, nome:"valor digitado"};
+      entrada = {kcal, p:nv("nu-p")||0, c:nv("nu-c")||0, g100:nv("nu-f")||0,
+        nome: aiUltimo ? "🤖 " + aiUltimo + " (estimativa)" : "valor digitado", ia: !!aiUltimo};
     }
     if(q.g == null) entrada.g = gramas;
     db.foodMap = Object.assign({}, db.foodMap, {[key]: entrada});
     save(); closeModal(); render();
     const quantos = db.food.filter(x=>foodKey(x.name)===key).length;
     toast(quantos>1 ? `Aprendido — vale para os ${quantos} registros de "${key}" ✓` : "Nutrição definida ✓");
+  }
+  else if(a === "save-aikey"){
+    const v = (document.getElementById("aikey").value || "").trim();
+    if(!v){ toast("Cole a chave do AI Studio."); return; }
+    db.settings.aiKey = v; db.settings.aiModel = null; save();
+    toast("Testando a chave…");
+    aiConnect().then(r => { render(); toast(`Chave ok ✓ usando ${r.modelo}`); })
+      .catch(e => { toast(e.message || "Não deu para validar a chave."); render(); });
+  }
+  else if(a === "clear-aikey"){
+    db.settings.aiKey = null; db.settings.aiModel = null; save(); render(); toast("Chave removida");
+  }
+  else if(a === "ai-nutri"){
+    const f = db.food.find(x=>x.id===el.dataset.id); if(!f) return;
+    const box = document.getElementById("ai-out");
+    const alvo = parseQty(f.name).resto.trim() || f.name;
+    if(box) box.innerHTML = `<div class="empty">🤖 Perguntando à IA sobre "${esc(alvo)}"…</div>`;
+    aiNutri(alvo).then(d=>{
+      /* preenche os campos para VOCÊ conferir antes de salvar — estimativa não entra sozinha */
+      aiUltimo = d.alimento;
+      const set = (id,v) => { const el2 = document.getElementById(id); if(el2) el2.value = v; };
+      set("nu-kcal", d.kcal); set("nu-p", d.p); set("nu-c", d.c); set("nu-f", d.g);
+      if(d.gUn > 0){ const g = document.getElementById("nu-g"); if(g && !g.value) g.value = d.gUn; }
+      const cor = d.conf === "alta" ? "var(--good)" : d.conf === "media" ? "var(--gold)" : "var(--bad)";
+      if(box) box.innerHTML = `<div class="card" style="margin-bottom:10px; border-color:${cor}">
+        <div class="t" style="font-weight:800">🤖 ${esc(d.alimento)}</div>
+        <div class="sub" style="margin-top:4px">${d.kcal} kcal · P ${fmtNum(d.p)} · C ${fmtNum(d.c)} · G ${fmtNum(d.g)} <span class="sub">(por 100 g)</span></div>
+        <div class="sub" style="margin-top:6px; color:${cor}">Confiança <b>${esc(d.conf)}</b> — é <b>estimativa</b>, não medição. Confira e toque em <b>Salvar valores digitados</b>.</div>
+        ${d.gUn>0?`<div class="sub" style="margin-top:4px">1 unidade ≈ ${fmtNum(d.gUn)} g</div>`:""}
+      </div>`;
+    }).catch(e=>{
+      if(box) box.innerHTML = `<div class="empty" style="color:var(--bad)">${esc(e.message||"Falhou")}</div>`;
+    });
   }
   else if(a === "nutri-clear"){
     const f = db.food.find(x=>x.id===el.dataset.id); if(!f) return;

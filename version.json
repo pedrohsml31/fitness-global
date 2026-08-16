@@ -1,6 +1,6 @@
 {
-  "version": 24,
-  "name": "2.4",
-  "notes": "Progressão de carga: o app passa a sugerir o peso e a meta de reps de cada exercício por dupla progressão — fica no mesmo peso até você fechar o topo da faixa em todas as séries, e aí sobe a carga e recomeça no piso. O degrau de peso sai do seu próprio histórico. Exercícios que você não vai fazer hoje: toque em ⤵ e eles vão para o fim da lista, riscados; o que está em andamento sobe para o topo e o que terminou fica verde — tudo isso zera sozinho quando vira o dia. Exercício global agora conta as séries só no treino em que você o iniciou. O botão voltar do Android passou a funcionar dentro do app em vez de fechá-lo. Aviso quando o celular está no Não Perturbe (o som do descanso não toca). E dá para salvar as fotos dos exercícios dentro do app, para funcionarem sem internet na academia.",
+  "version": 25,
+  "name": "2.5",
+  "notes": "IA para estimar calorias e macros dos alimentos que não estão na tabela TACO. Use a chave gratuita do Google AI Studio (aistudio.google.com/apikey) — assinatura do Gemini, ChatGPT ou Claude não serve, é outra coisa. Cole a chave nos Ajustes: o app testa, escolhe sozinho um modelo Flash do plano gratuito e passa a mostrar o botão \"🤖 Estimar com IA\" no alimento. A estimativa preenche os campos para você conferir antes de salvar, mostra o nível de confiança e fica marcada como estimativa — nunca entra sozinha como se fosse valor de tabela. Só o nome do alimento é enviado.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
