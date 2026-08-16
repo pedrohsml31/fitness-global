@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v2.3</title>
+<title>Fitness Global v2.4</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -263,6 +263,23 @@ table.xls td.dl.up{color:var(--good);} table.xls td.dl.down{color:var(--bad);}  
 .xbtn{width:32px;height:32px;border-radius:9px;background:none;border:1px solid var(--border);color:var(--bad);flex:none;font-size:.95rem;}
 .xbtn.wide{width:auto; padding:0 10px; color:var(--muted); font-size:.74rem; font-weight:800;}
 .xbtn.wide.on{color:var(--good); border-color:color-mix(in srgb, var(--good) 45%, var(--border)); background:color-mix(in srgb, var(--good) 10%, transparent);}
+/* estado do exercício HOJE: o que falta fica normal, o feito some um pouco e o pulado
+   fica claramente de lado — todos vão para o fim da lista */
+.card.ex-done{border-color:color-mix(in srgb, var(--good) 40%, var(--border)); opacity:.72;}
+.card.ex-done h3{color:var(--good);}
+.card.ex-skip{opacity:.5; border-style:dashed;}
+.card.ex-skip h3{color:var(--faint); text-decoration:line-through;}
+.card.ex-doing{border-color:var(--accent); box-shadow:0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);}
+/* meta do dia (progressão de carga) */
+.goalcard{background:var(--surface); border:1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-radius:var(--radius); padding:12px 14px; margin-bottom:10px;}
+.goalcard.up{border-color:color-mix(in srgb, var(--good) 50%, var(--border));}
+.goalcard .gh{font-size:.95rem; font-weight:800; color:var(--ink);}
+.goalcard .gm{font-size:.84rem; color:var(--muted); margin-top:4px;}
+.goalcard .gs{font-size:.76rem; color:var(--faint); margin-top:6px; line-height:1.35;}
+.goalcard.up .gh{color:var(--good);}
+.skipbtn{flex:none; color:var(--faint);}
+.skipbtn.on{color:var(--gold); border-color:color-mix(in srgb, var(--gold) 45%, var(--border));}
 .vtag{font-size:.62rem; font-weight:800; color:var(--faint); vertical-align:middle;
   border:1px solid var(--border); border-radius:999px; padding:1px 6px; margin-left:4px;}
 .xbtn.wide.no{color:var(--bad); border-color:color-mix(in srgb, var(--bad) 45%, var(--border)); background:color-mix(in srgb, var(--bad) 10%, transparent);}
@@ -365,8 +382,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "2.3";
-const APP_VERSION = 23;
+const APP_NAME_VERSION = "2.4";
+const APP_VERSION = 24;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -721,6 +738,83 @@ function templateForm(gymId){
     <p class="sub">As fotos são um chute do catálogo — confira e troque pela 🖼 galeria ou por uma foto sua.</p>`);
 }
 
+/* ===================== PROGRESSÃO DE CARGA (dupla progressão) =====================
+   A regra é a que você descreveu: fica no MESMO peso até fechar o topo da faixa em
+   todas as séries. Fechou (12/12/12 numa faixa 8–12)? Sobe a carga e recomeça no piso
+   (8/8/8). Não fechou? Mesmo peso, e a meta é justamente a série que ficou para trás.
+   O degrau de carga sai do SEU histórico — o menor salto que você já deu nesse
+   exercício. Sem isso o app não chuta: ele diz que não sabe e pergunta. */
+function parseReps(s){
+  const t = String(s||"").replace(/\s/g,"");
+  const m = t.match(/(\d+)[–\-—a](\d+)/);
+  if(m){ const a=+m[1], b=+m[2]; return {min:Math.min(a,b), max:Math.max(a,b)}; }
+  const n = t.match(/(\d+)/);
+  return n ? {min:+n[1], max:+n[1]} : null;
+}
+function loadStep(exId){
+  const ws = [...new Set(exLogs(exId).flatMap(l => l.sets.map(s => s.weight)))].sort((a,b)=>a-b);
+  let step = null;
+  for(let i=1;i<ws.length;i++){
+    const d = Math.round((ws[i]-ws[i-1])*100)/100;
+    if(d > 0 && (step === null || d < step)) step = d;
+  }
+  return step;
+}
+/* séries de trabalho da última sessão = as feitas no peso mais alto do dia
+   (assim um aquecimento leve não estraga a leitura) */
+function workSets(log){
+  if(!log || !log.sets.length) return {w:0, reps:[]};
+  const w = Math.max(...log.sets.map(s=>s.weight));
+  return {w, reps: log.sets.filter(s=>s.weight === w).map(s=>s.reps)};
+}
+function nextTarget(e){
+  const range = parseReps(e.reps);
+  if(!range) return {falta:"reps"};
+  const logs = exLogs(e.id);
+  if(!logs.length) return {falta:"historico", range};
+  const {w, reps} = workSets(logs[logs.length-1]);
+  const alvo = e.targetSets;
+  const fechou = reps.length >= alvo && reps.slice(0, alvo).every(r => r >= range.max);
+  const step = loadStep(e.id);
+  if(fechou){
+    return {tipo:"subir", range, step, de:w,
+      peso: step != null ? Math.round((w + step)*100)/100 : null,
+      metaReps: range.min, sets: alvo, ultima: reps.slice(0, alvo)};
+  }
+  /* quanto falta para fechar: por série, o que ainda não bateu o topo */
+  const faltas = [];
+  for(let i=0;i<alvo;i++){
+    const feito = reps[i] != null ? reps[i] : 0;
+    if(feito < range.max) faltas.push({serie:i+1, feito, falta: range.max - feito});
+  }
+  return {tipo:"manter", range, peso:w, metaReps:range.max, sets:alvo,
+    ultima: reps.slice(0, alvo), faltas};
+}
+function targetHtml(e){
+  const t = nextTarget(e);
+  if(t.falta === "reps") return `<div class="sub" style="margin-bottom:8px">Defina a <b>faixa de reps</b> deste exercício (ex.: 8–12) para o app sugerir a progressão.</div>`;
+  if(t.falta === "historico") return `<div class="sub" style="margin-bottom:8px">🎯 Primeira vez: escolha um peso que você feche <b>${t.range.min} reps</b> com folga e vá subindo até <b>${t.range.max}</b>.</div>`;
+  const serie = n => n===1?"1ª":n===2?"2ª":n===3?"3ª":n+"ª";
+  if(t.tipo === "subir"){
+    return `<div class="goalcard up">
+      <div class="gh">✅ Fechou ${t.ultima.join(" · ")} com ${fmtW(t.de)} kg — hora de subir</div>
+      ${t.peso != null
+        ? `<div class="gm">🎯 Hoje: <b>${fmtW(t.peso)} kg</b> · ${Array(t.sets).fill(t.metaReps).join(" · ")} reps</div>
+           <div class="gs">Subiu ${fmtW(t.step)} kg, que é o menor degrau que você já usou aqui. Recomeça no piso da faixa e sobe de novo até ${t.range.max}.</div>`
+        : `<div class="gm">🎯 Hoje: <b>suba a carga</b> · ${Array(t.sets).fill(t.metaReps).join(" · ")} reps</div>
+           <div class="gs">Ainda não sei de quanto em quanto essa máquina sobe — use o próximo pino/anilha. Da próxima vez eu já sugiro o valor sozinho.</div>`}
+    </div>`;
+  }
+  const f = t.faltas;
+  return `<div class="goalcard">
+    <div class="gh">🎯 Hoje: <b>${fmtW(t.peso)} kg</b> · ${Array(t.sets).fill(t.metaReps).join(" · ")} reps</div>
+    <div class="gm">Última vez: ${t.ultima.length ? t.ultima.join(" · ") : "—"}</div>
+    <div class="gs">${f.length
+      ? "Falta " + f.map(x=>`<b>${x.falta}</b> rep${x.falta>1?"s":""} na ${serie(x.serie)}`).join(" e ") + `. Fechando ${t.range.max} em todas, a carga sobe.`
+      : `Feche ${t.sets} séries de ${t.range.max} para subir a carga.`}</div>
+  </div>`;
+}
+
 /* ---- rotinas (Treino A, B, C…) dentro de uma academia ----
    A rotina guarda a LISTA de exercícios (exIds), não o contrário: assim o mesmo
    exercício pode estar em mais de um treino e os exercícios globais funcionam igual. */
@@ -735,11 +829,44 @@ function routineExercises(r, gymId){
 }
 let gymRoutine = "";      // "" = Todos
 
+/* ---- "hoje eu não vou fazer esse" ----
+   Guardado com a DATA junto, então vira o dia e some sozinho: nada de limpar na mão. */
+function skipKey(e, rid){ return e.id + (rid ? "|" + rid : ""); }
+function isSkipped(e, rid){
+  const s = (db.settings.skipToday || {})[skipKey(e, rid)];
+  return s === todayStr();
+}
+/* séries feitas hoje. Num treino, só contam as séries que VOCÊ registrou dentro daquele
+   treino — antes um exercício global aparecia como "1/3 feito" em todas as rotinas. */
+function setsToday(exId, rid){
+  const l = todayLog(exId);
+  if(!l) return 0;
+  if(!rid) return l.sets.length;
+  return l.sets.filter(s => (s.rt || "") === rid).length;
+}
+function exStateToday(e, rid){
+  if(isSkipped(e, rid)) return "skip";
+  const n = setsToday(e.id, rid);
+  if(n >= e.targetSets) return "done";
+  return n > 0 ? "doing" : "todo";
+}
+
 function renderGym(g){
   const rts = gymRoutines(g.id);
   if(gymRoutine && !routineById(gymRoutine)) gymRoutine = "";      // rotina apagada
   const rAtiva = gymRoutine ? routineById(gymRoutine) : null;
-  const exs = rAtiva ? routineExercises(rAtiva, g.id) : gymExercises(g.id);
+  const rid = rAtiva ? rAtiva.id : "";
+  let exs = rAtiva ? routineExercises(rAtiva, g.id) : gymExercises(g.id);
+  /* ordem do dia: o que falta primeiro, depois o que já terminei, e os pulados por
+     último — para o que importa agora ficar sempre no topo */
+  if(!reorderMode){
+    /* o que está EM ANDAMENTO vem primeiro (é o que você está fazendo agora), depois o
+       que falta, depois o que já terminou, e o pulado por último */
+    const peso = {doing:0, todo:1, done:2, skip:3};
+    exs = exs.map((e,i)=>({e, i, st:exStateToday(e, rid)}))
+             .sort((a,b)=> (peso[a.st]-peso[b.st]) || (a.i-b.i))
+             .map(x=>x.e);
+  }
   const items = exs.map((e, idx) => {
     if(reorderMode){
       return `<div class="card row">
@@ -751,13 +878,15 @@ function renderGym(g){
     }
     const t = loadTrend(e.id);
     const mini = t ? `<span class="trendmini" title="${TREND[t.dir].t}">${TREND[t.dir].em}</span>` : "";
-    /* séries feitas HOJE (controle durante o treino) — zera sozinho quando o dia vira */
-    const tl = todayLog(e.id), dn = tl ? tl.sets.length : 0;
-    const sc = `<span class="setcount ${dn >= e.targetSets ? "full" : dn > 0 ? "part" : ""}" title="Séries feitas hoje">${dn}/${e.targetSets}</span>`;
-    return `<div class="card tap row" data-action="open-ex" data-gym="${g.id}" data-id="${e.id}">
+    const st = exStateToday(e, rid);
+    const dn = setsToday(e.id, rid);
+    const sc = `<span class="setcount ${st==="done" ? "full" : dn > 0 ? "part" : ""}" title="Séries feitas hoje${rid?" neste treino":""}">${dn}/${e.targetSets}</span>`;
+    return `<div class="card tap row ex-${st}" data-action="open-ex" data-gym="${g.id}" data-id="${e.id}">
       ${e.photo ? `<img class="exthumb" src="${esc(e.photo)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ""}
-      <div class="grow"><h3>${esc(e.name)}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}${e.notes ? " 📝" : ""}</h3>
-      <div class="sub">${e.targetSets} séries${e.reps?` × ${esc(e.reps)}`:""} · descanso ${e.restSec}s · ${summaryLine(e.id)}</div></div>
+      <div class="grow"><h3>${st==="done"?"✅ ":st==="skip"?"⤵️ ":""}${esc(e.name)}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}${e.notes ? " 📝" : ""}</h3>
+      <div class="sub">${st==="skip" ? "Hoje não vou fazer" : `${e.targetSets} séries${e.reps?` × ${esc(e.reps)}`:""} · descanso ${e.restSec}s · ${summaryLine(e.id)}`}</div></div>
+      <button class="xbtn skipbtn${st==="skip"?" on":""}" data-action="skip-ex" data-id="${e.id}" data-rt="${rid}"
+        title="${st==="skip"?"Voltar para a lista de hoje":"Hoje eu não vou fazer esse"}">${st==="skip"?"↩":"⤵"}</button>
       ${sc}${mini}<span class="chev">›</span></div>`;
   }).join("");
   const canReorder = exs.length > 1;
@@ -775,6 +904,8 @@ function renderGym(g){
       <button class="pill" data-action="rt-new" data-gym="${g.id}" style="cursor:pointer; color:var(--accent)">＋ treino</button>
       <button class="pill" data-action="tpl-open" data-gym="${g.id}" style="cursor:pointer">🤖 pronto</button>
     </div>`}
+    ${reorderMode ? "" : dndWarnHtml()}
+    ${(!reorderMode && exs.some(e=>e.photo && e.photo.slice(0,5) !== "data:")) ? `<button class="btn ghost sm" data-action="dl-photos" data-gym="${g.id}" data-rt="${rid}" style="margin-bottom:10px">📥 Salvar as fotos no app (funcionar sem internet)</button>` : ""}
     <div class="section"><h2>${rAtiva ? esc(rAtiva.name) : "Exercícios"}${rAtiva&&rAtiva.src?` <span class="pill">por ${esc(rAtiva.src)}</span>`:""}${rAtiva?` <button class="xbtn" data-action="rt-menu" data-id="${rAtiva.id}" aria-label="Opções do treino" style="vertical-align:middle">⋮</button>`:""}</h2>
       ${items || `<div class="empty">${rAtiva
         ? "Este treino ainda não tem exercício.<br>Toque em <b>Escolher exercícios</b> abaixo."
@@ -797,6 +928,7 @@ function renderEx(g, e){
   const done = tlog ? tlog.sets : [];
   const prev = exLogs(e.id).filter(l => l.date !== todayStr()).pop();
   const totalRows = Math.max(e.targetSets, done.length) + pendingExtra;
+  const alvoHoje = nextTarget(e);
 
   let rows = "";
   for(let i = 0; i < totalRows; i++){
@@ -809,8 +941,14 @@ function renderEx(g, e){
         <button class="ok" data-action="del-set" data-ex="${e.id}" data-i="${i}" aria-label="Apagar série ${i+1}">✓</button>
       </div>`;
     } else {
+      /* já vem preenchido com a META de hoje (peso e reps da progressão); sem meta,
+         repete a última vez, como antes */
       const ref = (prev && prev.sets[i]) || (prev && prev.sets[prev.sets.length-1]) || done[done.length-1] || null;
-      const pw = ref ? String(ref.weight) : "", pr = ref ? String(ref.reps) : "";
+      let pw = ref ? String(ref.weight) : "", pr = ref ? String(ref.reps) : "";
+      if(alvoHoje && alvoHoje.peso != null && alvoHoje.metaReps != null){
+        pw = String(alvoHoje.peso); pr = String(alvoHoje.metaReps);
+        if(done.length) pw = String(done[done.length-1].weight);   // já começou: segue o peso do dia
+      }
       rows += `<div class="setrow">
         <div class="num">${i+1}</div>
         <input type="number" inputmode="decimal" step="any" min="0" id="w${i}" value="${pw}" placeholder="kg" aria-label="Peso da série ${i+1}">
@@ -848,6 +986,7 @@ function renderEx(g, e){
     ${e.notes ? `<div class="card notecard">📝 ${esc(e.notes)}</div>` : ""}
 
     <div class="section"><h2>Treino de hoje · ${fmtDate(todayStr())}</h2>
+      ${targetHtml(e)}
       <div class="card">
         <div class="sethead"><span>#</span><span>kg</span><span>reps</span><span></span></div>
         ${rows}
@@ -1666,6 +1805,32 @@ document.addEventListener("click", ev => {
     save(); closeModal(); location.hash = "";
   }
 
+  else if(a === "skip-ex"){
+    ev.stopPropagation();                       // não abre o exercício ao tocar no ⤵
+    const e = exById(el.dataset.id); if(!e) return;
+    const k = skipKey(e, el.dataset.rt);
+    db.settings.skipToday = db.settings.skipToday || {};
+    if(db.settings.skipToday[k] === todayStr()){ delete db.settings.skipToday[k]; toast(`${e.name} voltou para a lista`); }
+    else { db.settings.skipToday[k] = todayStr(); toast(`${e.name}: hoje não`); }
+    save(); render();
+  }
+  else if(a === "dnd-recheck"){ dndCheck().then(r => toast(r && r.on ? "Ainda está no Não Perturbe" : "Não Perturbe desligado ✓")); }
+  else if(a === "dl-photos"){
+    const gymId = el.dataset.gym, rt = el.dataset.rt;
+    const r = rt ? routineById(rt) : null;
+    const lista = (r ? routineExercises(r, gymId) : gymExercises(gymId)).filter(e=>e.photo && e.photo.slice(0,5) !== "data:");
+    if(!lista.length){ toast("Todas as fotos já estão salvas no app."); return; }
+    openModal(`<h2>📥 Salvando fotos</h2><div class="empty" id="dlmsg">Preparando…</div>`);
+    downloadPhotos(lista, (i, n, nome)=>{
+      const m = document.getElementById("dlmsg");
+      if(m) m.innerHTML = `${i} de ${n}<br><span class="sub">${esc(nome)}</span>`;
+    }).then(res=>{
+      closeModal(); render();
+      toast(res.falhou
+        ? `${res.ok} foto(s) salvas · ${res.falhou} não deram (sem internet ou limite de espaço)`
+        : `${res.ok} foto(s) salvas no app — agora funcionam sem internet ✓ (${photoKb()} KB)`);
+    });
+  }
   else if(a === "rt-sel"){ gymRoutine = el.dataset.v; reorderMode = false; render(); }
   else if(a === "rt-new"){
     const gymId = el.dataset.gym;
@@ -1819,7 +1984,9 @@ document.addEventListener("click", ev => {
     const pr = detectPR(exId, w, r);
     let l = todayLog(exId);
     if(!l){ l = {id:uid(), exerciseId:exId, gymId:cur.gymId, date:todayStr(), sets:[]}; db.logs.push(l); }
-    l.sets.push({weight:w, reps:r});
+    /* carimba em qual treino a série foi feita: sem isso um exercício global aparecia
+       como "já fiz" em todas as rotinas ao mesmo tempo */
+    l.sets.push(gymRoutine ? {weight:w, reps:r, rt:gymRoutine} : {weight:w, reps:r});
     if(pendingExtra > 0 && l.sets.length > e.targetSets) pendingExtra--;
     save();
     if(pr) celebratePR(pr.kind, pr.value, pr.unit);
@@ -2181,7 +2348,8 @@ const ExDb = {
    tamanho. Por isso a imagem é reduzida para 400px no maior lado e salva em JPEG: uma
    foto de celular de 3 MB vira uns 25 KB. */
 const PHOTO_MAX = 400, PHOTO_Q = 0.72, PHOTO_BUDGET_KB = 600;
-function photoFromFile(file){
+function photoFromFile(file, maxPx){
+  const MAX = maxPx || PHOTO_MAX;
   return new Promise((ok, fail)=>{
     if(!file || !/^image\//.test(file.type||"")) return fail(new Error("Isso não é uma imagem."));
     const fr = new FileReader();
@@ -2191,7 +2359,7 @@ function photoFromFile(file){
       img.onerror = () => fail(new Error("Não deu para abrir essa imagem."));
       img.onload = () => {
         try{
-          const k = Math.min(1, PHOTO_MAX / Math.max(img.width, img.height));
+          const k = Math.min(1, MAX / Math.max(img.width, img.height));
           const c = document.createElement("canvas");
           c.width = Math.max(1, Math.round(img.width * k));
           c.height = Math.max(1, Math.round(img.height * k));
@@ -2205,6 +2373,33 @@ function photoFromFile(file){
     };
     fr.readAsDataURL(file);
   });
+}
+/* ---- guardar as fotos do catálogo DENTRO do app ----
+   A foto do catálogo é só um link para o GitHub: sem internet na academia, o exercício
+   aparece sem imagem. Aqui a gente baixa e converte para a mesma foto reduzida que as
+   fotos próprias usam, aí fica offline de vez. */
+async function photoFromUrl(url){
+  const r = await fetch(url, {mode:"cors"});
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  const blob = await r.blob();
+  /* 300px no lote: são só miniaturas de referência, e assim cabem os 25 exercícios de
+     um plano inteiro dentro do orçamento da sincronização */
+  return photoFromFile(new File([blob], "cat.jpg", {type: blob.type || "image/jpeg"}), 300);
+}
+async function downloadPhotos(lista, onStep){
+  let ok = 0, falhou = 0, pulou = 0;
+  for(let i = 0; i < lista.length; i++){
+    const e = lista[i];
+    if(onStep) onStep(i + 1, lista.length, e.name);
+    if(!e.photo || e.photo.slice(0,5) === "data:"){ pulou++; continue; }
+    try{
+      const url = await photoFromUrl(e.photo);
+      if(photoKb(url.length) > PHOTO_BUDGET_KB){ falhou++; break; }   // estourou o orçamento
+      e.photo = url; ok++;
+    }catch(err){ falhou++; }
+  }
+  if(ok) save();
+  return {ok, falhou, pulou};
 }
 /* quanto as fotos próprias já ocupam (as do catálogo são só link, não pesam) */
 function photoKb(extra){
@@ -3978,10 +4173,56 @@ applyWake();
 render();
 Sync.start();
 checkUpdate();
+dndCheck();
 autoHealthSync();
 document.addEventListener("visibilitychange", () => {
-  if(!document.hidden){ checkUpdate(); autoHealthSync(); Sync.check(); }   // ao voltar pro app, confere a nuvem
+  if(!document.hidden){ checkUpdate(); autoHealthSync(); Sync.check(); dndCheck(); }   // ao voltar pro app, confere a nuvem
 });
+
+/* ===================== botão voltar do Android =====================
+   Sem isso o botão/gesto de voltar do Samsung fecha o app direto. A ordem é a que a
+   pessoa espera: fecha o que estiver por cima primeiro, depois volta uma tela, e só
+   sai do app quando já está na tela inicial (perguntando antes). */
+(function backButton(){
+  const App = native.plugin("App");
+  if(!native.isNative || !App || !App.addListener) return;
+  App.addListener("backButton", () => {
+    if(prBox.classList.contains("on")){ prBox.classList.remove("on"); return; }   // celebração de recorde
+    if(modal.classList.contains("on")){ closeModal(); return; }
+    const h = location.hash.replace(/^#\/?/, "");
+    if(h && h !== "/"){                       // dentro de exercício/academia/aba: sobe um nível
+      const p = h.split("/");
+      if(p[0] === "ex" && p[1]) location.hash = "#/gym/" + p[1];
+      else location.hash = "#/";
+      return;
+    }
+    if(confirm("Sair do Fitness Global?")) App.exitApp();
+  });
+})();
+
+/* ===================== Não Perturbe =====================
+   No Não Perturbe o Android silencia a notificação do descanso: a vibração ainda vai,
+   mas o som não toca. Melhor avisar do que ele achar que o app quebrou. */
+let dndState = null;
+async function dndCheck(){
+  const RC = native.plugin("RestChannel");
+  if(!native.isNative || !RC || !RC.dnd) return null;
+  try{
+    const r = await RC.dnd();
+    const antes = dndState && dndState.on;
+    dndState = r;
+    if(r.known && r.on !== antes) render();
+    return r;
+  }catch(e){ return null; }
+}
+function dndWarnHtml(){
+  if(!dndState || !dndState.known || !dndState.on || !db.settings.sound) return "";
+  return `<div class="updbanner" style="margin-bottom:10px">
+    <span style="font-size:1.2rem">🔕</span>
+    <div class="grow"><b>Celular no Não Perturbe</b>
+      <div class="sub">${dndState.silent ? "Nada passa: o aviso de descanso não vai tocar nem notificar." : "O som do aviso de descanso não vai tocar — a vibração continua."}</div></div>
+    <button class="btn ghost sm" style="width:auto" data-action="dnd-recheck">Já desliguei</button></div>`;
+}
 </script>
 </body>
 </html>

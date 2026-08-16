@@ -1,6 +1,6 @@
 {
-  "version": 23,
-  "name": "2.3",
-  "notes": "Treinos prontos: novo botão 🤖 na academia que monta um plano inteiro de uma vez — cria os treinos e os exercícios, reaproveitando os que você já tem com o mesmo nome. Já vem com o Full Body A / B / C (por ChatGPT), focado em máquina, com as séries e a faixa de repetições de cada exercício. Os exercícios também ganharam campo de repetições alvo (ex.: 8–12), que aparece na lista e na tela do exercício.",
+  "version": 24,
+  "name": "2.4",
+  "notes": "Progressão de carga: o app passa a sugerir o peso e a meta de reps de cada exercício por dupla progressão — fica no mesmo peso até você fechar o topo da faixa em todas as séries, e aí sobe a carga e recomeça no piso. O degrau de peso sai do seu próprio histórico. Exercícios que você não vai fazer hoje: toque em ⤵ e eles vão para o fim da lista, riscados; o que está em andamento sobe para o topo e o que terminou fica verde — tudo isso zera sozinho quando vira o dia. Exercício global agora conta as séries só no treino em que você o iniciou. O botão voltar do Android passou a funcionar dentro do app em vez de fechá-lo. Aviso quando o celular está no Não Perturbe (o som do descanso não toca). E dá para salvar as fotos dos exercícios dentro do app, para funcionarem sem internet na academia.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

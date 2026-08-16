@@ -63,4 +63,32 @@ public class RestChannelPlugin extends Plugin {
         ret.put("id", id);
         call.resolve(ret);
     }
+
+    /**
+     * Diz se o celular está no Não Perturbe. Ler o filtro NÃO precisa de permissão
+     * (só mudar precisaria), então dá para avisar que o som do descanso não vai tocar.
+     * Filtro: 1 = tudo passa · 2 = só prioridade · 3 = nada · 4 = só alarmes.
+     */
+    @PluginMethod
+    public void dnd(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+                ret.put("known", false);
+                call.resolve(ret);
+                return;
+            }
+            int f = nm.getCurrentInterruptionFilter();
+            ret.put("known", true);
+            ret.put("filter", f);
+            ret.put("on", f == NotificationManager.INTERRUPTION_FILTER_PRIORITY
+                       || f == NotificationManager.INTERRUPTION_FILTER_NONE
+                       || f == NotificationManager.INTERRUPTION_FILTER_ALARMS);
+            ret.put("silent", f == NotificationManager.INTERRUPTION_FILTER_NONE);
+        } catch (Exception e) {
+            ret.put("known", false);
+        }
+        call.resolve(ret);
+    }
 }

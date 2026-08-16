@@ -30,6 +30,15 @@ if ((Test-Path "$src\native-patch\HealthPlugin.kt") -and (Test-Path $hp)) {
     Copy-Item "$src\native-patch\HealthPlugin.kt" $hp -Force
 }
 
+# Os plugins nativos proprios (canal de descanso, fone, Nao Perturbe) tambem moram em
+# native-patch. Sem esta copia, mexer neles nao chegava ao APK.
+$javaDir = "$native\android\app\src\main\java\com\pedro\fitnessglobal"
+foreach ($p in @("RestChannelPlugin.java","HeadsetPlugin.java")) {
+    if ((Test-Path "$src\native-patch\$p") -and (Test-Path $javaDir)) {
+        Copy-Item "$src\native-patch\$p" "$javaDir\$p" -Force
+    }
+}
+
 # O manifesto declara as permissoes de saude (peso, gordura corporal). Sem esta copia,
 # uma permissao nova em native-patch nunca chega ao APK.
 $mf = "$native\android\app\src\main\AndroidManifest.xml"
