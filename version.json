@@ -1,6 +1,6 @@
 {
-  "version": 26,
-  "name": "2.6",
-  "notes": "Exercício de peso do corpo: marque na edição do exercício e o campo de kg já vem com o seu último peso registrado (dá para escrever outro valor por cima). No diagnóstico 🔎: botão para pedir na hora a permissão de histórico do Health Connect e botão \"Copiar diagnóstico\", que junta tudo num texto para você colar numa mensagem — é o caminho mais rápido para descobrir por que o peso não está vindo. Também deixei a checagem de permissões à prova de falha: um Health Connect que não conheça a permissão de histórico não zera mais as outras.",
+  "version": 27,
+  "name": "2.7",
+  "notes": "Peso: o app agora descarta a medição impossível ANTES de escolher a pesagem do dia — se num mesmo dia vier uma boa e uma zerada, a boa vence (antes eu pegava a mais recente e depois descartava o dia inteiro). Mesma correção na gordura corporal. E o diagnóstico passou a dizer quantas pesagens chegaram com 0 kg, desde quando e de qual app, com um aviso na tela de Evolução apontando que o valor zerado vem de fora do app.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

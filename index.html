@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v2.6</title>
+<title>Fitness Global v2.7</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -382,8 +382,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "2.6";
-const APP_VERSION = 26;
+const APP_NAME_VERSION = "2.7";
+const APP_VERSION = 27;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -3457,6 +3457,12 @@ function renderProgress(){
         <div class="setline"><div class="grow"><div class="t">A balança manda</div>
           <div class="d">Quando a pesagem chega do Health Connect, ela substitui o peso que estava no dia. Desligue para proteger valores digitados à mão.</div></div>
           <button class="switch${db.settings.scaleWins!==false?" on":""}" data-action="tg" data-k="scaleWins" role="switch" aria-checked="${db.settings.scaleWins!==false}"></button></div>
+        ${(()=>{ const z = db.settings.lastWeights || {};
+          if(!z.zerados) return "";
+          return `<div class="empty" style="color:var(--gold); margin-top:8px">⚠️ <b>${z.zerados} pesagem(ns) chegaram com 0 kg</b>${z.zeradosDe?`, a partir de ${fmtDate(z.zeradosDe)}`:""}.<br>
+            O app está lendo o Health Connect direito — o valor é que vem zerado de <b>${esc(z.fonte||"quem grava lá")}</b>.
+            Confira em <b>Health Connect → Procurar dados → Peso</b>: se lá também estiver 0 kg, o problema é no openScale sync, não aqui.
+            No <b>openScale sync</b>, desligue e religue o Health Connect para ele reenviar as medições.</div>`; })()}
         ${db.settings.wDenied ? `<div class="empty" style="color:var(--bad); margin-top:8px">O Health Connect está <b>negando</b> a leitura de peso para este app. Toque em 🔎 → <b>Abrir Health Connect</b> → <b>Permissões do app</b> → Fitness Global → ligue <b>Peso</b>.</div>` : ""}
         <div class="btnrow" style="margin-top:6px">
           <button class="btn ghost sm" data-action="health-sync">🔄 Importar do Health Connect</button>
@@ -3755,8 +3761,16 @@ async function importWeights(H, start, end){
     const out = await readWindow((s,e)=>H.queryWeight({startDate:s.toISOString(), endDate:e.toISOString()}), start, end);
     const list = out.r.weights || [];
     const from = db.settings.weightFrom || null;
+    /* Descarta valor impossível ANTES de escolher a pesagem do dia. O openScale sync já
+       gravou registros com 0 kg aqui; se num dia existir uma boa e uma zerada, a boa tem
+       que ganhar — antes eu pegava a mais recente e só depois olhava o valor. */
+    const valido = w => { const k = Number(w.kg); return isFinite(k) && k >= 20 && k <= 400; };
+    const zerados = list.filter(w => !valido(w));
     const byDay = {};
-    list.forEach(w=>{ const d = localDateOf(w.time); if(!byDay[d] || byDay[d].time < w.time) byDay[d] = w; });
+    list.filter(valido).forEach(w=>{ const d = localDateOf(w.time); if(!byDay[d] || byDay[d].time < w.time) byDay[d] = w; });
+    /* dia que só teve registro inválido continua aparecendo no diagnóstico, para o
+       problema não sumir de vista */
+    zerados.forEach(w=>{ const d = localDateOf(w.time); if(!byDay[d]) byDay[d] = w; });
     const res = []; let n = 0;
     Object.keys(byDay).sort().forEach(d=>{
       const kg = Math.round(Number(byDay[d].kg)*100)/100;
@@ -3775,7 +3789,9 @@ async function importWeights(H, start, end){
       put(manual ? "substituiu" : antes != null ? "atualizou" : "novo", antes);
     });
     db.settings.lastWeights = { when:Date.now(), n:list.length, aplicados:n,
-      cortou:out.cortou, erroLargo:out.erroLargo,
+      cortou:out.cortou, erroLargo:out.erroLargo, zerados:zerados.length,
+      zeradosDe:zerados.length ? localDateOf(zerados.map(w=>w.time).sort()[0]) : null,
+      fonte:[...new Set(list.map(w=>String(w.sourceBundleId||w.deviceModel||"?")))].join(", "),
       dias:Object.keys(byDay).length, res:res.slice(-14),
       det:list.slice(-10).map(w=>({d:localDateOf(w.time), kg:Math.round(Number(w.kg)*100)/100, src:String(w.deviceModel||w.sourceBundleId||"")})) };
     return n;
@@ -3792,8 +3808,11 @@ async function importBodyFat(H, start, end){
     const out = await readWindow((s,e)=>H.queryBodyFat({startDate:s.toISOString(), endDate:e.toISOString()}), start, end);
     const list = out.r.bodyFat || [];
     const from = db.settings.weightFrom || null;
+    const valido = w => { const p = Number(w.pct); return isFinite(p) && p >= 2 && p <= 75; };
+    const zerados = list.filter(w => !valido(w));
     const byDay = {};
-    list.forEach(w=>{ const d = localDateOf(w.time); if(!byDay[d] || byDay[d].time < w.time) byDay[d] = w; });
+    list.filter(valido).forEach(w=>{ const d = localDateOf(w.time); if(!byDay[d] || byDay[d].time < w.time) byDay[d] = w; });
+    zerados.forEach(w=>{ const d = localDateOf(w.time); if(!byDay[d]) byDay[d] = w; });
     const res = []; let n = 0;
     Object.keys(byDay).sort().forEach(d=>{
       const pct = Math.round(Number(byDay[d].pct)*100)/100;
@@ -3809,7 +3828,7 @@ async function importBodyFat(H, start, end){
       e.bf = pct; e.bfSrc = "health"; n++;
       put(manual ? "substituiu" : antes != null ? "atualizou" : "novo", antes);
     });
-    db.settings.lastBF = { when:Date.now(), n:list.length, aplicados:n,
+    db.settings.lastBF = { when:Date.now(), n:list.length, aplicados:n, zerados:zerados.length,
       dias:Object.keys(byDay).length, res:res.slice(-14) };
     return n;
   }catch(e){ console.warn("bodyfat", e); db.settings.lastErr = "gordura: " + ((e&&e.message)||e);
@@ -4254,12 +4273,13 @@ document.addEventListener("click", ev => {
     L.push(`metodos: queryWeight=${!!(native.plugin("HealthPlugin")||{}).queryWeight} queryBodyFat=${!!(native.plugin("HealthPlugin")||{}).queryBodyFat}`);
     L.push(`weightFrom=${db.settings.weightFrom} actFrom=${db.settings.actFrom} scaleWins=${db.settings.scaleWins}`);
     L.push(`ultimoErro=${db.settings.lastErr || "-"}`);
-    L.push(`PESO: quando=${lw.when?new Date(lw.when).toLocaleString("pt-BR"):"nunca"} lidas=${lw.n} aplicadas=${lw.aplicados} dias=${lw.dias} cortou=${lw.cortou} noMethod=${lw.noMethod}`);
+    L.push(`PESO: quando=${lw.when?new Date(lw.when).toLocaleString("pt-BR"):"nunca"} lidas=${lw.n} aplicadas=${lw.aplicados} dias=${lw.dias} zerados=${lw.zerados} desde=${lw.zeradosDe} cortou=${lw.cortou} noMethod=${lw.noMethod}`);
+    if(lw.fonte) L.push(`PESO fonte=${lw.fonte}`);
     if(lw.erro) L.push(`PESO erro=${lw.erro}`);
     if(lw.erroLargo) L.push(`PESO recusa da janela larga=${lw.erroLargo}`);
     (lw.res||[]).forEach(w=>L.push(`  ${w.d} ${w.kg}kg [${w.src||"-"}] -> ${w.act}${w.antes!=null?" (antes "+w.antes+")":""}`));
     if(!(lw.res||[]).length) L.push("  (nenhuma pesagem registrada no diagnostico)");
-    L.push(`GORDURA: lidas=${lbf.n} aplicadas=${lbf.aplicados} erro=${lbf.erro||"-"} noMethod=${lbf.noMethod}`);
+    L.push(`GORDURA: lidas=${lbf.n} aplicadas=${lbf.aplicados} zerados=${lbf.zerados} erro=${lbf.erro||"-"} noMethod=${lbf.noMethod}`);
     L.push(`TREINOS: ${li.workouts||0} em ${li.dias||0} dia(s) tipos=${(li.types||[]).join("/")}`);
     L.push(`passos hoje no app=${(()=>{const b=bodyByDate(todayStr())||{}; return typeof b.steps==="number"?b.steps:"-";})()}`);
     L.push(`ultimo peso no app=${(()=>{const s=bodySorted(); return s.length?s[s.length-1].date+" "+s[s.length-1].kg+"kg src="+(s[s.length-1].kgSrc||"-"):"-";})()}`);
