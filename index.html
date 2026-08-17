@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v2.5</title>
+<title>Fitness Global v2.6</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -382,8 +382,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "2.5";
-const APP_VERSION = 25;
+const APP_NAME_VERSION = "2.6";
+const APP_VERSION = 26;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -949,6 +949,9 @@ function renderEx(g, e){
         pw = String(alvoHoje.peso); pr = String(alvoHoje.metaReps);
         if(done.length) pw = String(done[done.length-1].weight);   // já começou: segue o peso do dia
       }
+      /* peso do corpo: o kg vem do seu último peso registrado (dá para escrever por cima) */
+      if(e.bw && !done.length){ const b = lastBodyWeight(); if(b) pw = String(b.kg); }
+      else if(e.bw && done.length) pw = String(done[done.length-1].weight);
       rows += `<div class="setrow">
         <div class="num">${i+1}</div>
         <input type="number" inputmode="decimal" step="any" min="0" id="w${i}" value="${pw}" placeholder="kg" aria-label="Peso da série ${i+1}">
@@ -976,6 +979,7 @@ function renderEx(g, e){
     </div>
     <div class="pills" style="margin-top:-4px">
       <span class="pill" style="${done.length>=e.targetSets?"color:var(--good);border-color:var(--good)":done.length?"color:var(--gold);border-color:var(--gold)":""}">${done.length}/${e.targetSets} séries hoje</span>
+      ${e.bw?`<span class="pill" title="O kg já vem com o seu último peso corporal">🧍 peso do corpo</span>`:""}
       ${e.reps?`<span class="pill" title="Faixa de repetições alvo">alvo ${esc(e.reps)} reps</span>`:""}
       <span class="pill">descanso ${e.restSec}s</span>
       ${e.gymId === null ? '<span class="pill glob">🌐 em todas as academias</span>' : ""}
@@ -1311,6 +1315,7 @@ function exFormSnapshot(){
   if(g("f-name")) exFormCtx.name = g("f-name").value;
   if(g("f-sets")) exFormCtx.sets = g("f-sets").value;
   if(g("f-reps")) exFormCtx.reps = g("f-reps").value;
+  if(g("f-bw")) exFormCtx.bw = g("f-bw").checked;
   if(g("f-rest")) exFormCtx.rest = g("f-rest").value;
   if(g("f-notes")) exFormCtx.notes = g("f-notes").value;
   if(g("f-global")) exFormCtx.global = g("f-global").checked;
@@ -1320,9 +1325,9 @@ function exForm(gymId, e, pre){
   const v = Object.assign({
     name: e ? e.name : "", sets: e ? e.targetSets : 3, rest: e ? e.restSec : 90,
     notes: (e && e.notes) || "", global: e ? e.gymId === null : false, photo: (e && e.photo) || "",
-    reps: (e && e.reps) || ""
+    reps: (e && e.reps) || "", bw: e ? !!e.bw : false
   }, pre || {});
-  exFormCtx = {gymId, id: e ? e.id : "", name:v.name, sets:v.sets, rest:v.rest, notes:v.notes, global:v.global, photo:v.photo, reps:v.reps};
+  exFormCtx = {gymId, id: e ? e.id : "", name:v.name, sets:v.sets, rest:v.rest, notes:v.notes, global:v.global, photo:v.photo, reps:v.reps, bw:v.bw};
   openModal(`<h2>${e ? "Editar exercício" : "Novo exercício"}</h2>
     <div class="field"><label for="f-name">Nome</label>
     <input id="f-name" value="${esc(v.name)}" placeholder="Ex.: Supino reto" maxlength="60">
@@ -1354,6 +1359,11 @@ function exForm(gymId, e, pre){
     <div class="field"><label for="f-notes">📝 Observações (opcional)</label>
     <textarea id="f-notes" maxlength="600" placeholder="Ex.: regulagem do banco no furo 4, pegada média, encosto 2 furos, cabo na polia baixa…">${esc(v.notes)}</textarea>
     <div class="hint">Aparece no topo da tela do exercício, na hora do treino.</div></div>
+    <label class="check">
+      <input type="checkbox" id="f-bw" ${v.bw ? "checked" : ""}>
+      <div class="grow"><div class="t">🧍 Peso do corpo</div>
+      <div class="d">Barra, paralelas, abdominal… O campo de kg já vem com o seu último peso registrado${(()=>{const b=lastBodyWeight(); return b?` (hoje: ${fmtW(b.kg)} kg de ${fmtDate(b.date)})`:" (ainda sem peso registrado)";})()}. Dá para escrever outro valor por cima.</div></div>
+    </label>
     <label class="check">
       <input type="checkbox" id="f-global" ${v.global ? "checked" : ""}>
       <div class="grow"><div class="t">🌐 Exercício global</div>
@@ -1935,15 +1945,16 @@ document.addEventListener("click", ev => {
     const sets = Math.max(1, parseInt(document.getElementById("f-sets").value, 10) || 3);
     const restS = Math.max(5, parseInt(document.getElementById("f-rest").value, 10) || 90);
     const reps = ((document.getElementById("f-reps")||{value:""}).value || "").trim();
+    const bw = !!(document.getElementById("f-bw") || {}).checked;
     const glob = document.getElementById("f-global").checked;
     const notes = document.getElementById("f-notes").value.trim();
     const photo = (document.getElementById("f-photo") || {value:""}).value;
     if(!name){ toast("Dê um nome ao exercício."); return; }
     if(el.dataset.id){
       const e = exById(el.dataset.id);
-      e.name = name; e.targetSets = sets; e.restSec = restS; e.reps = reps; e.notes = notes; e.photo = photo; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
+      e.name = name; e.targetSets = sets; e.restSec = restS; e.reps = reps; e.bw = bw; e.notes = notes; e.photo = photo; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
     } else {
-      db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, targetSets:sets, restSec:restS, reps, notes, photo, order: nextOrder()});
+      db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, targetSets:sets, restSec:restS, reps, bw, notes, photo, order: nextOrder()});
     }
     exFormCtx = null;
     save(); closeModal(); render();
@@ -3367,6 +3378,8 @@ function activityTables(){
     <div class="section"><h2>Mês a mês</h2><div class="card">${meses}</div></div>`;
 }
 function bodySorted(){ return db.body.filter(b=>typeof b.kg==="number").sort((a,b)=>a.date<b.date?-1:1); }
+/* último peso corporal registrado — usado nos exercícios marcados como "peso do corpo" */
+function lastBodyWeight(){ const s = bodySorted(); return s.length ? s[s.length-1] : null; }
 function weekKeyOf(date){ const d=new Date(date+"T00:00"); const off=(d.getDay()+6)%7; d.setDate(d.getDate()-off); return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
 function weeklyWeight(){
   const map={}; bodySorted().forEach(b=>{ const k=weekKeyOf(b.date); (map[k]=map[k]||[]).push(b.kg); });
@@ -3852,8 +3865,16 @@ async function healthStatus(){
   if(!native.isNative || !H) return {native:false, available:false, perms:{}};
   try{
     const av = await H.isHealthAvailable();
-    const c = await H.checkHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS","READ_WEIGHT","READ_BODY_FAT","READ_HISTORY"]});
-    return {native:true, available:!!(av && av.available), perms:permMap(c)};
+    /* as básicas numa chamada e o histórico em OUTRA, com catch próprio: se o Health
+       Connect do aparelho não conhecer READ_HISTORY, isso não pode zerar a lista toda e
+       fazer o app achar que não tem permissão de nada (era o risco que eu criei na 2.1) */
+    const c = await H.checkHealthPermissions({permissions:["READ_STEPS","READ_WORKOUTS","READ_WEIGHT","READ_BODY_FAT"]});
+    const perms = permMap(c);
+    try{
+      const h = await H.checkHealthPermissions({permissions:["READ_HISTORY"]});
+      Object.assign(perms, permMap(h));
+    }catch(e){ perms.READ_HISTORY = null; }
+    return {native:true, available:!!(av && av.available), perms};
   }catch(e){ return {native:true, available:false, perms:{}, err:(e&&e.message)||String(e)}; }
 }
 async function healthDiagForm(){
@@ -3907,6 +3928,8 @@ async function healthDiagForm(){
         <button class="btn ghost sm" data-action="w-probe">🧪 Testar leitura de peso (365 dias)</button>
         ${st.perms.READ_WEIGHT === false ? `<button class="btn sm" data-action="w-ask" style="flex:none; width:auto">Pedir permissão</button>` : ""}
       </div>
+      ${st.perms.READ_HISTORY !== true ? `<button class="btn sm" data-action="hist-ask" style="margin-top:8px">🕓 Pedir a permissão de histórico agora</button>
+        <div class="sub" style="margin-top:4px; font-size:.74rem">Se a janela do Health Connect não abrir, a permissão foi negada de vez ou este Health Connect não a tem: use <b>Abrir Health Connect</b> e procure "Ler dados anteriores" / "histórico".</div>` : ""}
       <div id="wprobe"></div>
     </div>
     <div class="card" style="margin-bottom:12px">
@@ -3925,7 +3948,9 @@ async function healthDiagForm(){
     <div class="btnrow">
       <button class="btn ghost" data-action="open-hc">Abrir Health Connect</button>
       <button class="btn" data-action="health-sync">Importar agora</button>
+      <button class="btn ghost sm" data-action="diag-copy" style="margin-top:8px">📋 Copiar diagnóstico (para mandar por mensagem)</button>
     </div>`);
+  window._diagSt = st;
 }
 let _lastAutoSync = 0;
 async function autoHealthSync(force){
@@ -4206,6 +4231,44 @@ document.addEventListener("click", ev => {
       if(ok){ toast("Permissão de peso concedida ✓ importando…"); importHealth(false); }
       else toast("Continua negada — abra o Health Connect e ligue Peso para o Fitness Global.");
     }).catch(e => toast("Não deu para pedir: " + ((e&&e.message)||e)));
+  }
+  else if(a === "hist-ask"){
+    const H = native.plugin("HealthPlugin"); if(!H) return;
+    toast("Abrindo o Health Connect…");
+    H.requestHealthPermissions({permissions:["READ_HISTORY"]}).then(async () => {
+      let ok = null;
+      try{ ok = permMap(await H.checkHealthPermissions({permissions:["READ_HISTORY"]})).READ_HISTORY; }catch(e){}
+      if(ok === true){ toast("Permissão de histórico concedida ✓ importando…"); importHealth(false); healthDiagForm(); }
+      else toast("Não foi concedida. Abra o Health Connect → Fitness Global e procure a opção de dados anteriores.");
+    }).catch(e => toast("Este Health Connect não aceitou o pedido: " + ((e&&e.message)||e)));
+  }
+  /* junta TUDO num texto para ele colar numa mensagem — é o caminho mais rápido para eu
+     entender um problema que só acontece no aparelho dele */
+  else if(a === "diag-copy"){
+    const st = window._diagSt || {perms:{}};
+    const lw = db.settings.lastWeights || {}, lbf = db.settings.lastBF || {}, li = db.settings.lastImport || {};
+    const L = [];
+    L.push(`Fitness Global v${APP_NAME_VERSION} (build ${APP_VERSION})`);
+    L.push(`nativo=${st.native} healthConnect=${st.available}${st.err?" erro="+st.err:""}`);
+    L.push(`permissoes: passos=${st.perms.READ_STEPS} treinos=${st.perms.READ_WORKOUTS} peso=${st.perms.READ_WEIGHT} gordura=${st.perms.READ_BODY_FAT} historico=${st.perms.READ_HISTORY}`);
+    L.push(`metodos: queryWeight=${!!(native.plugin("HealthPlugin")||{}).queryWeight} queryBodyFat=${!!(native.plugin("HealthPlugin")||{}).queryBodyFat}`);
+    L.push(`weightFrom=${db.settings.weightFrom} actFrom=${db.settings.actFrom} scaleWins=${db.settings.scaleWins}`);
+    L.push(`ultimoErro=${db.settings.lastErr || "-"}`);
+    L.push(`PESO: quando=${lw.when?new Date(lw.when).toLocaleString("pt-BR"):"nunca"} lidas=${lw.n} aplicadas=${lw.aplicados} dias=${lw.dias} cortou=${lw.cortou} noMethod=${lw.noMethod}`);
+    if(lw.erro) L.push(`PESO erro=${lw.erro}`);
+    if(lw.erroLargo) L.push(`PESO recusa da janela larga=${lw.erroLargo}`);
+    (lw.res||[]).forEach(w=>L.push(`  ${w.d} ${w.kg}kg [${w.src||"-"}] -> ${w.act}${w.antes!=null?" (antes "+w.antes+")":""}`));
+    if(!(lw.res||[]).length) L.push("  (nenhuma pesagem registrada no diagnostico)");
+    L.push(`GORDURA: lidas=${lbf.n} aplicadas=${lbf.aplicados} erro=${lbf.erro||"-"} noMethod=${lbf.noMethod}`);
+    L.push(`TREINOS: ${li.workouts||0} em ${li.dias||0} dia(s) tipos=${(li.types||[]).join("/")}`);
+    L.push(`passos hoje no app=${(()=>{const b=bodyByDate(todayStr())||{}; return typeof b.steps==="number"?b.steps:"-";})()}`);
+    L.push(`ultimo peso no app=${(()=>{const s=bodySorted(); return s.length?s[s.length-1].date+" "+s[s.length-1].kg+"kg src="+(s[s.length-1].kgSrc||"-"):"-";})()}`);
+    const txt = L.join("\n");
+    copyText(txt).then(ok=>{
+      if(ok) toast("Diagnóstico copiado — cole na mensagem 📋");
+      else { openModal(`<h2>Diagnóstico</h2><textarea rows="16" style="width:100%; font-size:.72rem">${esc(txt)}</textarea>
+        <div class="sub" style="margin-top:6px">Não deu para copiar sozinho: selecione o texto acima e copie à mão.</div>`); }
+    });
   }
   else if(a === "w-probe"){
     const box = document.getElementById("wprobe"); if(!box) return;

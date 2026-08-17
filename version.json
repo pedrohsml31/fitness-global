@@ -1,6 +1,6 @@
 {
-  "version": 25,
-  "name": "2.5",
-  "notes": "IA para estimar calorias e macros dos alimentos que não estão na tabela TACO. Use a chave gratuita do Google AI Studio (aistudio.google.com/apikey) — assinatura do Gemini, ChatGPT ou Claude não serve, é outra coisa. Cole a chave nos Ajustes: o app testa, escolhe sozinho um modelo Flash do plano gratuito e passa a mostrar o botão \"🤖 Estimar com IA\" no alimento. A estimativa preenche os campos para você conferir antes de salvar, mostra o nível de confiança e fica marcada como estimativa — nunca entra sozinha como se fosse valor de tabela. Só o nome do alimento é enviado.",
+  "version": 26,
+  "name": "2.6",
+  "notes": "Exercício de peso do corpo: marque na edição do exercício e o campo de kg já vem com o seu último peso registrado (dá para escrever outro valor por cima). No diagnóstico 🔎: botão para pedir na hora a permissão de histórico do Health Connect e botão \"Copiar diagnóstico\", que junta tudo num texto para você colar numa mensagem — é o caminho mais rápido para descobrir por que o peso não está vindo. Também deixei a checagem de permissões à prova de falha: um Health Connect que não conheça a permissão de histórico não zera mais as outras.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
