@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v2.7</title>
+<title>Fitness Global v2.8</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -99,16 +99,19 @@ input[type=number]{font-variant-numeric:tabular-nums;}
   font-size:.72rem; text-transform:uppercase; letter-spacing:.07em; font-weight:700; text-align:center; margin-bottom:6px;}
 
 /* barra de descanso */
-#restbar{position:fixed; left:0; right:0; bottom:0; z-index:40; display:none;
-  background:color-mix(in srgb, var(--surface) 92%, black); border-top:1px solid var(--border);
-  padding:12px 14px calc(12px + env(safe-area-inset-bottom));}
+/* fica ACIMA das abas: some da frente da navegação e continua visível em qualquer tela */
+#restbar{position:fixed; left:8px; right:8px; bottom:calc(58px + env(safe-area-inset-bottom));
+  z-index:40; display:none; border-radius:14px; overflow:hidden;
+  background:color-mix(in srgb, var(--surface) 88%, black);
+  border:1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow:0 6px 20px rgba(0,0,0,.45); padding:8px 10px;}
 #restbar.on{display:block;}
 .restin{max-width:540px; margin:0 auto; display:flex; align-items:center; gap:10px;}
-#resttime{font-size:2rem; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-.02em;
-  min-width:108px; color:var(--accent);}
-.restlabel{flex:1; min-width:0; color:var(--muted); font-size:.82rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-.restbtn{border:1px solid var(--border); background:var(--surface2); border-radius:11px;
-  padding:10px 12px; font-weight:800; font-size:.9rem; flex:none;}
+#resttime{font-size:1.4rem; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-.02em;
+  min-width:64px; color:var(--accent);}
+.restlabel{flex:1; min-width:0; color:var(--muted); font-size:.76rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer;}
+.restbtn{border:1px solid var(--border); background:var(--surface2); border-radius:9px;
+  padding:7px 9px; font-weight:800; font-size:.78rem; flex:none;}
 .restbtn.skip{color:var(--bad);}
 #restprog{position:absolute; top:-1px; left:0; height:2px; background:var(--accent); transition:width .25s linear;}
 
@@ -346,7 +349,7 @@ input[type=range]{accent-color:var(--accent);}
   <div id="restprog"></div>
   <div class="restin">
     <div id="resttime">0:00</div>
-    <div class="restlabel" id="restlabel"></div>
+    <div class="restlabel" id="restlabel" data-action="rest-goto"></div>
     <button class="restbtn" data-action="rest-minus" aria-label="Diminuir 15 segundos">−15s</button>
     <button class="restbtn" data-action="rest-plus" aria-label="Aumentar 15 segundos">+15s</button>
     <button class="restbtn skip" data-action="rest-skip" aria-label="Encerrar descanso">✕</button>
@@ -382,8 +385,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "2.7";
-const APP_VERSION = 27;
+const APP_NAME_VERSION = "2.8";
+const APP_VERSION = 28;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 async function checkUpdate(){
@@ -996,7 +999,7 @@ function renderEx(g, e){
         ${rows}
         <div class="btnrow" style="margin-top:10px">
           <button class="btn ghost sm" data-action="extra-set">＋ Série extra</button>
-          <button class="btn ghost sm" data-action="start-rest" data-sec="${e.restSec}" data-name="${esc(e.name)} — ${done.length >= e.targetSets ? "série extra" : `agora a série ${done.length+1}/${e.targetSets}`}">⏱ Iniciar descanso</button>
+          <button class="btn ghost sm" data-action="start-rest" data-ex="${e.id}" data-sec="${e.restSec}" data-name="${esc(e.name)} — ${done.length >= e.targetSets ? "série extra" : `agora a série ${done.length+1}/${e.targetSets}`}">⏱ Iniciar descanso</button>
         </div>
       </div>
     </div>
@@ -1261,6 +1264,10 @@ function renderSettings(){
           <div class="d">Calcula kcal, proteína, carboidrato e gordura do que você comeu, usando a <b>TACO 4ª edição</b> (NEPA/UNICAMP) que vem dentro do app. Você liga o alimento à tabela uma vez e ele fica sabendo para sempre.</div></div>
         <button class="switch${macrosOn()?" on":""}" data-action="tg" data-k="macros" role="switch" aria-checked="${macrosOn()}"></button></div>
       <div class="setline">
+        <div class="grow"><div class="t">⌚ Lembrar de iniciar o treino no relógio</div>
+          <div class="d">Na primeira série do dia, avisa para você começar um treino de musculação no Samsung Health/relógio. O app não consegue iniciar isso sozinho — a Samsung não abre esse controle para outros aplicativos.</div></div>
+        <button class="switch${db.settings.shRemind!==false?" on":""}" data-action="tg" data-k="shRemind" role="switch" aria-checked="${db.settings.shRemind!==false}"></button></div>
+      <div class="setline">
         <div class="grow"><div class="t">🤖 IA para estimar nutrição (Gemini)</div>
           <div class="d">Para alimentos que não estão na TACO. Use a chave <b>gratuita</b> do <b>Google AI Studio</b> (aistudio.google.com/apikey) — assinatura do Gemini, ChatGPT ou Claude <b>não</b> serve, é outra coisa. Só o nome do alimento é enviado.
             ${db.settings.aiModel?`<br>Modelo em uso: <b>${esc(db.settings.aiModel)}</b>`:""}</div>
@@ -1407,17 +1414,44 @@ function syncForm(){
   setTimeout(() => { const el = document.getElementById("f-fb") || document.getElementById("f-code"); if(el) el.focus(); }, 50);
 }
 
+/* ===================== treino no Samsung Health / relógio =====================
+   Não existe API pública que deixe um app iniciar ou parar um treino no Galaxy Watch —
+   o Health Connect só lê e grava registros, e o SDK do Samsung Health é de leitura e só
+   para parceiros aprovados. Então o app faz o que dá: lembra você de começar no relógio
+   assim que a primeira série do dia é registrada. */
+const SHEALTH_PKG = "com.sec.android.app.shealth";
+function setsLoggedToday(){
+  return db.logs.filter(l => l.date === todayStr()).reduce((n,l) => n + l.sets.length, 0);
+}
+function shShouldRemind(){
+  return db.settings.shRemind !== false && db.settings.shRemindDay !== todayStr();
+}
+function shRemindForm(){
+  db.settings.shRemindDay = todayStr(); save(false);
+  openModal(`<h2>⌚ Começou o treino</h2>
+    <p class="sub" style="margin-bottom:12px">Registrei sua primeira série de hoje. Se quiser que o
+    <b>relógio</b> conte este treino (frequência cardíaca, calorias, tempo), inicie agora um
+    <b>Treino de musculação</b> no Samsung Health ou no relógio.</p>
+    <p class="sub" style="margin-bottom:14px; font-size:.78rem">Não dá para o app iniciar isso sozinho:
+    a Samsung não abre esse controle para outros aplicativos. Por isso este lembrete.</p>
+    <button class="btn" data-action="sh-open">Abrir Samsung Health</button>
+    <button class="btn ghost" data-action="sh-ok" style="margin-top:8px">Já iniciei / deixa quieto</button>
+    <button class="btn ghost sm" data-action="sh-never" style="margin-top:8px">Não lembrar mais</button>`);
+}
+
 /* ===================== descanso ===================== */
 let rest = {end:0, total:0, iv:null};
 let audioCtx = null;
 const bar = document.getElementById("restbar"), tEl = document.getElementById("resttime"),
       lEl = document.getElementById("restlabel"), pEl = document.getElementById("restprog");
 
-function startRest(sec, label){
+function startRest(sec, label, exId, gymId){
   rest.end = Date.now() + sec*1000;
   rest.total = sec*1000;
+  rest.exId = exId || null; rest.gymId = gymId || null;   // toque no rótulo volta ao exercício
   lEl.textContent = "Descanso · " + label;
   bar.classList.add("on");
+  native.restOngoing(rest.end, label);
   if(!rest.iv) rest.iv = setInterval(tickRest, 250);
   if(db.settings.sound && !audioCtx){ try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){} }
   native.scheduleRestEnd(rest.end, label);      // fecha o alarme nativo (tela apagada)
@@ -1434,7 +1468,8 @@ function tickRest(){
   pEl.style.width = Math.max(0, Math.min(100, left/rest.total*100)) + "%";
 }
 function stopRest(skipCancel){
-  rest.end = 0;
+  rest.end = 0; rest.exId = null; rest.gymId = null;
+  native.restOngoingCancel();
   if(rest.iv){ clearInterval(rest.iv); rest.iv = null; }
   bar.classList.remove("on");
   keepAlive.off();
@@ -1460,12 +1495,44 @@ async function maybeBeep(){
   if(native.isNative && !(await native.headsetConnected())) return;   // som só com fone
   playBeep();
 }
-function playBeep(){
+/* tom pronto em WAV: o WebAudio às vezes está suspenso (tela apagada, app em segundo
+   plano, política de autoplay) e não sai som nenhum. Este <audio> toca mesmo assim. */
+let beepEl = null;
+function beepWavUrl(dur){
+  const sr = 8000, n = Math.max(1, Math.round(sr*dur)), bytes = 44 + n*2;
+  const b = new ArrayBuffer(bytes), v = new DataView(b);
+  const str = (o,t) => { for(let i=0;i<t.length;i++) v.setUint8(o+i, t.charCodeAt(i)); };
+  str(0,"RIFF"); v.setUint32(4, bytes-8, true); str(8,"WAVEfmt ");
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+  str(36,"data"); v.setUint32(40, n*2, true);
+  for(let i=0;i<n;i++){
+    const t = i/sr;
+    const env = Math.min(1, t/0.01) * Math.min(1, (dur-t)/0.05);   // sobe rápido, cai só no fim
+    v.setInt16(44+i*2, Math.round(Math.sin(2*Math.PI*880*t) * 26000 * Math.max(0,env)), true);
+  }
+  let bin = ""; const u = new Uint8Array(b);
+  for(let i=0;i<u.length;i++) bin += String.fromCharCode(u[i]);
+  return "data:audio/wav;base64," + btoa(bin);
+}
+function beepFallback(dur){
   try{
-    if(!audioCtx){ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-    audioCtx.resume();
-    const dur = SOUNDLEN[db.settings.soundLen] || SOUNDLEN.medio;
-    const t0 = audioCtx.currentTime;
+    if(!beepEl){ beepEl = new Audio(); beepEl.preload = "auto"; }
+    beepEl.src = beepWavUrl(dur);
+    beepEl.currentTime = 0;
+    const p = beepEl.play();
+    if(p && p.catch) p.catch(()=>{});
+  }catch(e){}
+}
+async function playBeep(){
+  const dur = SOUNDLEN[db.settings.soundLen] || SOUNDLEN.medio;
+  try{
+    if(!audioCtx || audioCtx.state === "closed"){ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    /* resume() é assíncrono: sem esperar, o tom era agendado num contexto parado e
+       simplesmente não saía som — era esse o "às vezes não toca" */
+    if(audioCtx.state === "suspended"){ try{ await audioCtx.resume(); }catch(e){} }
+    if(audioCtx.state !== "running"){ beepFallback(dur); return; }
+    const t0 = audioCtx.currentTime + 0.02;
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
     o.frequency.value = 880; o.type = "sine";     // mesmo som sempre, só a duração muda
     g.gain.setValueAtTime(0.001, t0);
@@ -1474,7 +1541,7 @@ function playBeep(){
     g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
     o.connect(g); g.connect(audioCtx.destination);
     o.start(t0); o.stop(t0 + dur + 0.05);
-  }catch(e){}
+  }catch(e){ beepFallback(dur); }
 }
 document.addEventListener("visibilitychange", () => { if(!document.hidden) tickRest(); });
 
@@ -1588,6 +1655,22 @@ const native = {
     const P = this.plugin("Headset");
     if(!P) return false;
     try{ const r = await P.isConnected(); return !!(r && r.connected); }catch(e){ return false; }
+  },
+  /* contagem regressiva fixa na barra de status, para ver quanto falta sem abrir o app */
+  async restOngoing(atMs, label){
+    const P = this.plugin("RestChannel");
+    if(!P || !P.ongoing) return;
+    try{ await P.ongoing({endAt: Math.round(atMs), title:"Descanso", text: label || ""}); }catch(e){}
+  },
+  async restOngoingCancel(){
+    const P = this.plugin("RestChannel");
+    if(!P || !P.ongoingCancel) return;
+    try{ await P.ongoingCancel(); }catch(e){}
+  },
+  async openApp(pkg){
+    const P = this.plugin("RestChannel");
+    if(!P || !P.openApp) return false;
+    try{ const r = await P.openApp({pkg}); return !!(r && r.ok); }catch(e){ return false; }
   }
 };
 /* vibração com padrão escolhido (funciona no navegador e na WebView do app) */
@@ -2016,8 +2099,13 @@ document.addEventListener("click", ev => {
     const lbl = dn >= e.targetSets
       ? `${e.name} — ${dn}/${e.targetSets} séries feitas ✓`
       : `${e.name} — agora a série ${dn+1}/${e.targetSets}`;
-    if(db.settings.autoRest) startRest(e.restSec, lbl);
+    if(db.settings.autoRest) startRest(e.restSec, lbl, e.id, cur.gymId);
     render();
+    /* primeira série do dia: lembra de iniciar o treino no relógio */
+    if(dn === 1 && setsLoggedToday() === 1 && shShouldRemind()){
+      doVibrate([120,80,120]);
+      setTimeout(shRemindForm, 400);
+    }
   }
   else if(a === "del-set"){
     const l = todayLog(el.dataset.ex);
@@ -2053,14 +2141,21 @@ document.addEventListener("click", ev => {
 
   else if(a === "metric"){ exUI.metric = el.dataset.m; renderProg(exById(route().exId), records(route().exId)); }
 
-  else if(a === "start-rest") startRest(+el.dataset.sec, el.dataset.name || "");
-  else if(a === "rest-minus"){ rest.end -= 15000; native.scheduleRestEnd(rest.end, (lEl.textContent||"").replace(/^Descanso · /,"")); if(rest.end <= Date.now()) finishRest(); else tickRest(); }
+  else if(a === "start-rest") startRest(+el.dataset.sec, el.dataset.name || "", el.dataset.ex || null, route().gymId || null);
+  else if(a === "rest-minus"){ rest.end -= 15000; const n=(lEl.textContent||"").replace(/^Descanso · /,""); native.scheduleRestEnd(rest.end, n); native.restOngoing(rest.end, n); if(rest.end <= Date.now()) finishRest(); else tickRest(); }
   else if(a === "rest-plus"){ rest.end += 15000; native.scheduleRestEnd(rest.end, (lEl.textContent||"").replace(/^Descanso · /,"")); tickRest(); }
+  else if(a === "sh-open"){
+    closeModal();
+    native.openApp(SHEALTH_PKG).then(ok => { if(!ok) toast("Não achei o Samsung Health instalado."); });
+  }
+  else if(a === "sh-ok"){ closeModal(); }
+  else if(a === "sh-never"){ db.settings.shRemind = false; save(); closeModal(); toast("Não vou mais lembrar. Dá para religar nos Ajustes."); }
   else if(a === "rest-skip") stopRest();
+  else if(a === "rest-goto"){ if(rest.exId && rest.gymId) location.hash = "#/ex/" + rest.gymId + "/" + rest.exId; }
 
   else if(a === "tg"){
     const k = el.dataset.k;
-    db.settings[k] = (k === "ignoreAuto") ? (db.settings[k] === false) : !db.settings[k];
+    db.settings[k] = (k === "ignoreAuto" || k === "shRemind") ? (db.settings[k] === false) : !db.settings[k];
     if(k === "ignoreAuto") deriveAllActs();
     /* a tabela TACO só é lida quando o modo é ligado — não custa nada ficar desligado */
     if(k === "macros" && db.settings.macros) loadTaco().then(render);

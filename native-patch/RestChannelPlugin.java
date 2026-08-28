@@ -1,8 +1,11 @@
 package com.pedro.fitnessglobal;
 
+import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.os.Build;
 
 import com.getcapacitor.JSArray;
@@ -90,5 +93,81 @@ public class RestChannelPlugin extends Plugin {
             ret.put("known", false);
         }
         call.resolve(ret);
+    }
+
+    private static final int LIVE_ID = 7002;
+    private static final String LIVE_CH = "rest-live";
+
+    private int smallIcon() {
+        int r = getContext().getResources().getIdentifier("ic_stat_icon", "drawable", getContext().getPackageName());
+        return r != 0 ? r : getContext().getApplicationInfo().icon;
+    }
+
+    /**
+     * Notificacao fixa com contagem regressiva na barra de status, para ver quanto falta
+     * do descanso sem abrir o app. Canal proprio, silencioso e de baixa prioridade: quem
+     * apita no fim continua sendo a notificacao do descanso (id 7001).
+     */
+    @PluginMethod
+    public void ongoing(PluginCall call) {
+        long endAt = call.getLong("endAt", 0L);
+        String title = call.getString("title", "Descanso");
+        String text = call.getString("text", "");
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) { call.resolve(); return; }
+            NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) { call.resolve(); return; }
+
+            NotificationChannel c = new NotificationChannel(LIVE_CH, "Descanso em andamento", NotificationManager.IMPORTANCE_LOW);
+            c.setDescription("Mostra quanto falta do descanso na barra de status");
+            c.setSound(null, null);
+            c.enableVibration(false);
+            c.setShowBadge(false);
+            nm.createNotificationChannel(c);
+
+            Notification.Builder b = new Notification.Builder(getContext(), LIVE_CH)
+                    .setSmallIcon(smallIcon())
+                    .setContentTitle(title)
+                    .setContentText(text)
+                    .setOngoing(true)
+                    .setOnlyAlertOnce(true)
+                    .setShowWhen(true)
+                    .setWhen(endAt)
+                    .setUsesChronometer(true);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) b.setChronometerCountDown(true);
+
+            Intent open = getContext().getPackageManager().getLaunchIntentForPackage(getContext().getPackageName());
+            if (open != null) {
+                open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                b.setContentIntent(PendingIntent.getActivity(getContext(), 0, open,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+            }
+            nm.notify(LIVE_ID, b.build());
+        } catch (Exception ignored) { }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void ongoingCancel(PluginCall call) {
+        try {
+            NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(LIVE_ID);
+        } catch (Exception ignored) { }
+        call.resolve();
+    }
+
+    /** Abre outro app instalado (usado para o Samsung Health). */
+    @PluginMethod
+    public void openApp(PluginCall call) {
+        String pkg = call.getString("pkg", "");
+        JSObject r = new JSObject();
+        try {
+            Intent i = getContext().getPackageManager().getLaunchIntentForPackage(pkg);
+            if (i == null) { r.put("ok", false); call.resolve(r); return; }
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+            r.put("ok", true);
+        } catch (Exception e) { r.put("ok", false); }
+        call.resolve(r);
     }
 }

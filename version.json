@@ -1,6 +1,6 @@
 {
-  "version": 27,
-  "name": "2.7",
-  "notes": "Peso: o app agora descarta a medição impossível ANTES de escolher a pesagem do dia — se num mesmo dia vier uma boa e uma zerada, a boa vence (antes eu pegava a mais recente e depois descartava o dia inteiro). Mesma correção na gordura corporal. E o diagnóstico passou a dizer quantas pesagens chegaram com 0 kg, desde quando e de qual app, com um aviso na tela de Evolução apontando que o valor zerado vem de fora do app.",
+  "version": 28,
+  "name": "2.8",
+  "notes": "Cronômetro do descanso agora aparece na barra de status do celular, com contagem regressiva ao vivo — dá para ver quanto falta sem abrir o app. Dentro do app ele virou uma barrinha pequena que flutua acima das abas (não tapa mais a navegação) e some quando o descanso acaba; tocar no nome volta para o exercício. Som do fim da série: o app passou a esperar o áudio realmente acordar antes de tocar e, se ainda assim não der, toca um tom de reserva — era isso que fazia o som falhar às vezes. E na primeira série do dia o app lembra você de iniciar o treino de musculação no Samsung Health / relógio, com botão para abrir o app (não existe API pública que deixe iniciar isso automaticamente).",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
