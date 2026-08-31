@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v2.8</title>
+<title>Fitness Global v2.9</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -385,10 +385,12 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "2.8";
-const APP_VERSION = 28;
+const APP_NAME_VERSION = "2.9";
+const APP_VERSION = 29;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
+/* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
+const WEB_URL = "https://pedrohsml31.github.io/fitness-global/";
 async function checkUpdate(){
   try{
     const r = await fetch(VERSION_URL + "?cb=" + Date.now(), {cache:"no-store"});
@@ -430,7 +432,7 @@ function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
 
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false, mealNotif:false, restOverlay:false}, updatedAt:0}; }
 /* duração do bipe de fim de série (mesmo som, só mais longo) */
 const SOUNDLEN = { curto:0.45, medio:1.1, longo:2.4 };
 let db;
@@ -1220,6 +1222,14 @@ function renderSettings(){
         • <b>Notificações</b> → permitir</div></div>
       </div>`:""}
       <div class="setline">
+        <div class="grow"><div class="t">⏱ Bolha do tempo sobre outros apps</div>
+        <div class="d">${native.isNative
+          ? `Mostra quanto falta do descanso <b>por cima de qualquer app</b>, e dá para arrastar de lugar. O Android não deixa nenhum app escrever na barra de status — essa bolha é a forma de ver o número fora do app. Precisa da permissão <b>"Exibir sobre outros apps"</b>.`
+          : `Só no app instalado no celular.`}</div>
+        ${native.isNative && s.restOverlay ? `<button class="btn ghost sm" data-action="overlay-perm" style="width:auto; margin-top:8px">Conferir a permissão</button>` : ""}</div>
+        ${native.isNative ? `<button class="switch${s.restOverlay?" on":""}" data-action="tg" data-k="restOverlay" role="switch" aria-checked="${!!s.restOverlay}" aria-label="Bolha do tempo"></button>` : ""}
+      </div>
+      <div class="setline">
         <div class="grow"><div class="t">Manter tela ligada</div>
         <div class="d">Evita a tela apagar durante o treino (só no navegador)</div></div>
         <button class="switch${s.wake?" on":""}" data-action="tg" data-k="wake" role="switch" aria-checked="${s.wake}" aria-label="Manter tela ligada"></button>
@@ -1278,6 +1288,12 @@ function renderSettings(){
           ${db.settings.aiKey?`<button class="btn ghost sm" data-action="clear-aikey" style="width:auto; margin-top:8px">Remover chave</button>`:""}
         </div></div>
       <div class="setline">
+        <div class="grow"><div class="t">🔔 Lembrar de registrar as refeições</div>
+          <div class="d">${native.isNative
+            ? `Toca uma notificação no horário de cada refeição <b>fixa</b> do plano (as 📌), todo dia, mais as refeições marcadas só para hoje/amanhã. Hoje isso daria <b>${mealNotifCount()}</b> lembrete(s) por dia.`
+            : `Só no app instalado no celular — o navegador não agenda notificação com o app fechado.`}</div></div>
+        ${native.isNative ? `<button class="switch${s.mealNotif?" on":""}" data-action="tg" data-k="mealNotif" role="switch" aria-checked="${!!s.mealNotif}" aria-label="Lembrete de refeição"></button>` : ""}</div>
+      <div class="setline">
         <div class="grow"><div class="t">🎉 Refeições livres por semana</div>
           <div class="d">Quantas refeições livres você pode fazer na semana (segunda a domingo). 0 = sem limite, só conta quantas você fez.</div>
           <div class="row" style="gap:8px; margin-top:8px">
@@ -1287,6 +1303,18 @@ function renderSettings(){
       <div class="setline">
         <div class="grow"><div class="t">💣 Apagar tudo</div><div class="d">Zera o app inteiro neste aparelho (e na nuvem, se estiver sincronizado)</div></div>
         <button class="btn danger sm" style="width:auto" data-action="wipe">Apagar</button>
+      </div>
+    </div></div>
+    <div class="section"><h2>Usar no computador</h2><div class="card">
+      <div class="setline">
+        <div class="grow"><div class="t">Mesmo app, pelo navegador</div>
+          <div class="d">Abra o endereço abaixo no <b>Chrome</b> ou <b>Edge</b> do PC e use o
+          <b>mesmo código de sincronização</b> daqui — os dados são os mesmos.<br>
+          Para virar um app de verdade (ícone na área de trabalho, janela própria, sem barra
+          do navegador): na barra de endereço, clique no ícone <b>⊕ / Instalar</b>, ou
+          <b>menu ⋮ → Transmitir, salvar e compartilhar → Instalar página como app</b>.
+          <br><br><b style="word-break:break-all">${WEB_URL}</b></div></div>
+        <button class="btn ghost sm" data-action="web-copy" style="width:auto; flex:none">📋 Copiar</button>
       </div>
     </div></div>
     ${native.isNative ? `<div class="section"><h2>Atualizar o app</h2><div class="card">
@@ -1299,6 +1327,17 @@ function renderSettings(){
         <button class="btn ghost sm" data-action="upd-copy" style="width:auto; flex:none">📋 Copiar</button></div>
     </div></div>` : ""}
     <p class="sub" style="margin-top:10px">${native.isNative ? "Rodando como app instalado 📱" : "Rodando no navegador"} · <b>Fitness Global v${APP_NAME_VERSION}</b> <span class="sub">(build ${APP_VERSION})</span></p>`;
+}
+
+/* pedir a permissao "Exibir sobre outros apps" — sem ela a bolha nao aparece */
+function overlayPermForm(){
+  openModal(`<h2>⏱ Falta uma permissão do Android</h2>
+    <p class="sub" style="margin-bottom:12px">Para a bolha do tempo aparecer <b>por cima de outros apps</b>,
+    o Android exige a permissão <b>"Exibir sobre outros apps"</b>. Ela é dada uma vez só.</p>
+    <p class="sub" style="margin-bottom:14px; font-size:.78rem">Na tela que vai abrir, procure
+    <b>Fitness Global</b> na lista e ligue a chave. Depois volte para cá.</p>
+    <button class="btn" data-action="overlay-ask">Abrir a tela da permissão</button>
+    <button class="btn ghost" data-action="overlay-later" style="margin-top:8px">Agora não</button>`);
 }
 
 /* ===================== modal ===================== */
@@ -1439,6 +1478,54 @@ function shRemindForm(){
     <button class="btn ghost sm" data-action="sh-never" style="margin-top:8px">Não lembrar mais</button>`);
 }
 
+/* ===================== lembrete de refeicao =====================
+   Notificacao no horario de cada refeicao planejada. As FIXAS repetem todo dia
+   ({on:{hour,minute}}); as de um dia so entram com data e hora exatas.
+   Os ids 7100+ sao so daqui: a cada mudanca do plano tudo e cancelado e reagendado,
+   senao sobrariam lembretes de refeicoes que voce ja apagou. */
+const MEALN_BASE = 7100, MEALN_MAX = 30, MEALN_CH = "meals-v1";
+async function scheduleMealNotifs(){
+  if(!native.isNative) return;
+  const LN = native.plugin("LocalNotifications"); if(!LN) return;
+  const todos = [];
+  for(let i=0;i<MEALN_MAX;i++) todos.push({id:MEALN_BASE+i});
+  try{ await LN.cancel({notifications:todos}); }catch(e){}
+  if(!db.settings.mealNotif) return;
+  try{ await LN.requestPermissions(); }catch(e){}
+  try{
+    const ch = {id:MEALN_CH, name:"Refeições", description:"Lembrete de registrar a refeição",
+                importance:5, vibration:true, visibility:1};
+    ch.sound = "default";
+    await LN.createChannel(ch);
+  }catch(e){}
+  const lista = [];
+  db.plan.filter(m => m.fixed && m.time)
+    .sort((a,b)=>a.time.localeCompare(b.time))
+    .forEach(m => lista.push({m, at:null}));
+  const hoje = todayStr(), amanha = shiftDay(hoje, 1);
+  db.plan.filter(m => !m.fixed && m.time && (m.date === hoje || m.date === amanha)).forEach(m => {
+    const t = tsFor(m.date, m.time);
+    if(t > Date.now() + 60000) lista.push({m, at:new Date(t)});
+  });
+  if(!lista.length) return;
+  const notifs = lista.slice(0, MEALN_MAX).map((x, i) => {
+    const [h, mi] = x.m.time.split(":").map(Number);
+    return {
+      id: MEALN_BASE + i, channelId: MEALN_CH,
+      title: (x.m.kind === "lanche" ? "🍎 " : "🍽️ ") + x.m.name + " · " + x.m.time,
+      body: "Hora de registrar o que você comeu.",
+      smallIcon: "ic_stat_icon", autoCancel: true,
+      schedule: x.at ? {at: x.at, allowWhileIdle: true}
+                     : {on: {hour: h, minute: mi}, allowWhileIdle: true}
+    };
+  });
+  try{ await LN.schedule({notifications: notifs}); }catch(e){}
+}
+/* quantos lembretes o plano geraria (mostrado nos Ajustes) */
+function mealNotifCount(){
+  return db.plan.filter(m => m.fixed && m.time).length;
+}
+
 /* ===================== descanso ===================== */
 let rest = {end:0, total:0, iv:null};
 let audioCtx = null;
@@ -1452,6 +1539,7 @@ function startRest(sec, label, exId, gymId){
   lEl.textContent = "Descanso · " + label;
   bar.classList.add("on");
   native.restOngoing(rest.end, label);
+  if(db.settings.restOverlay) native.overlayStart(rest.end);
   if(!rest.iv) rest.iv = setInterval(tickRest, 250);
   if(db.settings.sound && !audioCtx){ try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){} }
   native.scheduleRestEnd(rest.end, label);      // fecha o alarme nativo (tela apagada)
@@ -1470,6 +1558,7 @@ function tickRest(){
 function stopRest(skipCancel){
   rest.end = 0; rest.exId = null; rest.gymId = null;
   native.restOngoingCancel();
+  native.overlayStop();
   if(rest.iv){ clearInterval(rest.iv); rest.iv = null; }
   bar.classList.remove("on");
   keepAlive.off();
@@ -1671,6 +1760,28 @@ const native = {
     const P = this.plugin("RestChannel");
     if(!P || !P.openApp) return false;
     try{ const r = await P.openApp({pkg}); return !!(r && r.ok); }catch(e){ return false; }
+  },
+  /* bolha flutuante com o tempo restante — a unica forma de ver o numero POR CIMA de
+     outro app (o Android nao deixa ninguem escrever texto na barra de status) */
+  async overlayCan(){
+    const P = this.plugin("RestChannel");
+    if(!P || !P.overlayCan) return false;
+    try{ const r = await P.overlayCan(); return !!(r && r.ok); }catch(e){ return false; }
+  },
+  async overlayAsk(){
+    const P = this.plugin("RestChannel");
+    if(!P || !P.overlayAsk) return;
+    try{ await P.overlayAsk(); }catch(e){}
+  },
+  async overlayStart(atMs){
+    const P = this.plugin("RestChannel");
+    if(!P || !P.overlayStart) return false;
+    try{ const r = await P.overlayStart({endAt: Math.round(atMs)}); return !!(r && r.ok); }catch(e){ return false; }
+  },
+  async overlayStop(){
+    const P = this.plugin("RestChannel");
+    if(!P || !P.overlayStop) return;
+    try{ await P.overlayStop(); }catch(e){}
   }
 };
 /* vibração com padrão escolhido (funciona no navegador e na WebView do app) */
@@ -2142,8 +2253,8 @@ document.addEventListener("click", ev => {
   else if(a === "metric"){ exUI.metric = el.dataset.m; renderProg(exById(route().exId), records(route().exId)); }
 
   else if(a === "start-rest") startRest(+el.dataset.sec, el.dataset.name || "", el.dataset.ex || null, route().gymId || null);
-  else if(a === "rest-minus"){ rest.end -= 15000; const n=(lEl.textContent||"").replace(/^Descanso · /,""); native.scheduleRestEnd(rest.end, n); native.restOngoing(rest.end, n); if(rest.end <= Date.now()) finishRest(); else tickRest(); }
-  else if(a === "rest-plus"){ rest.end += 15000; native.scheduleRestEnd(rest.end, (lEl.textContent||"").replace(/^Descanso · /,"")); tickRest(); }
+  else if(a === "rest-minus"){ rest.end -= 15000; const n=(lEl.textContent||"").replace(/^Descanso · /,""); native.scheduleRestEnd(rest.end, n); native.restOngoing(rest.end, n); if(rest.end <= Date.now()) finishRest(); else { if(db.settings.restOverlay) native.overlayStart(rest.end); tickRest(); } }
+  else if(a === "rest-plus"){ rest.end += 15000; const n=(lEl.textContent||"").replace(/^Descanso · /,""); native.scheduleRestEnd(rest.end, n); native.restOngoing(rest.end, n); if(db.settings.restOverlay) native.overlayStart(rest.end); tickRest(); }
   else if(a === "sh-open"){
     closeModal();
     native.openApp(SHEALTH_PKG).then(ok => { if(!ok) toast("Não achei o Samsung Health instalado."); });
@@ -2157,11 +2268,26 @@ document.addEventListener("click", ev => {
     const k = el.dataset.k;
     db.settings[k] = (k === "ignoreAuto" || k === "shRemind") ? (db.settings[k] === false) : !db.settings[k];
     if(k === "ignoreAuto") deriveAllActs();
+    if(k === "mealNotif"){
+      scheduleMealNotifs();
+      toast(db.settings.mealNotif
+        ? (mealNotifCount() ? `Lembretes ligados para ${mealNotifCount()} refeição(ões) fixa(s) ✓`
+                            : "Ligado — mas nenhuma refeição fixa tem horário ainda.")
+        : "Lembretes desligados.");
+    }
+    if(k === "restOverlay"){
+      if(db.settings.restOverlay) native.overlayCan().then(ok => { if(!ok) overlayPermForm(); });
+      else native.overlayStop();
+    }
     /* a tabela TACO só é lida quando o modo é ligado — não custa nada ficar desligado */
     if(k === "macros" && db.settings.macros) loadTaco().then(render);
     save(); applyWake(); if(k === "sound") native.init(); render();
   }
   else if(a === "ask-notif"){ Notification.requestPermission().then(() => render()); }
+  else if(a === "overlay-ask"){ closeModal(); native.overlayAsk(); }
+  else if(a === "overlay-later"){ db.settings.restOverlay = false; save(); closeModal(); render(); }
+  else if(a === "overlay-perm"){ overlayPermForm(); }
+  else if(a === "web-copy"){ copyText(WEB_URL).then(ok => toast(ok ? "Link copiado 📋" : WEB_URL)); }
   else if(a === "set-vibe"){ db.settings.vibe = el.dataset.v; save(); doVibrate(vibePattern()); render(); }
   else if(a === "set-soundlen"){ db.settings.soundLen = el.dataset.v; save(); playBeep(); native.init(); render(); }
   else if(a === "test-vibe"){
@@ -2645,6 +2771,12 @@ function plannedForDay(date){ return db.plan.filter(m => m.fixed || m.date === d
    true = comido · "skip" = você decidiu não comer (riscado) · undefined = ainda em aberto.
    Em aberto só conta como "não consumido" depois que o dia passa. */
 function itemState(it, date){ const v = it.done && it.done[date]; return v === true ? "done" : v === "skip" ? "skip" : "open"; }
+/* hora em que voce marcou o item como comido (fica guardada por dia) */
+function itemAt(it, date){ return (it.at || {})[date] || ""; }
+function hmMin(hm){ const p = String(hm||"").split(":"); return (+p[0]||0)*60 + (+p[1]||0); }
+/* diferenca em minutos entre o horario planejado e o que foi marcado */
+function hmDiff(a, b){ return Math.abs(hmMin(a) - hmMin(b)); }
+const CHECK_TOL = 30;   // acima disto o app pergunta se o horario foi aquele mesmo
 function dayClosed(date){ return date < todayStr(); }
 /* ===================== calorias e macros (modo opcional) =====================
    Fonte: TACO 4ª edição (NEPA/UNICAMP), 597 alimentos, valores por 100 g — é a tabela
@@ -2676,6 +2808,23 @@ function tacoById(id){ return TACO ? TACO.list.find(a=>a.id===id) : null; }
 const FRAC = {meia:0.5, meio:0.5, "1/2":0.5, "1/4":0.25, "3/4":0.75, um:1, uma:1, dois:2, duas:2, tres:3, quatro:4};
 function parseQty(txt){
   const t = String(txt||"").trim();
+  /* quantidade em campo separado: o app grava "arroz, 150 g" e a conta le daqui.
+     Numero sem unidade = grama, que e como o campo de quantidade vem preenchido.
+     A busca e da ESQUERDA para a direita, entao "arroz, 150,5" casa em "150,5" e nao
+     na virgula decimal. Nome com virgula e sem numero no fim ("Arroz, tipo 1") nao casa. */
+  const c = t.match(/,\s*(\d+(?:[.,]\d+)?)\s*(kg|quilos?|g|gr|gramas?|ml|mls|l|litros?|un|und|unid|unidades?)?\s*$/i);
+  if(c){
+    const v = parseFloat(c[1].replace(",", "."));
+    const u = (c[2] || "").toLowerCase();
+    const resto = t.slice(0, c.index);
+    if(isFinite(v) && v > 0 && resto.trim()){
+      if(/^(kg|quilo)/.test(u)) return {g:v*1000, resto};
+      if(/^(l|litro)/.test(u))  return {g:v*1000, ml:true, resto};
+      if(/^ml/.test(u))         return {g:v, ml:true, resto};
+      if(/^un/.test(u))         return {un:v, resto};
+      return {g:v, resto};
+    }
+  }
   let m = t.match(/(\d+(?:[.,]\d+)?)\s*(kg|quilos?)\b/i);
   if(m) return {g:parseFloat(m[1].replace(",","."))*1000, resto:t.replace(m[0],"")};
   m = t.match(/(\d+(?:[.,]\d+)?)\s*(g|gr|gramas?)\b/i);
@@ -3031,14 +3180,43 @@ function plannedMealHtml(m,day){
       const chip = livre ? `<span class="fchip free">livre</span>`
         : st==="done" ? "" : st==="skip" ? `<span class="fchip skip">não vou comer</span>`
         : dayClosed(day) ? `<span class="fchip skip">não consumido</span>` : `<span class="fchip pend">em aberto</span>`;
+      const at = st==="done" ? itemAt(it, day) : "";
       return `<div class="fooditem ${livre?"freeitem":st==="done"?"eaten":st==="skip"?"skipped":"pending"}">
         <button class="ftick ${st==="done"?"on":st==="skip"?"no":""}" data-action="plan-tick" data-m="${m.id}" data-i="${it.id}" aria-label="Marcar consumido">${st==="done"?"✓":st==="skip"?"✕":""}</button>
         <span class="fn">${esc(it.name)}${it.note?`<div class="fnote">💬 ${esc(it.note)}</div>`:""}</span>
+        ${at?`<button class="fchip" data-action="check-time" data-m="${m.id}" data-i="${it.id}" title="Horário em que você marcou — toque para corrigir" style="cursor:pointer">🕑 ${esc(at)}</button>`:""}
         ${chip}
         ${mf?"":`<button class="xbtn${itf?" free":""}" data-action="item-free" data-m="${m.id}" data-i="${it.id}" aria-label="Alimento livre" style="${itf?"":"color:var(--faint)"}">🎉</button>`}
         <button class="xbtn" data-action="plan-item-note" data-m="${m.id}" data-i="${it.id}" aria-label="Comentário no alimento" style="color:var(--faint)">💬</button>
       </div>`; }).join("")}
   </div>`;
+}
+/* horario que vale para o check: hoje e a hora de agora; em outro dia nao da para
+   inventar a hora, entao fica a hora planejada da refeicao */
+function checkHM(m){
+  return foodDay === todayStr() ? nowHM() : (m.time || "12:00");
+}
+/* se o check ficou a mais de 30 min do horario planejado, confirma antes de gravar */
+function maybeAskTime(m, hm, alvo){
+  if(!m.time || !hm) return;
+  if(hmDiff(m.time, hm) <= CHECK_TOL) return;
+  checkTimeForm(m, hm, alvo, false);
+}
+function checkTimeForm(m, hm, alvo, manual){
+  const d = m.time ? hmDiff(m.time, hm) : 0;
+  const dTxt = d >= 60 ? `${Math.floor(d/60)}h${String(d%60).padStart(2,"0")}` : `${d} min`;
+  openModal(`<h2>🕑 Horário da refeição</h2>
+    <p class="sub" style="margin-bottom:12px">
+      ${manual
+        ? `Você marcou <b>${esc(m.name)}</b> às <b>${esc(hm)}</b>.`
+        : `Marquei <b>${esc(m.name)}</b> como consumida às <b>${esc(hm)}</b>, mas ela estava planejada
+           para <b>${esc(m.time)}</b> — <b>${dTxt}</b> de diferença.`}
+      ${manual ? "" : "<br>Foi nesse horário mesmo, ou você está registrando depois?"}
+    </p>
+    <div class="field"><label for="ct-time">Horário em que você comeu</label>
+      <input id="ct-time" type="time" value="${esc(hm)}"></div>
+    <button class="btn" data-action="ct-save" data-m="${m.id}" data-i="${esc(alvo)}">Salvar este horário</button>
+    ${manual ? "" : `<button class="btn ghost" data-action="ct-keep" style="margin-top:8px">Foi ${esc(hm)} mesmo</button>`}`);
 }
 function mealNoteKey(day,mealName){ return day + "|" + mealName; }
 function mealNoteOf(day,mealName){ return (db.mealNotes||{})[mealNoteKey(day,mealName)]; }
@@ -3078,20 +3256,60 @@ function mealSuggestions(day){
   db.food.slice(-40).forEach(f=>s.add(f.meal));
   return [...s].filter(Boolean);
 }
+/* ---- linhas de "alimento | quantidade | unidade" ----
+   O nome e a quantidade sao dois campos separados; na hora de salvar eles viram um
+   texto so ("arroz, 150 g") porque e assim que o resto do app (nutricao, foodKey,
+   historico) le o alimento. O parseQty entende esse formato. */
+function qtySplit(nome){
+  const q = parseQty(nome || "");
+  /* "100g de arroz" deixa " de arroz" para tras; o "de" solto some aqui, como no foodKey */
+  const base = String(q.resto || "").replace(/^\s*,\s*/, "").replace(/\s*,\s*$/, "")
+    .trim().replace(/^(de|do|da|dos|das)\s+/i, "").trim();
+  if(q.g != null) return {nome:base, qtd:q.g, un:q.ml ? "ml" : "g"};
+  if(q.un != null && q.un !== 1) return {nome:base, qtd:q.un, un:"un"};
+  return {nome:base || String(nome || "").trim(), qtd:"", un:"g"};
+}
+function qtyJoin(nome, qtd, un){
+  nome = String(nome || "").trim().replace(/\s*,\s*$/, "");
+  const v = parseFloat(String(qtd).replace(",", "."));
+  if(!nome) return "";
+  if(!isFinite(v) || v <= 0) return nome;
+  return nome + ", " + String(qtd).replace(".", ",") + " " + (un || "g");
+}
+function ffRowHtml(nome, qtd, un){
+  const u = un || "g";
+  return `<div class="row ffrow" style="gap:6px; margin-bottom:6px">
+    <input class="ffn" value="${esc(nome||"")}" placeholder="Alimento" maxlength="80" style="flex:1; min-width:0">
+    <input class="ffq" value="${qtd===0||qtd?esc(String(qtd).replace(".",",")):""}" placeholder="qtd" inputmode="decimal" style="width:74px; text-align:center">
+    <select class="ffu" style="width:66px; flex:none">
+      ${["g","ml","un"].map(x=>`<option value="${x}"${u===x?" selected":""}>${x}</option>`).join("")}
+    </select>
+  </div>`;
+}
+function ffAddRow(){
+  const box = document.getElementById("ff-rows"); if(!box) return;
+  box.insertAdjacentHTML("beforeend", ffRowHtml("", "", "g"));
+}
 function foodForm(food){
   const day = foodDay;
   const isEdit = !!food;
   const meals = mealSuggestions(day);
   const kind = food?food.kind:"refeicao";
+  const ed = isEdit ? qtySplit(food.name) : null;
   openModal(`<h2>${isEdit?"Editar alimento":"Adicionar alimentos"}</h2>
     ${isEdit
-      ? `<div class="field"><label for="ff-name">Alimento</label>
-         <input id="ff-name" value="${esc(food.name)}" placeholder="Ex.: 100g de arroz, 2 ovos…" maxlength="80"></div>`
-      /* um por linha: tudo o que estiver marcado embaixo (refeição, horário, fora do
-         planejado, binge) vale para TODOS os alimentos de uma vez */
-      : `<div class="field"><label for="ff-name">Alimentos — <b>um por linha</b></label>
-         <textarea id="ff-name" rows="5" placeholder="100g de arroz&#10;150g de frango&#10;salada&#10;1 banana"></textarea>
-         <div class="sub" style="margin-top:4px; font-size:.76rem">Cada linha vira um alimento. As opções abaixo valem para todos eles.</div></div>`}
+      ? `<div class="field"><label>Alimento e quantidade</label>
+         <div id="ff-rows">${ffRowHtml(ed.nome, ed.qtd, ed.un)}</div>
+         <div class="sub" style="margin-top:2px; font-size:.76rem">Deixe a quantidade em branco se não souber.</div></div>`
+      /* uma linha por alimento: tudo o que estiver marcado embaixo (refeição, horário,
+         fora do planejado, binge) vale para TODOS os alimentos de uma vez */
+      : `<div class="field"><label>Alimentos — <b>um por linha</b></label>
+         <div id="ff-rows">${ffRowHtml("","","g")+ffRowHtml("","","g")+ffRowHtml("","","g")}</div>
+         <div class="btnrow" style="margin-top:2px">
+           <button class="btn ghost sm" data-action="ff-row" style="width:auto">＋ outra linha</button>
+           <button class="btn ghost sm" data-action="ff-paste" style="width:auto">📋 colar várias</button>
+         </div>
+         <div class="sub" style="margin-top:6px; font-size:.76rem">Nome de um lado, quantidade do outro. As opções abaixo valem para todos.</div></div>`}
     <div class="btnrow">
       <div class="field" style="flex:2"><label for="ff-meal">Refeição / lanche (nome)</label>
       <input id="ff-meal" list="ff-meals" value="${food?esc(food.meal):""}" placeholder="Ex.: Almoço, Café, Lanche da tarde" maxlength="40">
@@ -3113,8 +3331,16 @@ function foodForm(food){
       <div class="grow"><div class="t">⚠️ Fora do planejado</div><div class="d">Não estava na dieta do dia</div></div></label>
     <input type="hidden" id="ff-kind" value="${kind}">
     <button class="btn" data-action="save-food" data-id="${food?food.id:""}">${isEdit?"Salvar":"Adicionar"}</button>`);
-  setTimeout(()=>document.getElementById("ff-name").focus(),50);
+  setTimeout(()=>{ const f=sheet.querySelector(".ffn")||document.getElementById("ff-name"); if(f) f.focus(); },50);
 }
+/* enquanto voce digita na ultima linha, ja aparece outra vazia embaixo */
+sheet.addEventListener("input", ev => {
+  const t = ev.target;
+  if(!t.classList || !t.classList.contains("ffn")) return;
+  const rows = sheet.querySelectorAll(".ffrow");
+  const last = rows[rows.length-1];
+  if(last && last.contains(t) && t.value.trim()) ffAddRow();
+});
 /* escolher o alimento da TACO (ou digitar os valores à mão) e, quando o texto não tem
    grama, dizer quanto pesa 1 unidade. O que você escolher fica valendo para TODO alimento
    com esse mesmo nome, hoje e nos próximos dias. */
@@ -4099,8 +4325,23 @@ document.addEventListener("click", ev => {
   else if(a === "food-day"){ foodDay = shiftDay(foodDay, +el.dataset.d); render(); }
   else if(a === "add-food"){ foodForm(null); }
   else if(a === "edit-food"){ foodForm(db.food.find(f=>f.id===el.dataset.id)); }
+  else if(a === "ff-row"){ ffAddRow(); const rows=sheet.querySelectorAll(".ffrow"); const f=rows[rows.length-1].querySelector(".ffn"); if(f) f.focus(); }
+  else if(a === "ff-paste"){
+    /* volta pro modo texto (colar uma lista pronta), sem perder o que ja foi digitado */
+    const box=document.getElementById("ff-rows"); if(!box) return;
+    const linhas=[...box.querySelectorAll(".ffrow")]
+      .map(r=>qtyJoin(r.querySelector(".ffn").value, r.querySelector(".ffq").value, r.querySelector(".ffu").value))
+      .filter(Boolean);
+    box.outerHTML = `<textarea id="ff-name" rows="6" placeholder="arroz, 150&#10;frango, 150&#10;banana, 1 un&#10;leite, 200 ml">${esc(linhas.join("\n"))}</textarea>
+      <div class="sub" style="margin-top:4px; font-size:.76rem">Um alimento por linha, no formato <b>nome, quantidade</b>. Número sozinho = gramas.</div>`;
+    el.parentNode.remove();
+  }
   else if(a === "save-food"){
-    const bruto=document.getElementById("ff-name").value;
+    const ta=document.getElementById("ff-name");
+    const box=document.getElementById("ff-rows");
+    const bruto = ta ? ta.value : [...box.querySelectorAll(".ffrow")]
+      .map(r=>qtyJoin(r.querySelector(".ffn").value, r.querySelector(".ffq").value, r.querySelector(".ffu").value))
+      .filter(Boolean).join("\n");
     const meal=document.getElementById("ff-meal").value.trim()||"Refeição";
     const time=document.getElementById("ff-time").value||nowHM();
     const kind=document.getElementById("ff-kind").value;
@@ -4199,24 +4440,44 @@ document.addEventListener("click", ev => {
   else if(a === "plan-tick"){
     const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
     const it=m.items.find(x=>x.id===el.dataset.i); if(!it) return;
-    it.done=it.done||{};
+    it.done=it.done||{}; it.at=it.at||{};
     const st=itemState(it,foodDay);
-    if(st==="open"){ it.done[foodDay]=true; }                              // 1º toque: comi
-    else if(st==="done"){ it.done[foodDay]="skip"; toast("Riscado — não vou comer"); }  // 2º toque: risca
-    else { delete it.done[foodDay]; }                                       // 3º toque: volta pro aberto
+    let marcou=false;
+    if(st==="open"){ it.done[foodDay]=true; it.at[foodDay]=checkHM(m); marcou=true; }  // 1º toque: comi
+    else if(st==="done"){ it.done[foodDay]="skip"; delete it.at[foodDay]; toast("Riscado — não vou comer"); }  // 2º toque: risca
+    else { delete it.done[foodDay]; delete it.at[foodDay]; }                 // 3º toque: volta pro aberto
     save(); render();
+    if(marcou) maybeAskTime(m, it.at[foodDay], it.id);
   }
+  /* toque no relogio do item: corrigir o horario na mao */
+  else if(a === "check-time"){
+    const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
+    const it=m.items.find(x=>x.id===el.dataset.i); if(!it) return;
+    checkTimeForm(m, itemAt(it, foodDay), it.id, true);
+  }
+  else if(a === "ct-save"){
+    const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
+    const hm=document.getElementById("ct-time").value; if(!hm){ closeModal(); return; }
+    const alvo=el.dataset.i;
+    m.items.forEach(it=>{ if(alvo !== "*" && it.id !== alvo) return;
+      if(itemState(it, foodDay) !== "done") return;
+      it.at=it.at||{}; it.at[foodDay]=hm; });
+    save(); closeModal(); render(); toast("Horário salvo: " + hm);
+  }
+  else if(a === "ct-keep"){ closeModal(); }
   else if(a === "plan-all"){
     const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
     const v = el.dataset.v;   // "1" = comi tudo · "skip" = não comi nada · "0" = desfaz
-    m.items.forEach(it=>{ it.done=it.done||{};
-      if(v === "1") it.done[foodDay]=true;
-      else if(v === "skip") it.done[foodDay]="skip";
-      else delete it.done[foodDay]; });
+    const hm = checkHM(m);
+    m.items.forEach(it=>{ it.done=it.done||{}; it.at=it.at||{};
+      if(v === "1"){ it.done[foodDay]=true; it.at[foodDay]=hm; }
+      else if(v === "skip"){ it.done[foodDay]="skip"; delete it.at[foodDay]; }
+      else { delete it.done[foodDay]; delete it.at[foodDay]; } });
     save(); render();
     toast(v === "1" ? `${m.name}: refeição inteira marcada ✓`
       : v === "skip" ? `${m.name}: marcada como não comida ✕`
       : `${m.name}: desmarcada`);
+    if(v === "1") maybeAskTime(m, hm, "*");
   }
   else if(a === "plan-note"){
     const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
@@ -4314,21 +4575,23 @@ document.addEventListener("click", ev => {
     if(!name){ toast("Dê um nome à refeição."); return; }
     if(el.dataset.id){
       const m=db.plan.find(x=>x.id===el.dataset.id);
-      const old={}, oldNote={}; m.items.forEach(it=>{ old[it.name]=it.done||{}; oldNote[it.name]=it.note; });
+      /* editar a refeicao nao pode perder o que ja foi marcado nem a hora do check */
+      const old={}, oldNote={}, oldAt={};
+      m.items.forEach(it=>{ old[it.name]=it.done||{}; oldNote[it.name]=it.note; oldAt[it.name]=it.at||{}; });
       m.name=name; m.time=time; m.kind=kind; m.fixed=fixed; m.date=fixed?null:foodDay; m.note=note;
-      m.items=items.map(n=>({id:uid(), name:n, done:old[n]||{}, note:oldNote[n]}));
+      m.items=items.map(n=>({id:uid(), name:n, done:old[n]||{}, at:oldAt[n]||{}, note:oldNote[n]}));
     } else {
       db.plan.push({id:uid(), name, time, kind, fixed, note, created:todayStr(), date:fixed?null:foodDay, items:items.map(n=>({id:uid(), name:n, done:{}}))});
     }
-    save(); closeModal(); render();
+    save(); closeModal(); render(); scheduleMealNotifs();
   }
-  else if(a === "del-plan"){ if(!confirm("Excluir esta refeição do plano?")) return; db.plan=db.plan.filter(m=>m.id!==el.dataset.id); save(); render(); }
+  else if(a === "del-plan"){ if(!confirm("Excluir esta refeição do plano?")) return; db.plan=db.plan.filter(m=>m.id!==el.dataset.id); save(); render(); scheduleMealNotifs(); }
   else if(a === "copy-plan"){
     const prev=shiftDay(foodDay,-1);
     const src=db.plan.filter(m=>!m.fixed && m.date===prev);
     if(!src.length){ toast("Nada para copiar de ontem."); return; }
     src.forEach(m=>db.plan.push({id:uid(), name:m.name, time:m.time, kind:m.kind, fixed:false, date:foodDay, items:m.items.map(i=>({id:uid(), name:i.name, done:{}}))}));
-    save(); render(); toast(`${src.length} refeição(ões) copiada(s) de ontem ✓`);
+    save(); render(); scheduleMealNotifs(); toast(`${src.length} refeição(ões) copiada(s) de ontem ✓`);
   }
 
   else if(a === "health-sync"){ closeModal(); toast("Conectando ao Health Connect…"); importHealth(false); }
@@ -4476,6 +4739,7 @@ if(macrosOn()) loadTaco().then(render);
 deriveAllActs();
 applyWake();
 render();
+scheduleMealNotifs();
 Sync.start();
 checkUpdate();
 dndCheck();

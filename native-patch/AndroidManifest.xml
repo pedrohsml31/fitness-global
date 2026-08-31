@@ -65,6 +65,9 @@
     <!-- Descanso exato mesmo com a tela apagada / celular em Doze -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Bolha do cronômetro sobre outros apps: o Android não deixa escrever texto na
+         barra de status, então é a única forma de ver o tempo fora do app -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Peso e gordura corporal da balança (Yunmai -> openScale -> Health Connect) -->
     <uses-permission android:name="android.permission.health.READ_WEIGHT" />
     <uses-permission android:name="android.permission.health.READ_BODY_FAT" />

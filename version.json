@@ -1,6 +1,6 @@
 {
-  "version": 28,
-  "name": "2.8",
-  "notes": "Cronômetro do descanso agora aparece na barra de status do celular, com contagem regressiva ao vivo — dá para ver quanto falta sem abrir o app. Dentro do app ele virou uma barrinha pequena que flutua acima das abas (não tapa mais a navegação) e some quando o descanso acaba; tocar no nome volta para o exercício. Som do fim da série: o app passou a esperar o áudio realmente acordar antes de tocar e, se ainda assim não der, toca um tom de reserva — era isso que fazia o som falhar às vezes. E na primeira série do dia o app lembra você de iniciar o treino de musculação no Samsung Health / relógio, com botão para abrir o app (não existe API pública que deixe iniciar isso automaticamente).",
+  "version": 29,
+  "name": "2.9",
+  "notes": "Quantidade dos alimentos agora tem campo proprio: nome de um lado, quantidade e unidade (g / ml / un) do outro, uma linha por alimento, com linha nova aparecendo sozinha conforme voce digita. Ao marcar uma refeicao como consumida o app guarda a hora do check e, se ela ficar a mais de 30 minutos do horario planejado, pergunta se foi aquele horario mesmo (da para corrigir tocando no reloginho). Novo lembrete opcional que toca no horario de cada refeicao fixa do plano. E o cronometro do descanso ganhou uma bolha flutuante que aparece POR CIMA de outros apps, arrastavel e com o tempo ao vivo. Nos Ajustes ha agora as instrucoes de como usar o mesmo app pelo navegador do PC.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
