@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v2.9</title>
+<title>Fitness Global v3.0</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -232,6 +232,8 @@ input[type=number]{font-variant-numeric:tabular-nums;}
 .fchip.binge{background:color-mix(in srgb, var(--bad) 24%, var(--surface)); color:var(--bad);}
 .fchip.outside{background:color-mix(in srgb, var(--gold) 22%, var(--surface)); color:var(--gold);}
 .fchip.skip{background:var(--surface2); color:var(--faint);}
+.fchip.qty{background:var(--surface2); color:var(--muted); cursor:pointer;}
+.fchip.qtydiff{background:color-mix(in srgb, var(--gold) 22%, var(--surface)); color:var(--gold); cursor:pointer;}
 .fchip.pend{background:var(--surface2); color:var(--muted);}
 .fooditem.skipped .fn{color:var(--faint); text-decoration:line-through;}
 /* refeição livre: dourada e fora da conta da dieta */
@@ -385,8 +387,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "2.9";
-const APP_VERSION = 29;
+const APP_NAME_VERSION = "3.0";
+const APP_VERSION = 30;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -3172,18 +3174,24 @@ function plannedMealHtml(m,day){
         title="${tudoRiscado?"Desfazer — voltar ao normal":"Marcar a refeição inteira como NÃO comida"}">${tudoRiscado?"✕ nada ✔":"✕ nada"}</button>`:""}
       <button class="xbtn wide${mf?" free":""}" data-action="meal-free" data-n="${esc(m.name)}"
         title="${mf?"Deixar de ser refeição livre":"Marcar a refeição inteira como livre"}">🎉${mf?" livre":""}</button>
+      <button class="xbtn" data-action="add-to-meal" data-n="${esc(m.name)}" data-k="${m.kind}" data-t="${m.time||""}"
+        aria-label="Adicionar alimento nesta refeição" title="Comi algo que não estava no plano desta refeição" style="color:var(--accent)">＋</button>
       <button class="xbtn" data-action="plan-note" data-m="${m.id}" aria-label="Comentário da refeição" style="color:var(--faint)">💬</button>
     </div>
-    ${m.note?`<div class="fnote" style="margin:2px 0 6px">💬 ${esc(m.note)}</div>`:""}
+    ${planNoteOf(m,day)?`<div class="fnote" style="margin:2px 0 6px">💬 ${esc(planNoteOf(m,day))}</div>`:""}
     ${mf?`<div class="fnote" style="margin:2px 0 6px; color:var(--gold)">🎉 Refeição livre — não entra na conta da dieta</div>`:""}
     ${m.items.map(it=>{ const st=itemState(it,day), itf=itemFree(it,day), livre=mf||itf;
       const chip = livre ? `<span class="fchip free">livre</span>`
         : st==="done" ? "" : st==="skip" ? `<span class="fchip skip">não vou comer</span>`
         : dayClosed(day) ? `<span class="fchip skip">não consumido</span>` : `<span class="fchip pend">em aberto</span>`;
       const at = st==="done" ? itemAt(it, day) : "";
+      const dif = qtyDiffers(it, day), comi = eatenQtyTxt(it, day), planq = plannedQtyTxt(it);
+      const inote = planItemNoteOf(it, day);
       return `<div class="fooditem ${livre?"freeitem":st==="done"?"eaten":st==="skip"?"skipped":"pending"}">
         <button class="ftick ${st==="done"?"on":st==="skip"?"no":""}" data-action="plan-tick" data-m="${m.id}" data-i="${it.id}" aria-label="Marcar consumido">${st==="done"?"✓":st==="skip"?"✕":""}</button>
-        <span class="fn">${esc(it.name)}${it.note?`<div class="fnote">💬 ${esc(it.note)}</div>`:""}</span>
+        <span class="fn">${esc(it.name)}${inote?`<div class="fnote">💬 ${esc(inote)}</div>`:""}</span>
+        ${st==="done"?`<button class="fchip ${dif?"qtydiff":"qty"}" data-action="plan-qty" data-m="${m.id}" data-i="${it.id}"
+          title="${dif?`Você comeu ${esc(comi)} — o plano era ${esc(planq||"sem quantidade")}`:"Quanto você comeu — toque se foi diferente do planejado"}">⚖ ${esc(comi||planq||"?")}</button>`:""}
         ${at?`<button class="fchip" data-action="check-time" data-m="${m.id}" data-i="${it.id}" title="Horário em que você marcou — toque para corrigir" style="cursor:pointer">🕑 ${esc(at)}</button>`:""}
         ${chip}
         ${mf?"":`<button class="xbtn${itf?" free":""}" data-action="item-free" data-m="${m.id}" data-i="${it.id}" aria-label="Alimento livre" style="${itf?"":"color:var(--faint)"}">🎉</button>`}
@@ -3218,6 +3226,57 @@ function checkTimeForm(m, hm, alvo, manual){
     <button class="btn" data-action="ct-save" data-m="${m.id}" data-i="${esc(alvo)}">Salvar este horário</button>
     ${manual ? "" : `<button class="btn ghost" data-action="ct-keep" style="margin-top:8px">Foi ${esc(hm)} mesmo</button>`}`);
 }
+/* ---- quantidade do alimento planejado ----
+   A quantidade planejada mora no proprio nome ("arroz, 150 g"), igual ao que voce come.
+   Se num dia voce comeu o alimento certo mas em quantidade diferente, isso fica em
+   it.qtd[dia] — por dia, sem mexer no plano. */
+function plannedQtyTxt(it){
+  const q = qtySplit(it.name);
+  return q.qtd ? (String(q.qtd).replace(".", ",") + " " + q.un) : "";
+}
+function eatenQtyTxt(it, day){ return (it.qtd || {})[day] || ""; }
+function qtyDiffers(it, day){
+  const e = eatenQtyTxt(it, day);
+  return !!e && e !== plannedQtyTxt(it);
+}
+function qtyForm(m, it){
+  const plan = qtySplit(it.name);
+  const atual = eatenQtyTxt(it, foodDay);
+  const a = atual ? qtySplit("x, " + atual) : null;
+  openModal(`<h2>⚖ Quanto você comeu?</h2>
+    <p class="sub" style="margin-bottom:12px"><b>${esc(plan.nome)}</b> em ${fmtDate(foodDay)}.
+      ${plannedQtyTxt(it) ? `Planejado: <b>${esc(plannedQtyTxt(it))}</b>.` : "Sem quantidade planejada."}</p>
+    <div class="field"><label>Quantidade que você comeu de verdade</label>
+      <div class="row" style="gap:6px">
+        <input id="qf-q" value="${a?esc(String(a.qtd).replace(".",",")):(plan.qtd?esc(String(plan.qtd).replace(".",",")):"")}"
+          placeholder="qtd" inputmode="decimal" style="flex:1; min-width:0; text-align:center">
+        <select id="qf-u" style="width:74px; flex:none">
+          ${["g","ml","un"].map(x=>{ const sel=(a?a.un:plan.un)===x; return `<option value="${x}"${sel?" selected":""}>${x}</option>`; }).join("")}
+        </select>
+      </div></div>
+    <button class="btn" data-action="qty-save" data-m="${m.id}" data-i="${it.id}">Salvar esta quantidade</button>
+    ${atual?`<button class="btn ghost" data-action="qty-plan" data-m="${m.id}" data-i="${it.id}" style="margin-top:8px">Voltar para a quantidade planejada</button>`:""}`);
+}
+
+/* ---- comentarios do plano: um por DIA ----
+   Antes o comentario ficava preso na refeicao e reaparecia em todos os dias. Agora
+   m.notes[dia] e it.notes[dia]; o campo antigo (m.note / it.note) so existe ate a
+   migracao rodar. */
+function planNoteOf(m, day){ return (m.notes || {})[day] || ""; }
+function planItemNoteOf(it, day){ return (it.notes || {})[day] || ""; }
+function migrateNotes30(){
+  if(db.settings.migNotes30) return;
+  /* o comentario antigo aparecia em TODO dia; jogo ele em hoje para nao sumir sem aviso */
+  const hoje = todayStr();
+  db.plan.forEach(m => {
+    if(m.note){ m.notes = m.notes || {}; if(!m.notes[hoje]) m.notes[hoje] = m.note; delete m.note; }
+    (m.items || []).forEach(it => {
+      if(it.note){ it.notes = it.notes || {}; if(!it.notes[hoje]) it.notes[hoje] = it.note; delete it.note; }
+    });
+  });
+  db.settings.migNotes30 = true;
+  save(false);
+}
 function mealNoteKey(day,mealName){ return day + "|" + mealName; }
 function mealNoteOf(day,mealName){ return (db.mealNotes||{})[mealNoteKey(day,mealName)]; }
 function consumedMealHtml(mealName,foods,day){
@@ -3231,6 +3290,8 @@ function consumedMealHtml(mealName,foods,day){
       <span class="tm">${t0}</span>
       ${macrosOn() ? (()=>{ const t = sumNutri(foods);
         return `<span class="fchip nutri-tot" title="Total desta refeição">${kcalTxt(t.kcal)} kcal${t.pend?" +?":""}</span>`; })() : ""}
+      <button class="xbtn" data-action="add-to-meal" data-n="${esc(mealName)}" data-k="${kind}" data-t="${t0}"
+        aria-label="Adicionar alimento nesta refeição" title="Adicionar mais um alimento em ${esc(mealName)}" style="color:var(--accent)">＋</button>
       <button class="xbtn" data-action="meal-note" data-n="${esc(mealName)}" aria-label="Comentário da refeição" style="color:var(--faint)">💬</button>
     </div>
     ${mn?`<div class="fnote" style="margin:2px 0 6px">💬 ${esc(mn)}</div>`:""}
@@ -3290,11 +3351,13 @@ function ffAddRow(){
   const box = document.getElementById("ff-rows"); if(!box) return;
   box.insertAdjacentHTML("beforeend", ffRowHtml("", "", "g"));
 }
-function foodForm(food){
+/* pre: {meal, kind, time, planned} — vem do botao ＋ de uma refeicao, para nao ter
+   que rolar a tela ate o fim e digitar o nome dela de novo */
+function foodForm(food, pre){
   const day = foodDay;
   const isEdit = !!food;
   const meals = mealSuggestions(day);
-  const kind = food?food.kind:"refeicao";
+  const kind = food ? food.kind : (pre && pre.kind) || "refeicao";
   const ed = isEdit ? qtySplit(food.name) : null;
   openModal(`<h2>${isEdit?"Editar alimento":"Adicionar alimentos"}</h2>
     ${isEdit
@@ -3312,10 +3375,10 @@ function foodForm(food){
          <div class="sub" style="margin-top:6px; font-size:.76rem">Nome de um lado, quantidade do outro. As opções abaixo valem para todos.</div></div>`}
     <div class="btnrow">
       <div class="field" style="flex:2"><label for="ff-meal">Refeição / lanche (nome)</label>
-      <input id="ff-meal" list="ff-meals" value="${food?esc(food.meal):""}" placeholder="Ex.: Almoço, Café, Lanche da tarde" maxlength="40">
+      <input id="ff-meal" list="ff-meals" value="${food?esc(food.meal):(pre?esc(pre.meal):"")}" placeholder="Ex.: Almoço, Café, Lanche da tarde" maxlength="40">
       <datalist id="ff-meals">${meals.map(m=>`<option value="${esc(m)}">`).join("")}</datalist></div>
       <div class="field" style="flex:1"><label for="ff-time">Horário</label>
-      <input id="ff-time" type="time" value="${food?fmtTime(food.ts):nowHM()}"></div>
+      <input id="ff-time" type="time" value="${food?fmtTime(food.ts):(pre&&pre.time?esc(pre.time):nowHM())}"></div>
     </div>
     <div class="field"><label for="ff-note">💬 Comentário (opcional)</label>
     <input id="ff-note" value="${food&&food.note?esc(food.note):""}" placeholder="Ex.: comi só metade, estava sem sal…" maxlength="200"></div>
@@ -3327,11 +3390,12 @@ function foodForm(food){
     </div>
     <label class="check"><input type="checkbox" id="ff-binge" ${food&&food.binge?"checked":""}>
       <div class="grow"><div class="t">🔴 Foi um binge</div><div class="d">Comido em compulsão</div></div></label>
-    <label class="check"><input type="checkbox" id="ff-outside" ${food&&!food.planned?"checked":""}>
+    <label class="check"><input type="checkbox" id="ff-outside" ${(food&&!food.planned)||(pre&&pre.planned===false)?"checked":""}>
       <div class="grow"><div class="t">⚠️ Fora do planejado</div><div class="d">Não estava na dieta do dia</div></div></label>
     <input type="hidden" id="ff-kind" value="${kind}">
     <button class="btn" data-action="save-food" data-id="${food?food.id:""}">${isEdit?"Salvar":"Adicionar"}</button>`);
   setTimeout(()=>{ const f=sheet.querySelector(".ffn")||document.getElementById("ff-name"); if(f) f.focus(); },50);
+  if(pre && pre.meal) toast(`Adicionando em ${pre.meal}`);
 }
 /* enquanto voce digita na ultima linha, ja aparece outra vazia embaixo */
 sheet.addEventListener("input", ev => {
@@ -3407,8 +3471,8 @@ function renderFoodPlan(){
         <button class="xbtn" data-action="edit-plan" data-id="${m.id}" style="color:var(--muted)">✎</button>
         <button class="xbtn" data-action="del-plan" data-id="${m.id}">✕</button>
       </div>
-      ${m.note?`<div class="fnote" style="margin:2px 0 6px">💬 ${esc(m.note)}</div>`:""}
-      ${m.items.map(it=>`<div class="fooditem eaten"><span class="fn">${esc(it.name)}${it.note?`<div class="fnote">💬 ${esc(it.note)}</div>`:""}</span>
+      ${planNoteOf(m,day)?`<div class="fnote" style="margin:2px 0 6px">💬 ${esc(planNoteOf(m,day))}</div>`:""}
+      ${m.items.map(it=>`<div class="fooditem eaten"><span class="fn">${esc(it.name)}${planItemNoteOf(it,day)?`<div class="fnote">💬 ${esc(planItemNoteOf(it,day))}</div>`:""}</span>
         <button class="xbtn" data-action="plan-item-note" data-m="${m.id}" data-i="${it.id}" aria-label="Comentário no alimento" style="color:var(--faint)">💬</button></div>`).join("") || `<div class="fooditem pending"><span class="fn">— sem itens —</span></div>`}
     </div>`;
   view.innerHTML = `
@@ -3448,14 +3512,36 @@ function planForm(meal){
         <button type="button" data-seg="pkind" data-v="refeicao" class="${kind==="refeicao"?"on":""}">Refeição</button>
         <button type="button" data-seg="pkind" data-v="lanche" class="${kind==="lanche"?"on":""}">Lanche</button>
       </div><input type="hidden" id="pf-kind" value="${kind}"></div>
-    <div class="field"><label for="pf-items">Alimentos (um por linha)</label>
-    <textarea id="pf-items" placeholder="100g arroz\n150g frango\nsalada">${meal?esc(meal.items.map(i=>i.name).join("\n")):""}</textarea></div>
-    <div class="field"><label for="pf-note">💬 Comentário da refeição (opcional)</label>
-    <input id="pf-note" value="${meal&&meal.note?esc(meal.note):""}" placeholder="Ex.: se não der tempo, trocar por iogurte" maxlength="200"></div>
+    <div class="field"><label>Alimentos — <b>um por linha</b>, com a quantidade</label>
+      <div id="ff-rows">${(meal&&meal.items.length ? meal.items : [{name:""},{name:""},{name:""}])
+        .map(i=>{ const q=qtySplit(i.name||""); return ffRowHtml(q.nome, q.qtd, q.un); }).join("")}</div>
+      <div class="btnrow" style="margin-top:2px">
+        <button class="btn ghost sm" data-action="ff-row" style="width:auto">＋ outra linha</button>
+        <button class="btn ghost sm" data-action="pf-paste" style="width:auto">📋 colar várias</button>
+      </div>
+      <div class="sub" style="margin-top:6px; font-size:.76rem">A quantidade aqui é a <b>planejada</b>. No dia, se você comer o alimento certo em quantidade diferente, dá para ajustar só naquele dia pelo ⚖.</div></div>
+    <div class="field"><label for="pf-note">💬 Comentário — <b>só para ${fmtDate(day)}</b></label>
+    <input id="pf-note" value="${meal?esc(planNoteOf(meal,day)):""}" placeholder="Ex.: se não der tempo, trocar por iogurte" maxlength="200"></div>
     <label class="check"><input type="checkbox" id="pf-fixed" ${fixed?"checked":""}>
       <div class="grow"><div class="t">📌 Refeição fixa</div><div class="d">Aparece todos os dias (senão, só em ${fmtDate(day)})</div></div></label>
     <button class="btn" data-action="save-plan" data-id="${meal?meal.id:""}">Salvar</button>`);
   setTimeout(()=>document.getElementById("pf-name").focus(),50);
+}
+/* nomes dos alimentos digitados no formulario de plano ou de consumo */
+function readFoodRows(){
+  const box = document.getElementById("ff-rows");
+  if(!box) return null;
+  return [...box.querySelectorAll(".ffrow")]
+    .map(r => qtyJoin(r.querySelector(".ffn").value, r.querySelector(".ffq").value, r.querySelector(".ffu").value))
+    .filter(Boolean);
+}
+/* troca as linhas por um campo de texto, para colar uma lista pronta */
+function rowsToTextarea(el, id, ph){
+  const box = document.getElementById("ff-rows"); if(!box) return;
+  const linhas = readFoodRows() || [];
+  box.outerHTML = `<textarea id="${id}" rows="6" placeholder="${ph}">${esc(linhas.join("\n"))}</textarea>
+    <div class="sub" style="margin-top:4px; font-size:.76rem">Um alimento por linha, no formato <b>nome, quantidade</b>. Número sozinho = gramas.</div>`;
+  if(el && el.parentNode) el.parentNode.remove();
 }
 
 /* ---------- Alimentação: relatório ---------- */
@@ -4326,22 +4412,12 @@ document.addEventListener("click", ev => {
   else if(a === "add-food"){ foodForm(null); }
   else if(a === "edit-food"){ foodForm(db.food.find(f=>f.id===el.dataset.id)); }
   else if(a === "ff-row"){ ffAddRow(); const rows=sheet.querySelectorAll(".ffrow"); const f=rows[rows.length-1].querySelector(".ffn"); if(f) f.focus(); }
-  else if(a === "ff-paste"){
-    /* volta pro modo texto (colar uma lista pronta), sem perder o que ja foi digitado */
-    const box=document.getElementById("ff-rows"); if(!box) return;
-    const linhas=[...box.querySelectorAll(".ffrow")]
-      .map(r=>qtyJoin(r.querySelector(".ffn").value, r.querySelector(".ffq").value, r.querySelector(".ffu").value))
-      .filter(Boolean);
-    box.outerHTML = `<textarea id="ff-name" rows="6" placeholder="arroz, 150&#10;frango, 150&#10;banana, 1 un&#10;leite, 200 ml">${esc(linhas.join("\n"))}</textarea>
-      <div class="sub" style="margin-top:4px; font-size:.76rem">Um alimento por linha, no formato <b>nome, quantidade</b>. Número sozinho = gramas.</div>`;
-    el.parentNode.remove();
-  }
+  /* volta pro modo texto (colar uma lista pronta), sem perder o que ja foi digitado */
+  else if(a === "ff-paste"){ rowsToTextarea(el, "ff-name", "arroz, 150&#10;frango, 150&#10;banana, 1 un&#10;leite, 200 ml"); }
+  else if(a === "pf-paste"){ rowsToTextarea(el, "pf-items", "arroz, 150&#10;frango, 150&#10;salada"); }
   else if(a === "save-food"){
     const ta=document.getElementById("ff-name");
-    const box=document.getElementById("ff-rows");
-    const bruto = ta ? ta.value : [...box.querySelectorAll(".ffrow")]
-      .map(r=>qtyJoin(r.querySelector(".ffn").value, r.querySelector(".ffq").value, r.querySelector(".ffu").value))
-      .filter(Boolean).join("\n");
+    const bruto = ta ? ta.value : (readFoodRows() || []).join("\n");
     const meal=document.getElementById("ff-meal").value.trim()||"Refeição";
     const time=document.getElementById("ff-time").value||nowHM();
     const kind=document.getElementById("ff-kind").value;
@@ -4481,9 +4557,11 @@ document.addEventListener("click", ev => {
   }
   else if(a === "plan-note"){
     const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
-    const v=prompt(`Comentário para a refeição "${m.name}":`, m.note||"");
+    const v=prompt(`Comentário para "${m.name}" em ${fmtDate(foodDay)} (só deste dia):`, planNoteOf(m, foodDay));
     if(v===null) return;
-    m.note=v.trim()||undefined; save(); render();
+    m.notes=m.notes||{};
+    if(v.trim()) m.notes[foodDay]=v.trim(); else delete m.notes[foodDay];
+    save(); render();
   }
   else if(a === "meal-note"){
     const k=mealNoteKey(foodDay, el.dataset.n);
@@ -4496,9 +4574,37 @@ document.addEventListener("click", ev => {
   else if(a === "plan-item-note"){
     const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
     const it=m.items.find(x=>x.id===el.dataset.i); if(!it) return;
-    const v=prompt(`Comentário para "${it.name}":`, it.note||"");
+    const v=prompt(`Comentário para "${it.name}" em ${fmtDate(foodDay)} (só deste dia):`, planItemNoteOf(it, foodDay));
     if(v===null) return;
-    it.note=v.trim()||undefined; save(); render();
+    it.notes=it.notes||{};
+    if(v.trim()) it.notes[foodDay]=v.trim(); else delete it.notes[foodDay];
+    save(); render();
+  }
+  /* quantidade que voce comeu de verdade naquele dia */
+  else if(a === "plan-qty"){
+    const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
+    const it=m.items.find(x=>x.id===el.dataset.i); if(!it) return;
+    qtyForm(m, it);
+  }
+  else if(a === "qty-save"){
+    const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
+    const it=m.items.find(x=>x.id===el.dataset.i); if(!it) return;
+    const v=document.getElementById("qf-q").value, u=document.getElementById("qf-u").value;
+    const txt=(qtyJoin("x", v, u).split(", ")[1] || "");
+    it.qtd=it.qtd||{};
+    if(txt && txt !== plannedQtyTxt(it)) it.qtd[foodDay]=txt; else delete it.qtd[foodDay];
+    save(); closeModal(); render();
+    toast(txt ? (txt === plannedQtyTxt(it) ? "Igual ao planejado ✓" : `Comeu ${txt} ✓`) : "Quantidade limpa");
+  }
+  else if(a === "qty-plan"){
+    const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
+    const it=m.items.find(x=>x.id===el.dataset.i); if(!it) return;
+    if(it.qtd) delete it.qtd[foodDay];
+    save(); closeModal(); render(); toast("Voltou para a quantidade planejada");
+  }
+  /* atalho: adicionar um alimento direto numa refeicao, sem procurar o botao la embaixo */
+  else if(a === "add-to-meal"){
+    foodForm(null, {meal:el.dataset.n, kind:el.dataset.k||"refeicao", time:el.dataset.t||"", planned:false});
   }
   /* risca de uma vez tudo o que ficou em aberto no dia — é o caminho vindo da
      notificação de "preencha o que comeu ontem" */
@@ -4571,17 +4677,27 @@ document.addEventListener("click", ev => {
     const kind=document.getElementById("pf-kind").value;
     const fixed=document.getElementById("pf-fixed").checked;
     const note=(document.getElementById("pf-note").value||"").trim()||undefined;
-    const items=document.getElementById("pf-items").value.split("\n").map(s=>s.trim()).filter(Boolean);
+    const ta=document.getElementById("pf-items");
+    const items = ta ? ta.value.split("\n").map(s=>s.trim()).filter(Boolean) : (readFoodRows() || []);
     if(!name){ toast("Dê um nome à refeição."); return; }
     if(el.dataset.id){
       const m=db.plan.find(x=>x.id===el.dataset.id);
-      /* editar a refeicao nao pode perder o que ja foi marcado nem a hora do check */
-      const old={}, oldNote={}, oldAt={};
-      m.items.forEach(it=>{ old[it.name]=it.done||{}; oldNote[it.name]=it.note; oldAt[it.name]=it.at||{}; });
-      m.name=name; m.time=time; m.kind=kind; m.fixed=fixed; m.date=fixed?null:foodDay; m.note=note;
-      m.items=items.map(n=>({id:uid(), name:n, done:old[n]||{}, at:oldAt[n]||{}, note:oldNote[n]}));
+      /* editar a refeicao nao pode perder o que ja foi marcado, a hora do check,
+         a quantidade ajustada no dia nem os comentarios (que sao por dia).
+         O casamento e pelo NOME SEM a quantidade: mudar "arroz, 150 g" para "arroz, 180 g"
+         e a mesma comida, e antes isso zerava todo o historico do item. */
+      const chave = t => norm(qtySplit(t).nome) || norm(t);
+      const antigos = {};
+      m.items.forEach(it => { (antigos[chave(it.name)] = antigos[chave(it.name)] || []).push(it); });
+      const pega = t => { const l = antigos[chave(t)]; return (l && l.length) ? l.shift() : {}; };
+      m.name=name; m.time=time; m.kind=kind; m.fixed=fixed; m.date=fixed?null:foodDay;
+      m.notes = m.notes || {};
+      if(note) m.notes[foodDay] = note; else delete m.notes[foodDay];
+      m.items=items.map(n=>{ const o = pega(n);
+        return {id:uid(), name:n, done:o.done||{}, at:o.at||{}, qtd:o.qtd||{}, notes:o.notes||{}}; });
     } else {
-      db.plan.push({id:uid(), name, time, kind, fixed, note, created:todayStr(), date:fixed?null:foodDay, items:items.map(n=>({id:uid(), name:n, done:{}}))});
+      const notes = {}; if(note) notes[foodDay] = note;
+      db.plan.push({id:uid(), name, time, kind, fixed, notes, created:todayStr(), date:fixed?null:foodDay, items:items.map(n=>({id:uid(), name:n, done:{}}))});
     }
     save(); closeModal(); render(); scheduleMealNotifs();
   }
@@ -4734,6 +4850,7 @@ native.init();
 normalizeOrders();
 migrateManualActs();
 migratePlan12();
+migrateNotes30();
 migrateWalk19();
 if(macrosOn()) loadTaco().then(render);
 deriveAllActs();

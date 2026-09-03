@@ -1,6 +1,6 @@
 {
-  "version": 29,
-  "name": "2.9",
-  "notes": "Quantidade dos alimentos agora tem campo proprio: nome de um lado, quantidade e unidade (g / ml / un) do outro, uma linha por alimento, com linha nova aparecendo sozinha conforme voce digita. Ao marcar uma refeicao como consumida o app guarda a hora do check e, se ela ficar a mais de 30 minutos do horario planejado, pergunta se foi aquele horario mesmo (da para corrigir tocando no reloginho). Novo lembrete opcional que toca no horario de cada refeicao fixa do plano. E o cronometro do descanso ganhou uma bolha flutuante que aparece POR CIMA de outros apps, arrastavel e com o tempo ao vivo. Nos Ajustes ha agora as instrucoes de como usar o mesmo app pelo navegador do PC.",
+  "version": 30,
+  "name": "3.0",
+  "notes": "Os alimentos do PLANO agora tem quantidade em campo proprio (nome | quantidade | g/ml/un), igual ao de registrar o que comeu. Se voce comeu o alimento certo mas em quantidade diferente, o chip da balanca no item deixa ajustar so naquele dia, sem mexer no plano - e ele fica dourado para voce ver de longe que fugiu do planejado. Botao + em cada refeicao para lancar na hora um alimento que nao estava no plano, ja com a refeicao e o horario preenchidos, sem rolar a tela toda. E os comentarios de refeicao e de alimento passaram a valer so para o dia deles: nao aparecem mais em todos os outros dias. Os comentarios que ja existiam foram movidos para hoje.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
