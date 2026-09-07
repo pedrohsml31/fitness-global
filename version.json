@@ -1,6 +1,10 @@
 {
-  "version": 30,
-  "name": "3.0",
-  "notes": "Os alimentos do PLANO agora tem quantidade em campo proprio (nome | quantidade | g/ml/un), igual ao de registrar o que comeu. Se voce comeu o alimento certo mas em quantidade diferente, o chip da balanca no item deixa ajustar so naquele dia, sem mexer no plano - e ele fica dourado para voce ver de longe que fugiu do planejado. Botao + em cada refeicao para lancar na hora um alimento que nao estava no plano, ja com a refeicao e o horario preenchidos, sem rolar a tela toda. E os comentarios de refeicao e de alimento passaram a valer so para o dia deles: nao aparecem mais em todos os outros dias. Os comentarios que ja existiam foram movidos para hoje.",
+  "version": 31,
+  "name": "3.1",
+  "minNative": 31,
+  "files": [
+    "index.html"
+  ],
+  "notes": "O app passou a se atualizar sozinho. Ao abrir, ele confere se ha versao nova e, quando a mudanca e so do conteudo, baixa e aplica na hora - sem voce baixar APK nenhum. Os dados nao sao tocados: o app continua servindo da mesma origem, entao nada de localStorage e perdido. Se uma atualizacao abrir com problema, o proximo boot volta sozinho para a versao que veio no APK. Quando a versao nova mexe no app por dentro (permissao ou recurso do Android), ai ele baixa o instalador sozinho, com barra de progresso, e so pede um toque em Instalar - o Android nao deixa nenhum app comum instalar outro em silencio. Esta e a ultima vez que voce precisa baixar o APK na mao.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

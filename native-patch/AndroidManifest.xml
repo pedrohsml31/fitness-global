@@ -65,6 +65,9 @@
     <!-- Descanso exato mesmo com a tela apagada / celular em Doze -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- O app baixa e abre o instalador do APK novo sozinho (o Android ainda pede
+         um toque em "Instalar" — nenhum app comum pode instalar outro em silêncio) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Bolha do cronômetro sobre outros apps: o Android não deixa escrever texto na
          barra de status, então é a única forma de ver o tempo fora do app -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />

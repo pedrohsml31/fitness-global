@@ -54,6 +54,19 @@ Neste projeto o script `recompilar-apk.ps1` escreve isso automaticamente em
 - Campo novo no `db` **tem** que entrar no `seed()` e no `Sync.data()`, senão ele nunca
   chega nos outros aparelhos.
 
+## Atualização do app
+
+- O app **se atualiza sozinho**. Toda release precisa do `version.json` correto, senão
+  quem já tem o app instalado não recebe nada.
+- `minNative` no `version.json` é o menor **build nativo** capaz de rodar aquele conteúdo
+  web. Mexeu em Java/Kotlin, manifesto, permissão ou plugin? `minNative` = o build desta
+  release. Só mudou HTML/CSS/JS? `minNative` continua o da última release nativa —
+  é o que faz a atualização acontecer sozinha, sem instalar APK.
+- `files` lista os arquivos que a atualização automática baixa. **Só texto** (o app grava
+  como UTF-8). Mudou o `taco.json`? Ele tem que entrar nessa lista.
+- Plugin nativo novo **tem** que ser registrado no `MainActivity.java` e copiado pelo
+  `recompilar-apk.ps1`. Sem isso ele simplesmente não existe no JS, sem erro nenhum.
+
 ## Antes de compilar
 
 - Rodar a checagem de sintaxe do script do `index.html`. Um erro de sintaxe derruba o

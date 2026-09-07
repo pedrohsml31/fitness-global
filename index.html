@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v3.0</title>
+<title>Fitness Global v3.1</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -387,19 +387,136 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "3.0";
-const APP_VERSION = 30;
+const APP_NAME_VERSION = "3.1";
+const APP_VERSION = 31;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
 const WEB_URL = "https://pedrohsml31.github.io/fitness-global/";
+/* ===================== atualização sozinha =====================
+   Quase toda versão só muda o conteúdo web. Nesse caso o app baixa os arquivos novos,
+   grava numa pasta dele e passa a servir de lá — sem você baixar nem instalar nada.
+   A ORIGEM do WebView continua https://localhost, então o localStorage NÃO é apagado
+   (é por isso que nunca se aponta o server.url para outro domínio).
+
+   Quando a versão nova mexe em código nativo (permissão, plugin), OTA não resolve: aí
+   o app baixa o APK sozinho e abre o instalador, restando um toque em "Instalar".
+   O version.json diz qual é o caso pelo campo minNative: o menor build NATIVO capaz de
+   rodar aquele conteúdo web. */
+const updater = () => native.plugin("Updater");
+let nativeBuildCache = null;
+async function nativeBuild(){
+  if(nativeBuildCache !== null) return nativeBuildCache;
+  const U = updater();
+  if(U){ try{ const i = await U.info(); nativeBuildCache = Number(i.nativeBuild) || 0; return nativeBuildCache; }catch(e){} }
+  /* sem o plugin (versão antiga do APK), o build nativo é o do próprio index.html */
+  nativeBuildCache = native.isNative ? APP_VERSION : 0;
+  return nativeBuildCache;
+}
+let updating = false;
 async function checkUpdate(){
   try{
     const r = await fetch(VERSION_URL + "?cb=" + Date.now(), {cache:"no-store"});
     if(!r.ok) return;
     const j = await r.json();
-    if(j && Number(j.version) > APP_VERSION) showUpdate(j);
+    if(!j || !(Number(j.version) > APP_VERSION)) return;
+    if(updating) return;
+    const nb = await nativeBuild();
+    /* dá para atualizar só o web? então faz agora, sozinho */
+    if(native.isNative && updater() && Number(j.minNative || 0) <= nb){ otaUpdate(j); return; }
+    showUpdate(j);
   }catch(e){}
+}
+const OTA_FLAG = "fitglobal.ota.aplicando";
+async function otaUpdate(j){
+  const U = updater(); if(!U){ showUpdate(j); return; }
+  updating = true;
+  try{
+    const base = WEB_URL;
+    const files = (Array.isArray(j.files) && j.files.length) ? j.files : ["index.html"];
+    const txt = {};
+    for(const f of files){
+      const r = await fetch(base + f + "?cb=" + Date.now(), {cache:"no-store"});
+      if(!r.ok) throw new Error(f + ": HTTP " + r.status);
+      txt[f] = await r.text();
+    }
+    /* o index novo precisa ser mesmo o novo — senão o cache do CDN nos faria aplicar a
+       mesma versão de novo, em loop */
+    const m = /APP_VERSION\s*=\s*(\d+)/.exec(txt["index.html"] || "");
+    if(txt["index.html"] && (!m || Number(m[1]) !== Number(j.version))){
+      /* o version.json já virou mas o arquivo no CDN ainda é o velho. Não é erro nem é
+         caso de APK: no próximo boot o arquivo certo estará lá. */
+      updating = false;
+      return;
+    }
+    toast(`Atualizando para a v${j.name || j.version}…`);
+    const st = await U.stage();
+    if(!st || !st.ok) throw new Error((st && st.erro) || "não preparou a pasta");
+    for(const f of files){
+      const w = await U.write({name:f, data:txt[f]});
+      if(!w || !w.ok) throw new Error(f + ": " + ((w && w.erro) || "não gravou"));
+    }
+    try{ localStorage.setItem(OTA_FLAG, j.name || String(j.version)); }catch(e){}
+    const a = await U.activate({version: Number(j.version)});
+    if(!a || !a.ok) throw new Error((a && a.erro) || "não trocou a versão");
+    /* daqui o app recarrega sozinho na versão nova */
+  }catch(e){
+    updating = false;
+    try{ localStorage.removeItem(OTA_FLAG); }catch(e2){}
+    toast("Não deu para atualizar sozinho: " + (e.message || e));
+    showUpdate(j);
+  }
+}
+/* logo depois de abrir: confirma que a versão nova subiu de pé. Sem esta confirmação,
+   o próximo boot desfaz a atualização e volta para a que veio no APK — é a rede de
+   segurança contra uma versão que abre em branco. */
+function otaConfirm(){
+  const U = updater(); if(!U) return;
+  try{ U.confirm(); }catch(e){}
+  let veio = null;
+  try{ veio = localStorage.getItem(OTA_FLAG); localStorage.removeItem(OTA_FLAG); }catch(e){}
+  if(veio) setTimeout(()=>toast(`Atualizado para a v${APP_NAME_VERSION} ✓`), 800);
+}
+/* baixa o APK dentro do próprio app e abre o instalador do Android */
+let apkOff = null;
+async function apkUpdate(){
+  const U = updater();
+  if(!U){ toast("Abra o link do APK nos Ajustes."); return; }
+  const perm = await U.canInstall();
+  if(!perm || !perm.ok){
+    openModal(`<h2>⬆️ Falta uma permissão do Android</h2>
+      <p class="sub" style="margin-bottom:12px">Para o app se instalar sozinho, o Android pede que você
+      autorize o <b>Fitness Global</b> a instalar aplicativos. É uma vez só.</p>
+      <p class="sub" style="margin-bottom:14px; font-size:.78rem">Na tela que vai abrir, ligue
+      <b>"Permitir desta fonte"</b> e volte para cá.</p>
+      <button class="btn" data-action="apk-perm">Abrir a tela da permissão</button>
+      <button class="btn ghost" data-action="apk-link" style="margin-top:8px">Prefiro baixar pelo navegador</button>`);
+    return;
+  }
+  openModal(`<h2>⬆️ Baixando a versão nova</h2>
+    <div class="sub" id="apk-msg" style="margin-bottom:10px">Começando…</div>
+    <div style="height:8px; background:var(--surface2); border-radius:999px; overflow:hidden">
+      <div id="apk-bar" style="height:100%; width:0%; background:var(--accent); transition:width .2s"></div>
+    </div>`);
+  try{ if(apkOff && apkOff.remove) apkOff.remove(); }catch(e){}
+  apkOff = await U.addListener("apkProgress", ev => {
+    const b = document.getElementById("apk-bar"), m = document.getElementById("apk-msg");
+    if(b) b.style.width = (ev.pct || 0) + "%";
+    if(m) m.textContent = `${ev.pct || 0}% — ${((ev.bytes||0)/1048576).toFixed(1)} MB de ${((ev.total||0)/1048576).toFixed(1)} MB`;
+  });
+  const r = await U.downloadApk({url: APK_URL + "?cb=" + Date.now()});
+  try{ if(apkOff && apkOff.remove) apkOff.remove(); }catch(e){}
+  apkOff = null;
+  if(!r || !r.ok){
+    const m = document.getElementById("apk-msg");
+    if(m) m.innerHTML = `Não deu para baixar: ${esc(String((r&&r.erro)||"erro"))}.<br>
+      <button class="btn ghost sm" data-action="apk-link" style="width:auto; margin-top:10px">Baixar pelo navegador</button>`;
+    return;
+  }
+  const m = document.getElementById("apk-msg");
+  if(m) m.innerHTML = `Baixado ✓ — agora toque em <b>Instalar</b> na tela do Android.
+    <div class="sub" style="margin-top:6px; font-size:.76rem">Instala por cima, sem perder dados.</div>`;
+  await U.installApk();
 }
 function showUpdate(j){
   const slot = document.getElementById("updslot"); if(!slot) return;
@@ -410,10 +527,14 @@ function showUpdate(j){
     <span style="font-size:1.3rem">⬆️</span>
     <div class="grow"><b>Atualização disponível — v${APP_NAME_VERSION} → v${esc(j.name || j.version)}</b>
       <div class="sub">${j.notes ? esc(j.notes) : "Nova versão do app."}</div>
-      ${native.isNative ? `<div class="sub" style="margin-top:6px">Não abriu o download? <span data-action="upd-copy" style="color:var(--accent); font-weight:700; text-decoration:underline; cursor:pointer">copie o link</span> e cole no Chrome.</div>` : ""}</div>
+      ${native.isNative ? `<div class="sub" style="margin-top:6px">${updater()
+        ? "Esta versão mexe no app por dentro, então o Android pede um toque em <b>Instalar</b>."
+        : `Não abriu o download? <span data-action="upd-copy" style="color:var(--accent); font-weight:700; text-decoration:underline; cursor:pointer">copie o link</span> e cole no Chrome.`}</div>` : ""}</div>
     ${native.isNative
-      ? `<a class="btn sm" href="${APK_URL}" target="_blank" rel="noopener" data-action="upd-tip"
-           style="width:auto; text-decoration:none">Atualizar</a>`
+      ? (updater()
+          ? `<button class="btn sm" style="width:auto" data-action="apk-go">Atualizar</button>`
+          : `<a class="btn sm" href="${APK_URL}" target="_blank" rel="noopener" data-action="upd-tip"
+               style="width:auto; text-decoration:none">Atualizar</a>`)
       : `<button class="btn sm" style="width:auto" data-action="do-update">Atualizar</button>`}
     <button class="xbtn" data-action="dismiss-update" aria-label="Dispensar">✕</button></div>`;
 }
@@ -1320,13 +1441,23 @@ function renderSettings(){
       </div>
     </div></div>
     ${native.isNative ? `<div class="section"><h2>Atualizar o app</h2><div class="card">
+      <div class="setline"><div class="grow"><div class="t">Atualização automática</div>
+        <div class="d">${updater()
+          ? `Ao abrir o app, ele confere se há versão nova e <b>se atualiza sozinho</b>, sem baixar nada à mão. Só quando a versão nova mexe no app por dentro (permissão, recurso do Android) é que ele baixa o instalador e pede um toque em <b>Instalar</b>.<br>Se uma atualização abrir com problema, o app volta sozinho para a versão do APK no próximo boot.`
+          : `Este APK ainda é o antigo — atualize uma vez pelo botão abaixo e a partir daí o app passa a se atualizar sozinho.`}</div></div>
+        <button class="btn ghost sm" data-action="upd-check" style="width:auto; flex:none">🔄 Procurar</button></div>
       <div class="setline"><div class="grow"><div class="t">Baixar o APK mais recente</div>
         <div class="d">Instala por cima, sem perder dados. Se o download não abrir, copie o link e cole no Chrome.</div></div>
-        <a class="btn sm" href="${APK_URL}" target="_blank" rel="noopener" data-action="upd-tip"
-           style="width:auto; flex:none; text-decoration:none">⬇️ Baixar</a></div>
+        ${updater()
+          ? `<button class="btn sm" data-action="apk-go" style="width:auto; flex:none">⬇️ Baixar</button>`
+          : `<a class="btn sm" href="${APK_URL}" target="_blank" rel="noopener" data-action="upd-tip"
+               style="width:auto; flex:none; text-decoration:none">⬇️ Baixar</a>`}</div>
       <div class="setline"><div class="grow"><div class="t">Link do APK</div>
         <div class="d" style="word-break:break-all">${APK_URL}</div></div>
         <button class="btn ghost sm" data-action="upd-copy" style="width:auto; flex:none">📋 Copiar</button></div>
+      ${updater() ? `<div class="setline"><div class="grow"><div class="t">Voltar para a versão do APK</div>
+        <div class="d">Desfaz as atualizações automáticas e volta ao conteúdo que veio no APK instalado. Seus dados não são tocados.</div></div>
+        <button class="btn ghost sm" data-action="ota-revert" style="width:auto; flex:none">↩️ Voltar</button></div>` : ""}
     </div></div>` : ""}
     <p class="sub" style="margin-top:10px">${native.isNative ? "Rodando como app instalado 📱" : "Rodando no navegador"} · <b>Fitness Global v${APP_NAME_VERSION}</b> <span class="sub">(build ${APP_VERSION})</span></p>`;
 }
@@ -4840,6 +4971,14 @@ document.addEventListener("click", ev => {
   else if(a === "upd-tip"){
     setTimeout(()=>toast("Abra a notificação de download e toque no arquivo para instalar por cima — não perde dados."), 600);
   }
+  else if(a === "apk-go"){ apkUpdate(); }
+  else if(a === "apk-perm"){ closeModal(); const U=updater(); if(U) U.askInstall(); }
+  else if(a === "apk-link"){ closeModal(); window.open(APK_URL, "_blank"); }
+  else if(a === "ota-revert"){
+    if(!confirm("Voltar para a versão que veio no APK instalado?")) return;
+    const U=updater(); if(U) U.revert();
+  }
+  else if(a === "upd-check"){ toast("Procurando atualização…"); checkUpdate(); }
   else if(a === "upd-copy"){
     copyText(APK_URL).then(ok => toast(ok ? "Link copiado — cole no Chrome 📋" : APK_URL));
   }
@@ -4858,6 +4997,7 @@ applyWake();
 render();
 scheduleMealNotifs();
 Sync.start();
+otaConfirm();
 checkUpdate();
 dndCheck();
 autoHealthSync();
