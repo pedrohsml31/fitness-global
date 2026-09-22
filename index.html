@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v3.1</title>
+<title>Fitness Global v3.2</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -283,6 +283,9 @@ table.xls td.dl.up{color:var(--good);} table.xls td.dl.down{color:var(--bad);}  
 .goalcard .gm{font-size:.84rem; color:var(--muted); margin-top:4px;}
 .goalcard .gs{font-size:.76rem; color:var(--faint); margin-top:6px; line-height:1.35;}
 .goalcard.up .gh{color:var(--good);}
+.card.gymfocus{border-color:var(--accent); box-shadow:0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);}
+.focusline{font-size:.72rem; font-weight:800; color:var(--accent); margin-top:2px;}
+.wkdone{border-color:color-mix(in srgb, var(--good) 45%, var(--border)) !important;}
 .skipbtn{flex:none; color:var(--faint);}
 .skipbtn.on{color:var(--gold); border-color:color-mix(in srgb, var(--gold) 45%, var(--border));}
 .vtag{font-size:.62rem; font-weight:800; color:var(--faint); vertical-align:middle;
@@ -387,8 +390,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "3.1";
-const APP_VERSION = 31;
+const APP_NAME_VERSION = "3.2";
+const APP_VERSION = 32;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -555,7 +558,7 @@ function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
 
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false, mealNotif:false, restOverlay:false}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], sessions:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false, mealNotif:false, restOverlay:false, focus:null, doneDay:{}, kgFrom:null}, updatedAt:0}; }
 /* duração do bipe de fim de série (mesmo som, só mais longo) */
 const SOUNDLEN = { curto:0.45, medio:1.1, longo:2.4 };
 let db;
@@ -735,14 +738,23 @@ function updateTabs(name){
 }
 
 function renderHome(){
-  const cards = db.gyms.map(g => {
+  const f = focusToday();
+  const fst = f ? workoutStats(f) : null;
+  /* a academia onde você está treinando hoje sobe para o topo e fica destacada */
+  const lista = f ? db.gyms.slice().sort((a, b) => (b.id === f.gym) - (a.id === f.gym)) : db.gyms;
+  const cards = lista.map(g => {
     const exs = gymExercises(g.id), n = exs.length;
     /* quantos exercícios você já começou hoje aqui (zera sozinho quando o dia vira) */
     const feitos = exs.filter(e => { const l = todayLog(e.id); return l && l.sets.length; }).length;
-    return `<div class="card tap row" data-action="open-gym" data-id="${g.id}">
+    const foco = fst && f.gym === g.id;
+    const pronto = foco && fst.faltam === 0 && fst.feitos > 0;
+    return `<div class="card tap row${foco ? (pronto ? " wkdone" : " gymfocus") : ""}" data-action="open-gym" data-id="${g.id}">
       <div class="grow"><h3>${esc(g.name)}</h3>
+      ${foco ? `<div class="focusline"${pronto ? ' style="color:var(--good)"' : ""}>${pronto ? "🏁 Treino concluído hoje" : "🏋️ Treinando aqui hoje"}${
+        fst.r ? ` · ${esc(fst.r.name)}` : ""}</div>` : ""}
       <div class="sub">${n} exercício${n===1?"":"s"}${feitos?` · ${feitos}/${n} feitos hoje`:""}</div></div>
-      ${feitos?`<span class="setcount ${feitos>=n?"full":"part"}">${feitos}/${n}</span>`:""}
+      ${foco ? `<span class="setcount ${pronto ? "full" : "part"}">${fst.feitos + fst.pulados}/${fst.total}</span>`
+             : feitos?`<span class="setcount ${feitos>=n?"full":"part"}">${feitos}/${n}</span>`:""}
       <span class="chev">›</span></div>`;
   }).join("");
   const glob = db.exercises.filter(e => e.gymId === null).length;
@@ -757,8 +769,54 @@ function renderHome(){
       ${cards || `<div class="empty">Nenhuma academia ainda.<br>Registre a primeira para começar a treinar.</div>`}
       <button class="btn" data-action="add-gym">＋ Registrar academia</button>
     </div>
+    ${sessionsHtml()}
     ${glob ? `<p class="sub" style="margin-top:12px">🌐 Você tem ${glob} ${glob===1?"exercício global":"exercícios globais"} — ${glob===1?"aparece":"aparecem"} em todas as academias.</p>` : ""}
     ${db.gyms.length||db.exercises.length ? `<button class="btn danger sm" data-action="reset-treino" style="margin-top:14px">🗑 Zerar treino (academias, exercícios e séries)</button>` : ""}`;
+}
+
+/* faixa "treino de hoje" dentro da academia: so aparece quando o foco do dia e aqui */
+function focusBarHtml(g, rid){
+  const f = focusToday();
+  if(!f || f.gym !== g.id || (f.rt || "") !== (rid || "")) return "";
+  const st = workoutStats(f);
+  if(!st || !st.series) return "";
+  const pronto = st.faltam === 0 && st.feitos > 0;
+  return `<div class="card${pronto ? " wkdone" : " gymfocus"}" style="margin-bottom:10px">
+    <div class="row" style="gap:10px">
+      <span style="font-size:1.2rem">${pronto ? "🏁" : "🏋️"}</span>
+      <div class="grow"><b>${pronto ? "Treino concluído hoje" : "Treinando aqui hoje"}</b>
+        <div class="sub">${st.feitos} de ${st.total} exercício${st.total === 1 ? "" : "s"}${
+          st.pulados ? ` · ${st.pulados} pulado${st.pulados === 1 ? "" : "s"}` : ""}${
+          st.faltam ? ` · faltam ${st.faltam}` : ""} · ${st.series} série${st.series === 1 ? "" : "s"}</div></div>
+      ${pronto ? `<button class="btn ghost sm" data-action="wk-resumo" style="width:auto; flex:none">Ver resumo</button>` : ""}
+    </div></div>`;
+}
+
+/* ---- histórico de treinos concluídos ---- */
+let sessionsAll = false;
+function sessionsHtml(){
+  const list = (db.sessions || []).slice().sort((a,b) => (a.date + a.at) < (b.date + b.at) ? 1 : -1);
+  if(!list.length) return "";
+  const mostra = sessionsAll ? list : list.slice(0, 8);
+  const linhas = mostra.map(x => `<div class="wkrow">
+    <span class="wd">${fmtDate(x.date)} · <b>${esc(x.gymName || "—")}</b>${x.rtName ? ` · ${esc(x.rtName)}` : ""}
+      <div class="sub" style="font-size:.7rem">${x.at ? x.at + " · " : ""}${x.feitos}/${x.total} exercício${x.total === 1 ? "" : "s"}${
+        x.pulados ? ` · ${x.pulados} pulado${x.pulados === 1 ? "" : "s"}` : ""} · ${x.series} série${x.series === 1 ? "" : "s"}</div></span>
+    <span class="wv">${(x.volume || 0).toLocaleString("pt-BR")}<span class="sub" style="font-size:.66rem"> kg</span></span>
+    <button class="xbtn" data-action="del-session" data-id="${x.id}" aria-label="Excluir do histórico" style="color:var(--faint)">✕</button>
+  </div>`).join("");
+  /* quantas vezes em cada academia, nos últimos 30 dias */
+  const lim = shiftDay(todayStr(), -29);
+  const cont = {};
+  list.filter(x => x.date >= lim).forEach(x => { cont[x.gymName || "—"] = (cont[x.gymName || "—"] || 0) + 1; });
+  const resumo = Object.keys(cont).sort((a,b) => cont[b] - cont[a])
+    .map(k => `<span class="pill">${esc(k)}: ${cont[k]}</span>`).join("");
+  return `<div class="section"><h2>🗓 Treinos concluídos</h2><div class="card">
+    ${resumo ? `<div class="pills" style="margin-bottom:10px">${resumo}<span class="sub" style="font-size:.7rem; align-self:center">nos últimos 30 dias</span></div>` : ""}
+    ${linhas}
+    ${list.length > 8 ? `<button class="btn ghost sm" data-action="sessions-all" style="margin-top:8px">${
+      sessionsAll ? "Mostrar menos" : `Ver todos (${list.length})`}</button>` : ""}
+  </div></div>`;
 }
 
 function summaryLine(exId){
@@ -966,17 +1024,103 @@ function isSkipped(e, rid){
 }
 /* séries feitas hoje. Num treino, só contam as séries que VOCÊ registrou dentro daquele
    treino — antes um exercício global aparecia como "1/3 feito" em todas as rotinas. */
-function setsToday(exId, rid){
+function setsListToday(exId, rid){
   const l = todayLog(exId);
-  if(!l) return 0;
-  if(!rid) return l.sets.length;
-  return l.sets.filter(s => (s.rt || "") === rid).length;
+  if(!l) return [];
+  return rid ? l.sets.filter(s => (s.rt || "") === rid) : l.sets;
 }
+function setsToday(exId, rid){ return setsListToday(exId, rid).length; }
 function exStateToday(e, rid){
   if(isSkipped(e, rid)) return "skip";
   const n = setsToday(e.id, rid);
   if(n >= e.targetSets) return "done";
   return n > 0 ? "doing" : "todo";
+}
+
+/* ===================== academia em foco =====================
+   Assim que voce registra a primeira serie do dia, o app passa a saber ONDE voce esta
+   treinando: a academia (e o treino A/B/C) viram o foco do dia. Isso e o que deixa ele
+   dizer "treino concluido" na hora certa, em vez de olhar para todas as academias.
+   Guardado com a data junto, entao vira o dia e some sozinho. */
+function focusToday(){
+  const f = db.settings.focus;
+  return (f && f.d === todayStr()) ? f : null;
+}
+function setFocus(gymId, rid){
+  if(!gymId) return;
+  const f = focusToday();
+  if(f && f.gym === gymId && (f.rt || "") === (rid || "")) return;
+  db.settings.focus = {d: todayStr(), gym: gymId, rt: rid || ""};
+  save(false);
+}
+/* o que o foco de hoje abrange, com o estado de cada exercicio */
+function focusList(f){
+  if(!f) return null;
+  const g = db.gyms.find(x => x.id === f.gym); if(!g) return null;
+  const r = f.rt ? routineById(f.rt) : null;
+  if(f.rt && !r) return null;                       // treino apagado depois
+  const exs = r ? routineExercises(r, g.id) : gymExercises(g.id);
+  return {g, r, exs, st: exs.map(e => exStateToday(e, f.rt || ""))};
+}
+function workoutStats(f){
+  const L = focusList(f);
+  if(!L || !L.exs.length) return null;
+  const feitos = L.st.filter(x => x === "done").length;
+  const pulados = L.st.filter(x => x === "skip").length;
+  let series = 0, volume = 0;
+  L.exs.forEach(e => setsListToday(e.id, f.rt || "").forEach(x => { series++; volume += x.weight * x.reps; }));
+  return Object.assign({}, L, {feitos, pulados, faltam: L.exs.length - feitos - pulados,
+    series, volume, total: L.exs.length});
+}
+/* chamado depois de registrar serie e depois de marcar/desmarcar um exercicio como
+   "hoje nao": o treino acaba tanto fechando a ultima serie quanto riscando o ultimo
+   exercicio que faltava */
+function checkWorkoutDone(){
+  const f = focusToday(); if(!f) return;
+  const st = workoutStats(f); if(!st) return;
+  if(st.faltam > 0) return;
+  if(st.feitos === 0) return;                       // riscar tudo nao e treino concluido
+  const k = f.gym + "|" + (f.rt || "");
+  db.settings.doneDay = db.settings.doneDay || {};
+  if(db.settings.doneDay[k] === todayStr()) return; // uma vez por dia
+  db.settings.doneDay[k] = todayStr();
+  /* histórico de treinos: onde você treinou e em que dia, gravado só quando o treino
+     foi realmente concluído (tudo feito ou riscado) */
+  db.sessions = db.sessions || [];
+  if(!db.sessions.some(x => x.date === todayStr() && x.gym === f.gym && (x.rt || "") === (f.rt || ""))){
+    db.sessions.push({id:uid(), date:todayStr(), at:nowHM(), gym:f.gym, gymName:st.g.name,
+      rt:f.rt || "", rtName:st.r ? st.r.name : "",
+      feitos:st.feitos, pulados:st.pulados, total:st.total, series:st.series,
+      volume:Math.round(st.volume)});
+  }
+  save(false);
+  doVibrate([90, 60, 90, 60, 320]);
+  /* espera a vez: se a festa de recorde ou o aviso do relogio estiverem na tela, o
+     "treino concluido" entra depois, em vez de engolir o que ja estava aberto */
+  const abrir = () => {
+    if(modal.classList.contains("on") || prBox.classList.contains("on")){ setTimeout(abrir, 900); return; }
+    workoutDoneForm(st);
+  };
+  setTimeout(abrir, 600);
+}
+function workoutDoneForm(st){
+  const relogio = db.settings.shStarted === todayStr();
+  openModal(`<h2>🏁 Treino concluído!</h2>
+    <p class="sub" style="margin-bottom:12px"><b>${esc(st.g.name)}</b>${st.r ? ` · ${esc(st.r.name)}` : ""} —
+      você fechou tudo o que tinha para hoje.</p>
+    <div class="card row" style="gap:18px; flex-wrap:wrap; margin-bottom:12px">
+      <div><div class="sub">Exercícios</div><div class="bignumv">${st.feitos}<span class="sub" style="font-size:.8rem">/${st.total}</span></div></div>
+      <div><div class="sub">Séries</div><div class="bignumv">${st.series}</div></div>
+      <div><div class="sub">Volume</div><div class="bignumv">${Math.round(st.volume).toLocaleString("pt-BR")}<span class="sub" style="font-size:.7rem"> kg</span></div></div>
+      ${st.pulados ? `<div><div class="sub">Pulados</div><div class="bignumv" style="color:var(--faint)">${st.pulados}</div></div>` : ""}
+    </div>
+    ${relogio ? `<div class="card wkdone" style="margin-bottom:12px">
+      <b>⌚ Encerre o treino no relógio</b>
+      <div class="sub" style="margin-top:4px">Você iniciou um treino no Samsung Health hoje. Encerre agora
+        para ele gravar o tempo e as calorias certos — o app não consegue encerrar por você.</div>
+      <button class="btn sm" data-action="sh-open" style="margin-top:10px; width:auto">Abrir Samsung Health</button>
+    </div>` : ""}
+    <button class="btn" data-action="close-modal">Boraa! 💪</button>`);
 }
 
 function renderGym(g){
@@ -1011,10 +1155,10 @@ function renderGym(g){
     const sc = `<span class="setcount ${st==="done" ? "full" : dn > 0 ? "part" : ""}" title="Séries feitas hoje${rid?" neste treino":""}">${dn}/${e.targetSets}</span>`;
     return `<div class="card tap row ex-${st}" data-action="open-ex" data-gym="${g.id}" data-id="${e.id}">
       ${e.photo ? `<img class="exthumb" src="${esc(e.photo)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ""}
-      <div class="grow"><h3>${st==="done"?"✅ ":st==="skip"?"⤵️ ":""}${esc(e.name)}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}${e.notes ? " 📝" : ""}</h3>
+      <div class="grow"><h3>${st==="done"?"✅ ":st==="skip"?"✕ ":""}${esc(e.name)}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}${e.notes ? " 📝" : ""}</h3>
       <div class="sub">${st==="skip" ? "Hoje não vou fazer" : `${e.targetSets} séries${e.reps?` × ${esc(e.reps)}`:""} · descanso ${e.restSec}s · ${summaryLine(e.id)}`}</div></div>
       <button class="xbtn skipbtn${st==="skip"?" on":""}" data-action="skip-ex" data-id="${e.id}" data-rt="${rid}"
-        title="${st==="skip"?"Voltar para a lista de hoje":"Hoje eu não vou fazer esse"}">${st==="skip"?"↩":"⤵"}</button>
+        title="${st==="skip"?"Voltar para a lista de hoje":"Hoje eu não vou fazer esse"}">${st==="skip"?"↩":"✕"}</button>
       ${sc}${mini}<span class="chev">›</span></div>`;
   }).join("");
   const canReorder = exs.length > 1;
@@ -1032,6 +1176,15 @@ function renderGym(g){
       <button class="pill" data-action="rt-new" data-gym="${g.id}" style="cursor:pointer; color:var(--accent)">＋ treino</button>
       <button class="pill" data-action="tpl-open" data-gym="${g.id}" style="cursor:pointer">🤖 pronto</button>
     </div>`}
+    ${reorderMode ? "" : focusBarHtml(g, rid)}
+    ${(() => { if(reorderMode) return "";
+      /* quantos ainda estão em aberto: é o que o botão de encerrar vai riscar de uma vez */
+      const falta = exs.filter(e => { const st2 = exStateToday(e, rid); return st2 === "todo" || st2 === "doing"; }).length;
+      const feitos = exs.filter(e => exStateToday(e, rid) === "done").length;
+      if(!falta || !feitos) return "";
+      return `<button class="btn ghost sm" data-action="skip-rest-ex" data-gym="${g.id}" data-rt="${rid}" style="margin-bottom:10px">
+        🏁 Encerrar o treino — não vou fazer os ${falta} que faltam</button>`;
+    })()}
     ${reorderMode ? "" : dndWarnHtml()}
     ${(!reorderMode && exs.some(e=>e.photo && e.photo.slice(0,5) !== "data:")) ? `<button class="btn ghost sm" data-action="dl-photos" data-gym="${g.id}" data-rt="${rid}" style="margin-bottom:10px">📥 Salvar as fotos no app (funcionar sem internet)</button>` : ""}
     <div class="section"><h2>${rAtiva ? esc(rAtiva.name) : "Exercícios"}${rAtiva&&rAtiva.src?` <span class="pill">por ${esc(rAtiva.src)}</span>`:""}${rAtiva?` <button class="xbtn" data-action="rt-menu" data-id="${rAtiva.id}" aria-label="Opções do treino" style="vertical-align:middle">⋮</button>`:""}</h2>
@@ -1974,7 +2127,7 @@ const Sync = {
      que entrar aqui — o mealNotes ficou de fora na v13 e os comentários de refeição
      nunca chegavam nos outros aparelhos. */
   data(){ return {gyms:db.gyms, exercises:db.exercises, routines:db.routines, logs:db.logs, food:db.food, urges:db.urges,
-    plan:db.plan, body:db.body, mealNotes:db.mealNotes, free:db.free, foodMap:db.foodMap,
+    plan:db.plan, body:db.body, sessions:db.sessions, mealNotes:db.mealNotes, free:db.free, foodMap:db.foodMap,
     settings:Object.assign({}, db.settings, {sync:null}), updatedAt:db.updatedAt}; },
   async getRemote(){
     const r = await fetch(this.url(), {cache:"no-store"});
@@ -2040,8 +2193,15 @@ const Sync = {
   _adopt(remote){
     this.applying = true;
     const keepSync = db.settings.sync;
-    db.gyms = remote.gyms || []; db.exercises = remote.exercises || []; db.logs = remote.logs || [];
-    db.food = remote.food || []; db.urges = remote.urges || []; db.plan = remote.plan || []; db.body = remote.body || [];
+    /* A lista de campos sai do seed() de proposito. Antes eram sete nomes escritos a mao
+       aqui, e os que faltavam voltavam VAZIOS no aparelho que adotava a nuvem: as
+       rotinas (treino A/B/C), os comentarios de refeicao, as refeicoes livres e tudo o
+       que o app tinha aprendido de nutricao sumiam. Do seed(), campo novo entra sozinho. */
+    const base = seed();
+    Object.keys(base).forEach(k => {
+      if(k === "settings" || k === "updatedAt") return;
+      db[k] = remote[k] != null ? remote[k] : base[k];
+    });
     db.settings = Object.assign(seed().settings, remote.settings || {}, {sync:keepSync});
     db.updatedAt = remote.updatedAt || Date.now();
     localStorage.setItem(LS, JSON.stringify(db));
@@ -2123,7 +2283,38 @@ document.addEventListener("click", ev => {
   const a = el.dataset.action;
 
   if(a === "go"){ location.hash = el.dataset.h; }
-  else if(a === "open-gym"){ location.hash = "#/gym/" + el.dataset.id; }
+  else if(a === "open-gym"){
+    /* entrando na academia onde você está treinando hoje, já abre no treino certo —
+       sem ter que lembrar se era o A, o B ou o C */
+    const f = focusToday();
+    if(f && f.gym === el.dataset.id && f.rt && routineById(f.rt)) gymRoutine = f.rt;
+    location.hash = "#/gym/" + el.dataset.id;
+  }
+  else if(a === "close-modal"){ closeModal(); }
+  else if(a === "sessions-all"){ sessionsAll = !sessionsAll; render(); }
+  else if(a === "del-session"){
+    ev.stopPropagation();
+    db.sessions = (db.sessions || []).filter(x => x.id !== el.dataset.id);
+    save(); render(); toast("Removido do histórico");
+  }
+  /* risca de uma vez tudo o que sobrou, em vez de marcar exercício por exercício */
+  else if(a === "skip-rest-ex"){
+    const gid = el.dataset.gym, rt = el.dataset.rt || "";
+    const r = rt ? routineById(rt) : null;
+    const lista = (r ? routineExercises(r, gid) : gymExercises(gid))
+      .filter(e => { const st2 = exStateToday(e, rt); return st2 === "todo" || st2 === "doing"; });
+    if(!lista.length){ toast("Não sobrou nada em aberto."); return; }
+    if(!confirm(`Marcar ${lista.length} exercício${lista.length === 1 ? "" : "s"} como "hoje não vou fazer"?\n\nAs séries que você já registrou continuam salvas.`)) return;
+    db.settings.skipToday = db.settings.skipToday || {};
+    lista.forEach(e => { db.settings.skipToday[skipKey(e, rt)] = todayStr(); });
+    save(); render();
+    toast(`${lista.length} exercício${lista.length === 1 ? "" : "s"} riscado${lista.length === 1 ? "" : "s"}`);
+    checkWorkoutDone();
+  }
+  else if(a === "wk-resumo"){
+    const st = workoutStats(focusToday());
+    if(st) workoutDoneForm(st);
+  }
   else if(a === "open-ex"){ location.hash = "#/ex/" + el.dataset.gym + "/" + el.dataset.id; }
   else if(a === "close-pr"){ prBox.classList.remove("on"); }
 
@@ -2153,13 +2344,14 @@ document.addEventListener("click", ev => {
   }
 
   else if(a === "skip-ex"){
-    ev.stopPropagation();                       // não abre o exercício ao tocar no ⤵
+    ev.stopPropagation();                       // não abre o exercício ao tocar no ✕
     const e = exById(el.dataset.id); if(!e) return;
     const k = skipKey(e, el.dataset.rt);
     db.settings.skipToday = db.settings.skipToday || {};
     if(db.settings.skipToday[k] === todayStr()){ delete db.settings.skipToday[k]; toast(`${e.name} voltou para a lista`); }
     else { db.settings.skipToday[k] = todayStr(); toast(`${e.name}: hoje não`); }
     save(); render();
+    checkWorkoutDone();          // riscar o último que faltava também fecha o treino
   }
   else if(a === "dnd-recheck"){ dndCheck().then(r => toast(r && r.on ? "Ainda está no Não Perturbe" : "Não Perturbe desligado ✓")); }
   else if(a === "dl-photos"){
@@ -2344,12 +2536,15 @@ document.addEventListener("click", ev => {
       ? `${e.name} — ${dn}/${e.targetSets} séries feitas ✓`
       : `${e.name} — agora a série ${dn+1}/${e.targetSets}`;
     if(db.settings.autoRest) startRest(e.restSec, lbl, e.id, cur.gymId);
+    /* a academia (e o treino) onde a série foi feita vira o foco do dia */
+    setFocus(cur.gymId, gymRoutine);
     render();
     /* primeira série do dia: lembra de iniciar o treino no relógio */
     if(dn === 1 && setsLoggedToday() === 1 && shShouldRemind()){
       doVibrate([120,80,120]);
       setTimeout(shRemindForm, 400);
     }
+    checkWorkoutDone();          // ele mesmo espera a tela ficar livre
   }
   else if(a === "del-set"){
     const l = todayLog(el.dataset.ex);
@@ -2389,10 +2584,13 @@ document.addEventListener("click", ev => {
   else if(a === "rest-minus"){ rest.end -= 15000; const n=(lEl.textContent||"").replace(/^Descanso · /,""); native.scheduleRestEnd(rest.end, n); native.restOngoing(rest.end, n); if(rest.end <= Date.now()) finishRest(); else { if(db.settings.restOverlay) native.overlayStart(rest.end); tickRest(); } }
   else if(a === "rest-plus"){ rest.end += 15000; const n=(lEl.textContent||"").replace(/^Descanso · /,""); native.scheduleRestEnd(rest.end, n); native.restOngoing(rest.end, n); if(db.settings.restOverlay) native.overlayStart(rest.end); tickRest(); }
   else if(a === "sh-open"){
+    /* se você foi até o Samsung Health, o app assume que o treino do relógio começou —
+       é isso que faz ele lembrar de ENCERRAR no fim */
+    db.settings.shStarted = todayStr(); save(false);
     closeModal();
     native.openApp(SHEALTH_PKG).then(ok => { if(!ok) toast("Não achei o Samsung Health instalado."); });
   }
-  else if(a === "sh-ok"){ closeModal(); }
+  else if(a === "sh-ok"){ db.settings.shStarted = todayStr(); save(); closeModal(); }
   else if(a === "sh-never"){ db.settings.shRemind = false; save(); closeModal(); toast("Não vou mais lembrar. Dá para religar nos Ajustes."); }
   else if(a === "rest-skip") stopRest();
   else if(a === "rest-goto"){ if(rest.exId && rest.gymId) location.hash = "#/ex/" + rest.gymId + "/" + rest.exId; }
@@ -2495,7 +2693,8 @@ document.addEventListener("click", ev => {
   /* zerar só uma parte do app — cada aba tem o seu */
   else if(a === "reset-treino"){
     if(!confirm("Zerar o TREINO?\n\nApaga academias, exercícios e todas as séries.\nAlimentação, peso e medidas continuam.")) return;
-    db.gyms = []; db.exercises = []; db.logs = [];
+    db.gyms = []; db.exercises = []; db.logs = []; db.sessions = [];
+    db.settings.focus = null; db.settings.doneDay = {}; db.settings.skipToday = {};
     save(); location.hash = ""; render(); toast("Treino zerado");
   }
   else if(a === "reset-food"){
@@ -2521,6 +2720,16 @@ document.addEventListener("click", ev => {
     const v = document.getElementById("wfrom").value;
     db.settings.weightFrom = v || null; save(); render();
     toast(v ? "Vou importar o peso de " + fmtDate(v) + " em diante" : "Vou importar todas as pesagens");
+  }
+  /* isto NAO e o de cima: aquele diz o que IMPORTAR da balanca, este diz o que CONTA
+     na media, no grafico e na tendencia. Nada e apagado nos dois casos. */
+  else if(a === "save-kgfrom"){
+    const v = document.getElementById("kgfrom").value;
+    db.settings.kgFrom = v || null; save(); render();
+    toast(v ? `Contando o peso de ${fmtDate(v)} em diante` : "Contando todas as pesagens");
+  }
+  else if(a === "clear-kgfrom"){
+    db.settings.kgFrom = null; save(); render(); toast("Contando todas as pesagens");
   }
   else if(a === "save-afrom"){
     const v = document.getElementById("afrom").value;
@@ -3341,6 +3550,10 @@ function maybeAskTime(m, hm, alvo){
   if(hmDiff(m.time, hm) <= CHECK_TOL) return;
   checkTimeForm(m, hm, alvo, false);
 }
+/* quantos OUTROS alimentos da refeição já estão marcados como comidos hoje */
+function outrosMarcados(m, alvo){
+  return m.items.filter(it => it.id !== alvo && itemState(it, foodDay) === "done").length;
+}
 function checkTimeForm(m, hm, alvo, manual){
   const d = m.time ? hmDiff(m.time, hm) : 0;
   const dTxt = d >= 60 ? `${Math.floor(d/60)}h${String(d%60).padStart(2,"0")}` : `${d} min`;
@@ -3354,7 +3567,14 @@ function checkTimeForm(m, hm, alvo, manual){
     </p>
     <div class="field"><label for="ct-time">Horário em que você comeu</label>
       <input id="ct-time" type="time" value="${esc(hm)}"></div>
-    <button class="btn" data-action="ct-save" data-m="${m.id}" data-i="${esc(alvo)}">Salvar este horário</button>
+    <button class="btn" data-action="ct-save" data-m="${m.id}" data-i="${esc(alvo)}">${
+      alvo === "*" ? "Salvar para a refeição toda" : "Salvar só neste alimento"}</button>
+    ${/* corrigiu o horário de um alimento e os outros da refeição foram junto com ele?
+          dá para aplicar em todos de uma vez, sem repetir o mesmo ajuste item a item */""}
+    ${alvo !== "*" && outrosMarcados(m, alvo)
+      ? `<button class="btn ghost" data-action="ct-save" data-m="${m.id}" data-i="*" style="margin-top:8px">
+           Usar este horário em toda a <b>${esc(m.name)}</b> (${outrosMarcados(m, alvo) + 1} itens)</button>`
+      : ""}
     ${manual ? "" : `<button class="btn ghost" data-action="ct-keep" style="margin-top:8px">Foi ${esc(hm)} mesmo</button>`}`);
 }
 /* ---- quantidade do alimento planejado ----
@@ -3915,7 +4135,22 @@ function activityTables(){
     <div class="section"><h2>Passos por dia</h2><div class="card">${passos}</div></div>
     <div class="section"><h2>Mês a mês</h2><div class="card">${meses}</div></div>`;
 }
-function bodySorted(){ return db.body.filter(b=>typeof b.kg==="number").sort((a,b)=>a.date<b.date?-1:1); }
+/* ---- contar peso só a partir de uma data ----
+   Nada é apagado: as pesagens antigas continuam no histórico e dá para editar. Elas só
+   ficam de fora da média, da tabela, do gráfico e da tendência — é o jeito de recomeçar
+   a contagem sem perder o registro do que já passou. */
+function kgFrom(){ return db.settings.kgFrom || null; }
+function kgCounts(date){ const f = kgFrom(); return !f || date >= f; }
+function bodySorted(){
+  return db.body.filter(b => typeof b.kg === "number" && kgCounts(b.date))
+                .sort((a,b) => a.date < b.date ? -1 : 1);
+}
+/* quantas pesagens ficaram de fora por causa da data (só para avisar na tela) */
+function kgIgnoradas(){
+  const f = kgFrom();
+  if(!f) return 0;
+  return db.body.filter(b => typeof b.kg === "number" && b.date < f).length;
+}
 /* último peso corporal registrado — usado nos exercícios marcados como "peso do corpo" */
 function lastBodyWeight(){ const s = bodySorted(); return s.length ? s[s.length-1] : null; }
 function weekKeyOf(date){ const d=new Date(date+"T00:00"); const off=(d.getDay()+6)%7; d.setDate(d.getDate()-off); return d.getFullYear()+"-"+pad2(d.getMonth()+1)+"-"+pad2(d.getDate()); }
@@ -3985,9 +4220,21 @@ function renderProgress(){
         : `<div class="empty">Registre seu peso para ver a evolução.</div>`}
       </div>
       <button class="btn" data-action="body-entry" data-d="${todayStr()}">＋ Registrar hoje (peso, BF, medidas)</button>
+      <div class="card" style="margin-top:10px">
+        <div class="setline"><div class="grow"><div class="t">⚖️ Contar peso a partir de</div>
+          <div class="d">Só as pesagens desta data em diante entram na média, na tabela, no gráfico e na
+            tendência. As anteriores <b>não são apagadas</b> — continuam no histórico, marcadas como fora da conta.
+            ${kgFrom() ? `<br>Hoje: contando de <b>${fmtDate(kgFrom())}</b>${kgIgnoradas() ? ` · <b>${kgIgnoradas()}</b> pesagem(ns) guardada(s) fora da conta` : ""}.` : "<br>Hoje: contando <b>todas</b> as pesagens."}</div>
+          <div class="row" style="gap:8px; margin-top:8px">
+            <input id="kgfrom" type="date" value="${kgFrom()||""}" style="width:auto">
+            <button class="btn ghost sm" data-action="save-kgfrom" style="width:auto">Salvar</button>
+            ${kgFrom() ? `<button class="btn ghost sm" data-action="clear-kgfrom" style="width:auto">Contar tudo</button>` : ""}
+          </div></div></div>
+      </div>
       ${native.isNative?`<div class="card" style="margin-top:10px">
         <div class="setline"><div class="grow"><div class="t">Peso e gordura da balança</div>
-          <div class="d">Puxa as pesagens e o BF do Health Connect a partir da data abaixo. Medições de dias anteriores a essa data são ignoradas.</div>
+          <div class="d">De quando em diante <b>importar</b> as pesagens e o BF do Health Connect. Medições anteriores a essa data nem chegam ao app.
+            ${kgFrom() ? `<br><span style="color:var(--muted)">Para escolher o que <b>conta</b> na média e no gráfico, é o campo "Contar peso a partir de", logo acima.</span>` : ""}</div>
           <div class="row" style="gap:8px; margin-top:8px">
             <input id="wfrom" type="date" value="${db.settings.weightFrom||""}" style="width:auto">
             <button class="btn ghost sm" data-action="save-wfrom" style="width:auto">Salvar</button>
@@ -4022,10 +4269,11 @@ function renderProgress(){
       <div class="measgrid">${MEAS.filter(m=>typeof latestMeas.m[m.k]==="number").map(m=>`<div class="statbox"><div class="v">${fmtW(latestMeas.m[m.k])}</div><div class="k">${m.l}${measDelta(m.k,latestMeas)}</div></div>`).join("")}</div>
     </div></div>`:""}
     <div class="section"><h2>Histórico</h2><div class="card">
+      ${kgIgnoradas()?`<div class="sub" style="margin-bottom:8px">Pesos riscados são anteriores a <b>${fmtDate(kgFrom())}</b>: guardados, mas fora da conta.</div>`:""}
       ${db.body.length?[...db.body].sort((a,b)=>a.date<b.date?1:-1).slice(0,60).map(b=>`
         <div class="wkrow" style="cursor:pointer" data-action="body-entry" data-d="${b.date}">
           <span class="wd">${fmtDate(b.date)} ${b.musc?"🏋️":""}${b.cardio?"🏃"+(typeof b.cardioMin==="number"?b.cardioMin+"min":""):""}${typeof b.steps==="number"?` · ${b.steps.toLocaleString("pt-BR")} passos`:""}</span>
-          <span class="wv">${typeof b.kg==="number"?fmtW(b.kg)+" kg"+(b.kgSrc==="health"?" ⌚":""):"—"}</span>
+          <span class="wv"${typeof b.kg==="number"&&!kgCounts(b.date)?' style="color:var(--faint); text-decoration:line-through" title="Fora da conta — anterior à data escolhida"':""}>${typeof b.kg==="number"?fmtW(b.kg)+" kg"+(b.kgSrc==="health"?" ⌚":""):"—"}</span>
           <span class="wdelta" style="color:var(--muted)">${typeof b.bf==="number"?"BF "+fmtW(b.bf)+"%":""} ✎</span></div>`).join("")
         : `<div class="empty">Sem registros ainda.</div>`}
     </div></div>
@@ -4666,10 +4914,12 @@ document.addEventListener("click", ev => {
     const m=db.plan.find(x=>x.id===el.dataset.m); if(!m) return;
     const hm=document.getElementById("ct-time").value; if(!hm){ closeModal(); return; }
     const alvo=el.dataset.i;
+    let n=0;
     m.items.forEach(it=>{ if(alvo !== "*" && it.id !== alvo) return;
       if(itemState(it, foodDay) !== "done") return;
-      it.at=it.at||{}; it.at[foodDay]=hm; });
-    save(); closeModal(); render(); toast("Horário salvo: " + hm);
+      it.at=it.at||{}; it.at[foodDay]=hm; n++; });
+    save(); closeModal(); render();
+    toast(n > 1 ? `${hm} em ${n} alimentos de ${m.name} ✓` : "Horário salvo: " + hm);
   }
   else if(a === "ct-keep"){ closeModal(); }
   else if(a === "plan-all"){

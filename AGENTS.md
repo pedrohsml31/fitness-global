@@ -52,7 +52,9 @@ Neste projeto o script `recompilar-apk.ps1` escreve isso automaticamente em
 - Nunca apontar `server.url` do Capacitor para outro domínio: isso troca a origem do
   WebView e apaga o `localStorage` (já causou perda de dados aqui).
 - Campo novo no `db` **tem** que entrar no `seed()` e no `Sync.data()`, senão ele nunca
-  chega nos outros aparelhos.
+  chega nos outros aparelhos. O `Sync._adopt()` copia a lista de campos do próprio
+  `seed()` — não voltar a escrever os nomes à mão lá: campo esquecido nessa lista volta
+  **vazio** no aparelho que baixa da nuvem.
 
 ## Atualização do app
 
