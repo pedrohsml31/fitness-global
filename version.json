@@ -1,10 +1,10 @@
 {
-  "version": 32,
-  "name": "3.2",
+  "version": 33,
+  "name": "3.3",
   "minNative": 31,
   "files": [
     "index.html"
   ],
-  "notes": "Ao registrar a primeira serie do dia, a academia (e o treino A/B/C) viram o foco do dia: ela sobe para o topo da tela inicial, fica destacada como \"treinando aqui hoje\" e, ao abrir, ja vem no treino certo. A setinha de pular exercicio virou um X, e ha um botao para riscar de uma vez todos os que faltam (\"nao vou fazer o resto\"). Quando tudo estiver feito ou riscado, o app avisa que o treino acabou, com exercicios, series e volume - e, se voce tinha iniciado o treino no Samsung Health, lembra de encerrar no relogio. Todo treino concluido entra num historico na tela inicial: em que dia voce foi, em qual academia e qual treino, com a contagem por academia nos ultimos 30 dias. Novo ajuste \"contar peso a partir de\": pesagens anteriores a data escolhida saem da media, da tabela, do grafico e da tendencia, mas NAO sao apagadas - ficam no historico, riscadas. Ao corrigir o horario de um alimento, da para aplicar o mesmo horario a refeicao inteira. E um conserto importante: quando um aparelho baixava os dados da nuvem, os treinos A/B/C, os comentarios de refeicao, as refeicoes livres e a tabela nutricional aprendida voltavam vazios.",
+  "notes": "A busca de exercicio agora usa IA (Gemini, chave gratuita do AI Studio - a mesma da nutricao) para ENTENDER o que voce escreveu, mesmo misturando portugues com ingles, com erro de digitacao ou com o nome que a academia usa: \"bicps curl sentdo\" acha Rosca sentada, \"voador invertido\" acha Reverse Machine Flyes. A IA so traduz o termo - a foto continua vindo do catalogo publico, nada de imagem inventada. Sem chave, a busca antiga continua funcionando. Exercicio escolhido do catalogo passa a guardar o nome em portugues E em ingles, e um botao 🌐 troca qual aparece no app inteiro de uma vez (na tela da academia e nos Ajustes). Conserto: abrir o app direto na tela de uma academia deixava a tela em branco.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v3.2</title>
+<title>Fitness Global v3.3</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -390,8 +390,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "3.2";
-const APP_VERSION = 32;
+const APP_NAME_VERSION = "3.3";
+const APP_VERSION = 33;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -558,7 +558,7 @@ function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
 
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], sessions:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false, mealNotif:false, restOverlay:false, focus:null, doneDay:{}, kgFrom:null}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], sessions:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false, mealNotif:false, restOverlay:false, focus:null, doneDay:{}, kgFrom:null, exLang:"pt"}, updatedAt:0}; }
 /* duração do bipe de fim de série (mesmo som, só mais longo) */
 const SOUNDLEN = { curto:0.45, medio:1.1, longo:2.4 };
 let db;
@@ -587,6 +587,28 @@ function fmtW(n){ return Number(n).toLocaleString("pt-BR", {maximumFractionDigit
 
 const gymById = id => db.gyms.find(g => g.id === id);
 const exById  = id => db.exercises.find(e => e.id === id);
+/* ---- nome do exercício em português ou inglês ----
+   Quando o exercício vem do catálogo, o app guarda os DOIS nomes (namePt e nameEn) junto.
+   O botão PT/EN não renomeia nada: só troca qual dos dois aparece, em todo lugar de uma
+   vez. Exercício que você criou na mão e não está no catálogo continua com o seu nome. */
+function exLang(){ return db.settings.exLang === "en" ? "en" : "pt"; }
+function exName(e){
+  if(!e) return "";
+  const l = exLang();
+  if(l === "en" && e.nameEn) return e.nameEn;
+  if(l === "pt" && e.namePt) return e.namePt;
+  return e.name || "";
+}
+/* o outro nome, para mostrar embaixo em letra miúda */
+function exNameAlt(e){
+  if(!e || !e.namePt || !e.nameEn) return "";
+  const outro = exLang() === "en" ? e.namePt : e.nameEn;
+  return outro === exName(e) ? "" : outro;
+}
+function exLangPill(){
+  return `<button class="pill" data-action="ex-lang" style="cursor:pointer" title="Trocar os nomes dos exercícios entre português e inglês">🌐 ${exLang() === "en" ? "EN" : "PT"}</button>`;
+}
+
 function gymExercises(gymId){
   return db.exercises.filter(e => e.gymId === gymId || e.gymId === null)
     .sort((a,b) => (a.order ?? 1e9) - (b.order ?? 1e9) || a.name.localeCompare(b.name, "pt-BR"));
@@ -1014,6 +1036,11 @@ function routineExercises(r, gymId){
   return (r.exIds||[]).map(id=>todos.find(e=>e.id===id)).filter(Boolean);
 }
 let gymRoutine = "";      // "" = Todos
+/* Estado do Não Perturbe. Declarado AQUI, e não lá embaixo junto do dndCheck(), porque o
+   render() do boot chama dndWarnHtml() antes de o fim do arquivo ter rodado: com `let`
+   depois disso, abrir o app direto numa tela de academia estourava
+   "Cannot access 'dndState' before initialization" e a tela saía em branco. */
+let dndState = null;
 
 /* ---- "hoje eu não vou fazer esse" ----
    Guardado com a DATA junto, então vira o dia e some sozinho: nada de limpar na mão. */
@@ -1142,7 +1169,7 @@ function renderGym(g){
   const items = exs.map((e, idx) => {
     if(reorderMode){
       return `<div class="card row">
-        <div class="grow"><h3>${esc(e.name)}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}</h3></div>
+        <div class="grow"><h3>${esc(exName(e))}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}</h3></div>
         <div class="reord">
           <button class="ordbtn" data-action="move-ex" data-gym="${g.id}" data-id="${e.id}" data-dir="-1" ${idx===0?"disabled":""} aria-label="Mover para cima">↑</button>
           <button class="ordbtn" data-action="move-ex" data-gym="${g.id}" data-id="${e.id}" data-dir="1" ${idx===exs.length-1?"disabled":""} aria-label="Mover para baixo">↓</button>
@@ -1155,7 +1182,8 @@ function renderGym(g){
     const sc = `<span class="setcount ${st==="done" ? "full" : dn > 0 ? "part" : ""}" title="Séries feitas hoje${rid?" neste treino":""}">${dn}/${e.targetSets}</span>`;
     return `<div class="card tap row ex-${st}" data-action="open-ex" data-gym="${g.id}" data-id="${e.id}">
       ${e.photo ? `<img class="exthumb" src="${esc(e.photo)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ""}
-      <div class="grow"><h3>${st==="done"?"✅ ":st==="skip"?"✕ ":""}${esc(e.name)}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}${e.notes ? " 📝" : ""}</h3>
+      <div class="grow"><h3>${st==="done"?"✅ ":st==="skip"?"✕ ":""}${esc(exName(e))}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}${e.notes ? " 📝" : ""}</h3>${
+        exNameAlt(e) ? `<div class="sub" style="font-size:.68rem; color:var(--faint)">${esc(exNameAlt(e))}</div>` : ""}
       <div class="sub">${st==="skip" ? "Hoje não vou fazer" : `${e.targetSets} séries${e.reps?` × ${esc(e.reps)}`:""} · descanso ${e.restSec}s · ${summaryLine(e.id)}`}</div></div>
       <button class="xbtn skipbtn${st==="skip"?" on":""}" data-action="skip-ex" data-id="${e.id}" data-rt="${rid}"
         title="${st==="skip"?"Voltar para a lista de hoje":"Hoje eu não vou fazer esse"}">${st==="skip"?"↩":"✕"}</button>
@@ -1175,6 +1203,7 @@ function renderGym(g){
       ${rts.map(r=>`<button class="pill${gymRoutine===r.id?" on":""}" data-action="rt-sel" data-v="${r.id}" style="cursor:pointer">${esc(r.name)} (${routineExercises(r,g.id).length})</button>`).join("")}
       <button class="pill" data-action="rt-new" data-gym="${g.id}" style="cursor:pointer; color:var(--accent)">＋ treino</button>
       <button class="pill" data-action="tpl-open" data-gym="${g.id}" style="cursor:pointer">🤖 pronto</button>
+      ${exLangPill()}
     </div>`}
     ${reorderMode ? "" : focusBarHtml(g, rid)}
     ${(() => { if(reorderMode) return "";
@@ -1255,7 +1284,7 @@ function renderEx(g, e){
   view.innerHTML = `
     <div class="topbar">
       <button class="iconbtn" data-action="go" data-h="#/gym/${g.id}" aria-label="Voltar">‹</button>
-      <h1>${esc(e.name)}</h1>
+      <h1>${esc(exName(e))}</h1>
       <button class="iconbtn" data-action="ex-menu" data-gym="${g.id}" data-id="${e.id}" aria-label="Editar / opções">⋮</button>
     </div>
     <div class="pills" style="margin-top:-4px">
@@ -1267,7 +1296,7 @@ function renderEx(g, e){
       <button class="pill" data-action="edit-ex" data-gym="${g.id}" data-id="${e.id}" style="cursor:pointer">✏️ editar</button>
     </div>
 
-    ${e.photo ? `<img class="exphoto" src="${esc(e.photo)}" alt="Foto do exercício ${esc(e.name)}" loading="lazy" onerror="this.style.display='none'">` : ""}
+    ${e.photo ? `<img class="exphoto" src="${esc(e.photo)}" alt="Foto do exercício ${esc(exName(e))}" loading="lazy" onerror="this.style.display='none'">` : ""}
     ${e.notes ? `<div class="card notecard">📝 ${esc(e.notes)}</div>` : ""}
 
     <div class="section"><h2>Treino de hoje · ${fmtDate(todayStr())}</h2>
@@ -1277,7 +1306,7 @@ function renderEx(g, e){
         ${rows}
         <div class="btnrow" style="margin-top:10px">
           <button class="btn ghost sm" data-action="extra-set">＋ Série extra</button>
-          <button class="btn ghost sm" data-action="start-rest" data-ex="${e.id}" data-sec="${e.restSec}" data-name="${esc(e.name)} — ${done.length >= e.targetSets ? "série extra" : `agora a série ${done.length+1}/${e.targetSets}`}">⏱ Iniciar descanso</button>
+          <button class="btn ghost sm" data-action="start-rest" data-ex="${e.id}" data-sec="${e.restSec}" data-name="${esc(exName(e))} — ${done.length >= e.targetSets ? "série extra" : `agora a série ${done.length+1}/${e.targetSets}`}">⏱ Iniciar descanso</button>
         </div>
       </div>
     </div>
@@ -1564,6 +1593,16 @@ function renderSettings(){
           ${db.settings.aiKey?`<button class="btn ghost sm" data-action="clear-aikey" style="width:auto; margin-top:8px">Remover chave</button>`:""}
         </div></div>
       <div class="setline">
+        <div class="grow"><div class="t">🌐 Nome dos exercícios</div>
+          <div class="d">Exercícios escolhidos do catálogo guardam o nome em português <b>e</b> em inglês.
+            Este botão troca qual dos dois aparece — no app inteiro de uma vez. Exercício que você criou
+            na mão continua com o nome que você deu. Também dá para trocar pelo 🌐 na tela da academia.
+          <div class="seg" style="margin-top:10px; max-width:280px">
+            <button data-action="sugg-lang" data-v="pt" class="${exLang()==="pt"?"on":""}">Português</button>
+            <button data-action="sugg-lang" data-v="en" class="${exLang()==="en"?"on":""}">Inglês</button>
+          </div></div></div>
+      </div>
+      <div class="setline">
         <div class="grow"><div class="t">🔔 Lembrar de registrar as refeições</div>
           <div class="d">${native.isNative
             ? `Toca uma notificação no horário de cada refeição <b>fixa</b> do plano (as 📌), todo dia, mais as refeições marcadas só para hoje/amanhã. Hoje isso daria <b>${mealNotifCount()}</b> lembrete(s) por dia.`
@@ -1655,11 +1694,12 @@ function exFormSnapshot(){
 }
 function exForm(gymId, e, pre){
   const v = Object.assign({
-    name: e ? e.name : "", sets: e ? e.targetSets : 3, rest: e ? e.restSec : 90,
+    name: e ? exName(e) : "", sets: e ? e.targetSets : 3, rest: e ? e.restSec : 90,
     notes: (e && e.notes) || "", global: e ? e.gymId === null : false, photo: (e && e.photo) || "",
-    reps: (e && e.reps) || "", bw: e ? !!e.bw : false
+    reps: (e && e.reps) || "", bw: e ? !!e.bw : false,
+    namePt: (e && e.namePt) || "", nameEn: (e && e.nameEn) || ""
   }, pre || {});
-  exFormCtx = {gymId, id: e ? e.id : "", name:v.name, sets:v.sets, rest:v.rest, notes:v.notes, global:v.global, photo:v.photo, reps:v.reps, bw:v.bw};
+  exFormCtx = {gymId, id: e ? e.id : "", name:v.name, sets:v.sets, rest:v.rest, notes:v.notes, global:v.global, photo:v.photo, reps:v.reps, bw:v.bw, namePt:v.namePt, nameEn:v.nameEn};
   openModal(`<h2>${e ? "Editar exercício" : "Novo exercício"}</h2>
     <div class="field"><label for="f-name">Nome</label>
     <input id="f-name" value="${esc(v.name)}" placeholder="Ex.: Supino reto" maxlength="60">
@@ -1716,7 +1756,7 @@ function routinePickForm(rid, gymId){
       return `<div class="fooditem ${on?"eaten":"pending"}" data-action="rt-toggle-ex" data-id="${r.id}" data-ex="${e.id}" style="cursor:pointer">
         <button class="ftick ${on?"on":""}" tabindex="-1">${on?"✓":""}</button>
         ${e.photo?`<img class="exthumb" src="${esc(e.photo)}" alt="" loading="lazy" style="width:34px;height:34px" onerror="this.style.display='none'">`:""}
-        <span class="fn">${esc(e.name)}${e.gymId===null?' <span class="pill glob">🌐</span>':""}</span>
+        <span class="fn">${esc(exName(e))}${e.gymId===null?' <span class="pill glob">🌐</span>':""}</span>
       </div>`;
     }).join("") : `<div class="empty">Esta academia ainda não tem exercício. Crie um primeiro.</div>`}
     <div class="sub" style="margin:10px 0">${dentro.length} de ${todos.length} marcados${dentro.length?" · a ordem do treino segue a ordem em que você marcou":""}</div>
@@ -2291,6 +2331,11 @@ document.addEventListener("click", ev => {
     location.hash = "#/gym/" + el.dataset.id;
   }
   else if(a === "close-modal"){ closeModal(); }
+  else if(a === "ex-lang"){
+    db.settings.exLang = exLang() === "en" ? "pt" : "en";
+    save(); render();
+    toast(exLang() === "en" ? "Nomes em inglês 🌐" : "Nomes em português 🌐");
+  }
   else if(a === "sessions-all"){ sessionsAll = !sessionsAll; render(); }
   else if(a === "del-session"){
     ev.stopPropagation();
@@ -2348,8 +2393,8 @@ document.addEventListener("click", ev => {
     const e = exById(el.dataset.id); if(!e) return;
     const k = skipKey(e, el.dataset.rt);
     db.settings.skipToday = db.settings.skipToday || {};
-    if(db.settings.skipToday[k] === todayStr()){ delete db.settings.skipToday[k]; toast(`${e.name} voltou para a lista`); }
-    else { db.settings.skipToday[k] = todayStr(); toast(`${e.name}: hoje não`); }
+    if(db.settings.skipToday[k] === todayStr()){ delete db.settings.skipToday[k]; toast(`${exName(e)} voltou para a lista`); }
+    else { db.settings.skipToday[k] = todayStr(); toast(`${exName(e)}: hoje não`); }
     save(); render();
     checkWorkoutDone();          // riscar o último que faltava também fecha o treino
   }
@@ -2427,15 +2472,22 @@ document.addEventListener("click", ev => {
   }
   else if(a === "add-ex") exForm(el.dataset.gym, null);
   else if(a === "suggest-name"){ openSuggest(); }
-  else if(a === "sugg-lang"){ suggState.lang = el.dataset.v; renderSuggest(); }
+  /* o idioma escolhido aqui e o mesmo do app inteiro: um botao so, em todo lugar */
+  else if(a === "sugg-lang"){
+    db.settings.exLang = el.dataset.v; save();
+    /* o mesmo botao serve nos Ajustes, onde nao ha modal de sugestao para redesenhar */
+    if(document.getElementById("modal").classList.contains("on")) renderSuggest(); else render();
+  }
+  else if(a === "sugg-ai"){ aiSuggest(false); }
   else if(a === "sugg-back"){ const c = exFormCtx; if(c) exForm(c.gymId, c.id ? exById(c.id) : null, c); else closeModal(); }
   else if(a === "pick-sugg"){
     const x = suggState.results[+el.dataset.i]; if(!x) return;
     const c = exFormCtx || {gymId: route().gymId, id: ""};
-    c.name = suggState.lang === "pt" ? ptNameOf(x.n, x.e) : x.n;
+    c.namePt = ptNameOf(x.n, x.e); c.nameEn = x.n;
+    c.name = exLang() === "en" ? c.nameEn : c.namePt;
     c.photo = ExDb.img(x.i);
     exForm(c.gymId, c.id ? exById(c.id) : null, c);
-    toast("Nome e foto aplicados ✓");
+    toast("Nome (PT e EN) e foto aplicados ✓");
   }
   else if(a === "rm-photo"){ exFormSnapshot(); const c = exFormCtx; c.photo = ""; exForm(c.gymId, c.id ? exById(c.id) : null, c); }
   else if(a === "open-gallery"){ openGallery(); }
@@ -2444,7 +2496,8 @@ document.addEventListener("click", ev => {
   else if(a === "pick-gal"){
     const x = (ExDb.list||[])[+el.dataset.i]; if(!x) return;
     const c = exFormCtx || {gymId: route().gymId, id: ""};
-    if(!c.name || !c.name.trim()) c.name = ptNameOf(x.n, x.e);   // não sobrescreve nome que ele já digitou
+    c.namePt = ptNameOf(x.n, x.e); c.nameEn = x.n;
+    if(!c.name || !c.name.trim()) c.name = exLang() === "en" ? c.nameEn : c.namePt;   // não sobrescreve nome que ele já digitou
     c.photo = ExDb.img(x.i);
     exForm(c.gymId, c.id ? exById(c.id) : null, c);
     toast("Foto aplicada ✓");
@@ -2469,11 +2522,18 @@ document.addEventListener("click", ev => {
     const notes = document.getElementById("f-notes").value.trim();
     const photo = (document.getElementById("f-photo") || {value:""}).value;
     if(!name){ toast("Dê um nome ao exercício."); return; }
+    /* o par PT/EN só continua valendo se o nome digitado ainda for um dos dois; se você
+       renomeou para algo seu, o botão de idioma não tem mais o que trocar */
+    const cx = exFormCtx || {};
+    const casa = n2 => n2 && norm(n2) === norm(name);
+    const pt = (casa(cx.namePt) || casa(cx.nameEn)) ? (cx.namePt || "") : "";
+    const en = (casa(cx.namePt) || casa(cx.nameEn)) ? (cx.nameEn || "") : "";
     if(el.dataset.id){
       const e = exById(el.dataset.id);
-      e.name = name; e.targetSets = sets; e.restSec = restS; e.reps = reps; e.bw = bw; e.notes = notes; e.photo = photo; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
+      e.name = name; e.namePt = pt || undefined; e.nameEn = en || undefined;
+      e.targetSets = sets; e.restSec = restS; e.reps = reps; e.bw = bw; e.notes = notes; e.photo = photo; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
     } else {
-      db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, targetSets:sets, restSec:restS, reps, bw, notes, photo, order: nextOrder()});
+      db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, namePt:pt||undefined, nameEn:en||undefined, targetSets:sets, restSec:restS, reps, bw, notes, photo, order: nextOrder()});
     }
     exFormCtx = null;
     save(); closeModal(); render();
@@ -2481,7 +2541,7 @@ document.addEventListener("click", ev => {
   else if(a === "ex-menu"){
     const e = exById(el.dataset.id), gymId = el.dataset.gym;
     const others = db.gyms.filter(g => g.id !== gymId);
-    openModal(`<h2>${esc(e.name)}</h2>
+    openModal(`<h2>${esc(exName(e))}</h2>
       <button class="menuitem" data-action="edit-ex" data-gym="${gymId}" data-id="${e.id}"><span class="mi">✏️</span> Editar (nome, séries, descanso, global)</button>
       ${others.length ? `<button class="menuitem" data-action="copy-ex" data-id="${e.id}"><span class="mi">📋</span> Copiar para outra academia…</button>` : ""}
       <button class="menuitem" data-action="toggle-global" data-gym="${gymId}" data-id="${e.id}"><span class="mi">🌐</span> ${e.gymId === null ? "Tornar exclusivo desta academia" : "Tornar global (todas as academias)"}</button>
@@ -2491,13 +2551,13 @@ document.addEventListener("click", ev => {
   else if(a === "copy-ex"){
     const e = exById(el.dataset.id), cur = route();
     const others = db.gyms.filter(g => g.id !== cur.gymId);
-    openModal(`<h2>Copiar "${esc(e.name)}" para…</h2>
+    openModal(`<h2>Copiar "${esc(exName(e))}" para…</h2>
       ${others.map(g => `<button class="menuitem" data-action="do-copy" data-id="${e.id}" data-gym="${g.id}"><span class="mi">🏋️</span> ${esc(g.name)}</button>`).join("")}
       <p class="sub" style="margin-top:10px">A cópia começa sem histórico — leva só nome, séries e descanso.</p>`);
   }
   else if(a === "do-copy"){
     const e = exById(el.dataset.id), g = gymById(el.dataset.gym);
-    db.exercises.push({id:uid(), gymId:g.id, name:e.name, targetSets:e.targetSets, restSec:e.restSec, notes:e.notes||"", photo:e.photo||"", order: nextOrder()});
+    db.exercises.push({id:uid(), gymId:g.id, name:e.name, namePt:e.namePt, nameEn:e.nameEn, targetSets:e.targetSets, restSec:e.restSec, notes:e.notes||"", photo:e.photo||"", order: nextOrder()});
     save(); closeModal(); toast(`Copiado para ${g.name} ✓`);
   }
   else if(a === "toggle-global"){
@@ -2508,7 +2568,7 @@ document.addEventListener("click", ev => {
   }
   else if(a === "delete-ex"){
     const e = exById(el.dataset.id);
-    if(!confirm(`Excluir "${e.name}" e todo o histórico dele?`)) return;
+    if(!confirm(`Excluir "${exName(e)}" e todo o histórico dele?`)) return;
     db.exercises = db.exercises.filter(x => x.id !== e.id);
     db.logs = db.logs.filter(l => l.exerciseId !== e.id);
     save(); closeModal(); location.hash = "#/gym/" + el.dataset.gym; render();
@@ -2533,8 +2593,8 @@ document.addEventListener("click", ev => {
     /* o rótulo vai para a barra de descanso E para a notificação: você sabe em qual série está */
     const dn = l.sets.length;
     const lbl = dn >= e.targetSets
-      ? `${e.name} — ${dn}/${e.targetSets} séries feitas ✓`
-      : `${e.name} — agora a série ${dn+1}/${e.targetSets}`;
+      ? `${exName(e)} — ${dn}/${e.targetSets} séries feitas ✓`
+      : `${exName(e)} — agora a série ${dn+1}/${e.targetSets}`;
     if(db.settings.autoRest) startRest(e.restSec, lbl, e.id, cur.gymId);
     /* a academia (e o treino) onde a série foi feita vira o foco do dia */
     setFocus(cur.gymId, gymRoutine);
@@ -2901,7 +2961,9 @@ const ExDb = {
     try{ localStorage.setItem(EXDB_LS, JSON.stringify(this.list)); }catch(e){}   // cache (~90 KB)
     return this.list;
   },
-  search(q){
+  /* devolve {x, sc} ordenado — quem chama precisa da NOTA para comparar resultados de
+     buscas diferentes (os vários termos que a IA sugere) */
+  scored(q){
     if(!this.list) return [];
     const query = norm(q);
     let en = " " + query + " ";
@@ -2922,8 +2984,9 @@ const ExDb = {
         sc -= nome.split(/\s+/).length * 0.6;        // desempata pelo nome mais curto
       }
       return {x, sc};
-    }).filter(r => r.sc > 0).sort((a,b) => b.sc - a.sc).slice(0, 12).map(r => r.x);
+    }).filter(r => r.sc > 0).sort((a,b) => b.sc - a.sc);
   },
+  search(q){ return this.scored(q).slice(0, 12).map(r => r.x); },
   img(path){ return path ? EXDB_IMG + path : ""; }
 };
 
@@ -2974,7 +3037,7 @@ async function downloadPhotos(lista, onStep){
   let ok = 0, falhou = 0, pulou = 0;
   for(let i = 0; i < lista.length; i++){
     const e = lista[i];
-    if(onStep) onStep(i + 1, lista.length, e.name);
+    if(onStep) onStep(i + 1, lista.length, exName(e));
     if(!e.photo || e.photo.slice(0,5) === "data:"){ pulou++; continue; }
     try{
       const url = await photoFromUrl(e.photo);
@@ -3002,45 +3065,81 @@ const EQ_PT_FILTRO = {machine:"Máquina", cable:"Polia", "smith machine":"Smith"
 let galState = {mus:"", eq:"machine", q:""};      // abre no que ele mais precisa: máquinas
 
 /* ===================== SUGESTÃO: estado ===================== */
-let suggState = {lang:"pt", results:[], query:""};
+let suggState = {results:[], query:"", ai:null, aiErro:"", buscando:false};
 async function openSuggest(){
   const q = (document.getElementById("f-name") || {}).value || "";
   exFormSnapshot();                                        // guarda o que já foi digitado
   if(!q.trim()){ toast("Escreva o nome do exercício primeiro."); return; }
-  suggState.query = q;
+  suggState.query = q; suggState.ai = null; suggState.aiErro = "";
   openModal(`<h2>🔍 Buscando "${esc(q)}"…</h2><div class="empty">Consultando a base de exercícios…</div>`);
   try{
     await ExDb.load();
     suggState.results = ExDb.search(q);
+    /* com a chave configurada, a IA entra SEMPRE. A busca local casa palavra com palavra,
+       então devolve lista cheia e errada com a mesma cara de lista cheia e certa
+       ("voador invertido" trazia "Reverse Crunch" em primeiro). Contar resultados não
+       distingue as duas, e é uma chamada curta por busca — cabe no plano gratuito. */
+    if(geminiKey()){ await aiSuggest(true); return; }
     renderSuggest();
   }catch(e){
     openModal(`<h2>Sugestões</h2><div class="empty">Não deu para carregar a base agora.<br>Confira a internet e tente de novo.</div>
       <button class="btn ghost" data-action="sugg-back">Voltar</button>`);
   }
 }
+async function aiSuggest(auto){
+  const q = suggState.query;
+  suggState.buscando = true; suggState.aiErro = "";
+  openModal(`<h2>🤖 Entendendo "${esc(q)}"…</h2><div class="empty">Perguntando para a IA qual exercício é.</div>`);
+  try{
+    await ExDb.load();
+    const r = await aiExercise(q);
+    suggState.ai = r;
+    const achou = mergeSearch(r.en.concat([q]));
+    if(achou.length) suggState.results = achou;
+  }catch(e){
+    suggState.aiErro = (e && e.message) || String(e);
+    if(!auto) toast(suggState.aiErro);
+  }
+  suggState.buscando = false;
+  renderSuggest();
+}
 function renderSuggest(){
   const rs = suggState.results;
+  const ai = suggState.ai;
+  const cabeca = `<h2>Sugestões para "${esc(suggState.query)}"</h2>
+    ${ai ? `<div class="card" style="margin-bottom:10px; padding:10px 12px">
+        🤖 Entendi que você quis dizer <b>${esc(ai.pt || ai.en[0])}</b>
+        <div class="sub" style="margin-top:2px">em inglês: ${esc(ai.en.slice(0,3).join(" · "))}${ai.mus?` · ${esc(ai.mus)}`:""}</div>
+      </div>` : ""}
+    ${suggState.aiErro ? `<div class="sub" style="color:var(--gold); margin-bottom:10px">🤖 ${esc(suggState.aiErro)}</div>` : ""}`;
+  /* o botão de IA só aparece quando faz sentido: ainda não usei e existe chave */
+  const btnAi = (!ai && geminiKey())
+    ? `<button class="btn ghost sm" data-action="sugg-ai" style="margin-bottom:10px">🤖 Perguntar para a IA qual exercício é</button>`
+    : (!geminiKey()
+      ? `<div class="sub" style="margin-bottom:10px">🤖 A IA pode entender o nome que você usa (ex.: "biceps curl sentado" → rosca sentada) — configure a chave gratuita nos <b>Ajustes</b>.</div>`
+      : "");
   if(!rs.length){
-    openModal(`<h2>Sugestões para "${esc(suggState.query)}"</h2>
-      <div class="empty">Nenhum exercício parecido encontrado.<br>Tente outro termo (ex.: "supino", "remada", "rosca").</div>
-      <button class="btn ghost" data-action="sugg-back">Voltar</button>`);
+    openModal(cabeca + btnAi +
+      `<div class="empty">Nenhum exercício parecido encontrado.<br>Tente outro termo (ex.: "supino", "remada", "rosca").</div>
+       <button class="btn ghost" data-action="sugg-back" style="margin-top:12px">Voltar</button>`);
     return;
   }
-  openModal(`<h2>Sugestões para "${esc(suggState.query)}"</h2>
-    <div class="field"><label>Nome do exercício em:</label>
+  openModal(cabeca + btnAi + `
+    <div class="field"><label>Mostrar os nomes em:</label>
       <div class="seg">
-        <button type="button" data-action="sugg-lang" data-v="pt" class="${suggState.lang==="pt"?"on":""}">Português</button>
-        <button type="button" data-action="sugg-lang" data-v="en" class="${suggState.lang==="en"?"on":""}">Inglês</button>
-      </div></div>
+        <button type="button" data-action="sugg-lang" data-v="pt" class="${exLang()==="pt"?"on":""}">Português</button>
+        <button type="button" data-action="sugg-lang" data-v="en" class="${exLang()==="en"?"on":""}">Inglês</button>
+      </div>
+      <div class="hint">Vale para o app inteiro — e os dois nomes ficam guardados no exercício.</div></div>
     ${rs.map((x,i) => {
-      const pt = ptNameOf(x.n, x.e), main = suggState.lang==="pt" ? pt : x.n, alt = suggState.lang==="pt" ? x.n : pt;
+      const pt = ptNameOf(x.n, x.e), main = exLang()==="pt" ? pt : x.n, alt = exLang()==="pt" ? x.n : pt;
       return `<button class="suggrow" data-action="pick-sugg" data-i="${i}">
         <img src="${ExDb.img(x.i)}" alt="" loading="lazy">
         <div style="min-width:0"><div class="t">${esc(main)}</div>
         <div class="d">${esc(alt)}${x.e?" · "+esc(x.e):""}${x.m?" · "+esc(x.m):""}</div></div></button>`;
     }).join("")}
     <button class="btn ghost" data-action="sugg-back" style="margin-top:12px">Voltar sem escolher</button>
-    <p class="sub" style="margin-top:8px">Fotos e nomes: base pública free-exercise-db.</p>`);
+    <p class="sub" style="margin-top:8px">Fotos e nomes: base pública free-exercise-db${ai?" · a IA só entendeu o termo, a foto vem do catálogo":""}.</p>`);
 }
 
 async function openGallery(){
@@ -3356,6 +3455,67 @@ async function aiNutri(nome){
   const n = v => { const x = Number(v); return isFinite(x) && x >= 0 ? Math.round(x*10)/10 : 0; };
   return {alimento:d.alimento || nome, kcal:n(d.kcal), p:n(d.proteina), c:n(d.carboidrato),
     g:n(d.gordura), gUn:n(d.gramas_por_unidade), conf:d.confianca || "baixa", model};
+}
+
+/* ---- a IA entende QUAL exercício você quis dizer ----
+   A busca local casa palavra com palavra, então "biceps curl sentado" não achava a rosca
+   sentada: metade está em inglês, metade em português, e nenhuma das duas bate com
+   "Seated Dumbbell Curl". Aqui a IA só TRADUZ a intenção para nomes em inglês do jeito
+   que o catálogo escreve; quem acha a foto continua sendo a busca local, então nada de
+   imagem inventada. Uma chamada curta por busca — cabe no plano gratuito. */
+async function aiExercise(q){
+  if(!geminiKey()) throw new Error("Sem chave da IA. Configure nos Ajustes.");
+  const model = db.settings.aiModel || (await aiConnect()).modelo;
+  const j = await geminiFetch("/models/" + encodeURIComponent(model) + ":generateContent", {
+    method:"POST",
+    body: JSON.stringify({
+      contents:[{parts:[{text:
+        `Uma pessoa procura um exercício de musculação e escreveu: "${q}".\n` +
+        `O texto pode misturar português e inglês, ter erro de digitação, ou usar o nome ` +
+        `que a academia dela usa no Brasil.\n` +
+        `Em "ingles", dê de 1 a 5 nomes em INGLÊS do jeito que aparecem em catálogos de ` +
+        `exercícios (ex.: "seated dumbbell curl", "preacher curl", "incline bench press"), ` +
+        `do mais provável para o menos provável.\n` +
+        `Em "portugues", o nome usual no Brasil (ex.: "Rosca sentada").\n` +
+        `Se o texto não for um exercício de musculação, devolva a lista vazia.`}]}],
+      generationConfig:{
+        temperature: 0,
+        responseMimeType: "application/json",
+        responseSchema: { type:"OBJECT", properties:{
+          ingles:{type:"ARRAY", items:{type:"STRING"}},
+          portugues:{type:"STRING"},
+          musculo:{type:"STRING"}
+        }, required:["ingles","portugues"] }
+      }
+    })
+  });
+  const parts = (((j.candidates||[])[0]||{}).content||{}).parts;
+  const raw = parts && parts[0] && parts[0].text;
+  if(!raw) throw new Error("A IA não respondeu nada. Tente de novo.");
+  let d; try{ d = JSON.parse(raw); }catch(e){ throw new Error("Resposta da IA veio ilegível."); }
+  const en = (d.ingles || []).filter(x => typeof x === "string" && x.trim()).slice(0, 5);
+  if(!en.length) throw new Error(`A IA não reconheceu "${q}" como exercício.`);
+  return {en, pt: d.portugues || "", mus: d.musculo || ""};
+}
+/* usa os termos da IA na busca local e junta tudo, sem repetir.
+   Rodizio, nao um termo depois do outro: o melhor de cada termo primeiro, depois o
+   segundo melhor de cada. Senao os 12 resultados do primeiro termo enterram os demais —
+   "seated dumbbell curl" enchia a lista de rosca de PUNHO antes de a segunda opcao
+   aparecer. */
+function mergeSearch(termos){
+  /* cada termo puxa a nota da busca local, e o termo mais provavel da IA pesa mais.
+     Comparar NOTAS, e nao posicoes, e o que faz um bom resultado do segundo palpite
+     ganhar de um resultado fraco do primeiro: "reverse pec deck" nao existe no catalogo
+     e trazia "Reverse Crunch" em primeiro so por estar no palpite inicial. */
+  const best = new Map();
+  termos.forEach((t, i) => {
+    const peso = Math.pow(0.85, i);
+    ExDb.scored(t).forEach(({x, sc}) => {
+      const v = sc * peso, ja = best.get(x.n);
+      if(!ja || v > ja.v) best.set(x.n, {x, v});
+    });
+  });
+  return [...best.values()].sort((a, b) => b.v - a.v).slice(0, 12).map(r => r.x);
 }
 
 /* ---------- refeição livre ----------
@@ -5278,8 +5438,8 @@ document.addEventListener("visibilitychange", () => {
 
 /* ===================== Não Perturbe =====================
    No Não Perturbe o Android silencia a notificação do descanso: a vibração ainda vai,
-   mas o som não toca. Melhor avisar do que ele achar que o app quebrou. */
-let dndState = null;
+   mas o som não toca. Melhor avisar do que ele achar que o app quebrou.
+   (o `dndState` é declarado lá em cima, junto do resto do estado das telas) */
 async function dndCheck(){
   const RC = native.plugin("RestChannel");
   if(!native.isNative || !RC || !RC.dnd) return null;
