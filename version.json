@@ -1,10 +1,10 @@
 {
-  "version": 33,
-  "name": "3.3",
+  "version": 34,
+  "name": "3.4",
   "minNative": 31,
   "files": [
     "index.html"
   ],
-  "notes": "A busca de exercicio agora usa IA (Gemini, chave gratuita do AI Studio - a mesma da nutricao) para ENTENDER o que voce escreveu, mesmo misturando portugues com ingles, com erro de digitacao ou com o nome que a academia usa: \"bicps curl sentdo\" acha Rosca sentada, \"voador invertido\" acha Reverse Machine Flyes. A IA so traduz o termo - a foto continua vindo do catalogo publico, nada de imagem inventada. Sem chave, a busca antiga continua funcionando. Exercicio escolhido do catalogo passa a guardar o nome em portugues E em ingles, e um botao 🌐 troca qual aparece no app inteiro de uma vez (na tela da academia e nos Ajustes). Conserto: abrir o app direto na tela de uma academia deixava a tela em branco.",
+  "notes": "A forca da sessao passou a sair de TODAS as series de trabalho do dia (as do peso mais alto), nao das 3 melhores: a serie do fim, que e justamente a que trava a subida de carga, agora conta igual as outras. O recorde de forca tambem virou de SESSAO - so festeja quando a media de todas as series passa a da melhor sessao anterior, em vez de uma serie de sorte. A tela do exercicio ganhou a barra do ciclo da progressao dupla (ex.: 27/36 reps, faltam 9 para a carga subir), a meta de reps em destaque no topo, e cada serie pendente agora vem com as REPS QUE VOCE FEZ DA ULTIMA VEZ naquela mesma serie, com a meta ao lado - antes vinha a meta ja preenchida, e bastava tocar em confirmar para registrar um numero que voce nao fez. Quando fecha a faixa toda, o ciclo recomeca no piso com a carga maior. A busca de exercicio com IA nao trava mais a tela: a lista aparece na hora e se reorganiza quando a IA responde, com cache das respostas e limite de espera.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

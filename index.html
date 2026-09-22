@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v3.3</title>
+<title>Fitness Global v3.4</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -286,6 +286,16 @@ table.xls td.dl.up{color:var(--good);} table.xls td.dl.down{color:var(--bad);}  
 .card.gymfocus{border-color:var(--accent); box-shadow:0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);}
 .focusline{font-size:.72rem; font-weight:800; color:var(--accent); margin-top:2px;}
 .wkdone{border-color:color-mix(in srgb, var(--good) 45%, var(--border)) !important;}
+.dpbar{position:relative; height:20px; border-radius:999px; background:var(--surface2); overflow:hidden; margin:8px 0 6px;}
+.dpfill{height:100%; background:color-mix(in srgb, var(--accent) 55%, transparent); transition:width .25s;}
+.dpfill.full{background:color-mix(in srgb, var(--good) 62%, transparent);}
+.dptxt{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-size:.68rem; font-weight:800; color:var(--text); letter-spacing:.02em;}
+/* dica da serie pendente: fica FORA do grid .setrow (e irma dele), entao e bloco normal
+   com recuo igual a coluna do numero */
+.setlast{font-size:.68rem; color:var(--faint); padding:0 0 8px 42px; margin-top:-5px;}
+.setlast b{color:var(--muted);}
+.setlast .meta{color:var(--accent);}
 .skipbtn{flex:none; color:var(--faint);}
 .skipbtn.on{color:var(--gold); border-color:color-mix(in srgb, var(--gold) 45%, var(--border));}
 .vtag{font-size:.62rem; font-weight:800; color:var(--faint); vertical-align:middle;
@@ -390,8 +400,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "3.3";
-const APP_VERSION = 33;
+const APP_NAME_VERSION = "3.4";
+const APP_VERSION = 34;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -630,13 +640,37 @@ function e1rm(w, r){ return r >= 1 ? w * (1 + r/30) : 0; }
 function bestE1rmOfSets(sets){ return Math.max(...sets.map(s => e1rm(s.weight, s.reps))); }
 
 /* ---------- progressão de carga ----------
-   O placar de uma sessão NÃO é a melhor série: é a MÉDIA do e1RM das 3 séries mais
-   fortes. Assim uma série sozinha (de sorte, ou digitada errado) não manda no número,
-   e fazer uma série extra fraca não derruba o placar — as 3 melhores seguem as 3
-   melhores. Com menos de 3 séries usa as que tiver. */
+   "Fiquei mais forte?" não pode sair de UMA série. A série boa de sorte sobe o número
+   sozinha, e a série do fim — que é justamente a que trava a subida de carga na
+   progressão dupla — sumia da conta quando o placar pegava só as 3 melhores.
+
+   Placar da sessão = MÉDIA do 1RM estimado de TODAS as séries de trabalho do dia.
+   Séries de trabalho = as feitas no peso mais alto daquele dia: aquecimento leve fica
+   de fora sozinho, e a série extra no mesmo peso entra, porque ela também é trabalho.
+   Média, e não soma, para o placar não subir só por fazer mais séries.
+
+   A fórmula do 1RM estimado é a de Epley (1985): 1RM ≈ peso × (1 + reps/30). É ela que
+   deixa comparar 60 kg × 12 com 70 kg × 8 num número só. */
+function workSetsOf(sets){
+  const list = (sets || []).filter(s => s && s.reps > 0);
+  if(!list.length) return [];
+  const w = Math.max(...list.map(s => s.weight));
+  return list.filter(s => s.weight === w);
+}
 function sessionLoad(sets){
-  const v = sets.map(s => e1rm(s.weight, s.reps)).filter(x => x > 0).sort((a,b) => b-a).slice(0,3);
+  const v = workSetsOf(sets).map(s => e1rm(s.weight, s.reps)).filter(x => x > 0);
   return v.length ? v.reduce((a,b) => a+b, 0) / v.length : 0;
+}
+function sessionVolume(sets){ return (sets || []).reduce((a,s) => a + s.weight*s.reps, 0); }
+/* melhor sessão já feita (fora de uma data, para comparar a de hoje com o passado) */
+function bestSession(exId, exceto){
+  let v = 0, d = "";
+  exLogs(exId).forEach(l => {
+    if(l.date === exceto) return;
+    const x = sessionLoad(l.sets);
+    if(x > v){ v = x; d = l.date; }
+  });
+  return {v, d};
 }
 function loadSeries(exId){
   return exLogs(exId).map(l => ({d:l.date, v:sessionLoad(l.sets), n:l.sets.length}));
@@ -972,20 +1006,46 @@ function loadStep(exId){
    (assim um aquecimento leve não estraga a leitura) */
 function workSets(log){
   if(!log || !log.sets.length) return {w:0, reps:[]};
-  const w = Math.max(...log.sets.map(s=>s.weight));
-  return {w, reps: log.sets.filter(s=>s.weight === w).map(s=>s.reps)};
+  const ws = workSetsOf(log.sets);
+  return {w: ws.length ? ws[0].weight : 0, reps: ws.map(s => s.reps)};
+}
+/* ---- onde você está no ciclo da progressão dupla ----
+   Sua regra: meta 8–12 em 3 séries. A carga só sobe quando as TRÊS chegam a 12 — ou
+   seja, quando a soma bate 3 × 12 = 36 reps no topo. Aí o peso sobe um degrau e você
+   recomeça em 8 nas três, e sobe rep a rep até fechar 36 de novo.
+   Isto mede exatamente esse ciclo: quantas reps faltam para a carga subir. É a conta
+   que decide a progressão — e ela olha TODAS as séries, não uma. */
+function dpState(e, log){
+  const range = parseReps(e.reps);
+  if(!range || !log || !log.sets.length) return null;
+  const ws = workSetsOf(log.sets);
+  if(!ws.length) return null;
+  const alvo = Math.max(e.targetSets || 1, 1);
+  const reps = ws.map(s => s.reps).slice(0, alvo);
+  const teto = alvo * range.max;
+  /* rep acima do topo da faixa não vale ponto extra: 14 numa série não paga a que ficou
+     em 10, senão dava para "subir de carga" sem ter fechado todas */
+  const feito = reps.reduce((a,r) => a + Math.min(r, range.max), 0);
+  return {range, peso: ws[0].weight, reps, alvo, teto, feito,
+    faltam: Math.max(0, teto - feito),
+    seriesFaltando: Math.max(0, alvo - reps.length),
+    pct: teto ? Math.min(100, feito / teto * 100) : 0,
+    fechou: reps.length >= alvo && reps.every(r => r >= range.max)};
 }
 function nextTarget(e){
   const range = parseReps(e.reps);
   if(!range) return {falta:"reps"};
   const logs = exLogs(e.id);
   if(!logs.length) return {falta:"historico", range};
-  const {w, reps} = workSets(logs[logs.length-1]);
+  /* o plano de hoje sai da última sessão FECHADA. Usando o log de hoje, a meta mudava
+     no meio do treino: bastava a 1ª série boa para ele já mandar subir a carga. */
+  const base = logs.filter(l => l.date !== todayStr()).pop() || logs[logs.length-1];
+  const {w, reps} = workSets(base);
   const alvo = e.targetSets;
   const fechou = reps.length >= alvo && reps.slice(0, alvo).every(r => r >= range.max);
   const step = loadStep(e.id);
   if(fechou){
-    return {tipo:"subir", range, step, de:w,
+    return {tipo:"subir", range, step, de:w, base,
       peso: step != null ? Math.round((w + step)*100)/100 : null,
       metaReps: range.min, sets: alvo, ultima: reps.slice(0, alvo)};
   }
@@ -995,8 +1055,14 @@ function nextTarget(e){
     const feito = reps[i] != null ? reps[i] : 0;
     if(feito < range.max) faltas.push({serie:i+1, feito, falta: range.max - feito});
   }
-  return {tipo:"manter", range, peso:w, metaReps:range.max, sets:alvo,
-    ultima: reps.slice(0, alvo), faltas};
+  return {tipo:"manter", range, peso:w, metaReps:range.max, sets:alvo, base,
+    ultima: reps.slice(0, alvo), faltas,
+    faltamReps: faltas.reduce((a,x) => a + x.falta, 0)};
+}
+/* "a, b e c" — o join(" e ") simples virava "a e b e c" com tres series */
+function listaPt(arr){
+  if(arr.length <= 1) return arr.join("");
+  return arr.slice(0, -1).join(", ") + " e " + arr[arr.length - 1];
 }
 function targetHtml(e){
   const t = nextTarget(e);
@@ -1014,12 +1080,21 @@ function targetHtml(e){
     </div>`;
   }
   const f = t.faltas;
+  const dp = dpState(e, t.base);
   return `<div class="goalcard">
     <div class="gh">🎯 Hoje: <b>${fmtW(t.peso)} kg</b> · ${Array(t.sets).fill(t.metaReps).join(" · ")} reps</div>
     <div class="gm">Última vez: ${t.ultima.length ? t.ultima.join(" · ") : "—"}</div>
+    ${dp ? dpBarHtml(dp) : ""}
     <div class="gs">${f.length
-      ? "Falta " + f.map(x=>`<b>${x.falta}</b> rep${x.falta>1?"s":""} na ${serie(x.serie)}`).join(" e ") + `. Fechando ${t.range.max} em todas, a carga sobe.`
+      ? "Falta " + listaPt(f.map(x=>`<b>${x.falta}</b> rep${x.falta>1?"s":""} na ${serie(x.serie)}`)) + `. Fechando ${t.range.max} em todas, a carga sobe.`
       : `Feche ${t.sets} séries de ${t.range.max} para subir a carga.`}</div>
+  </div>`;
+}
+/* barra do ciclo da progressão dupla: quanto do caminho até subir a carga já foi feito */
+function dpBarHtml(dp){
+  return `<div class="dpbar" title="Soma das reps das séries de trabalho, com teto na faixa">
+    <div class="dpfill${dp.fechou ? " full" : ""}" style="width:${dp.pct.toFixed(1)}%"></div>
+    <span class="dptxt">${dp.feito}/${dp.teto} reps${dp.fechou ? " — fechou ✓" : ` · faltam ${dp.faltam}`}</span>
   </div>`;
 }
 
@@ -1251,14 +1326,38 @@ function renderEx(g, e){
         <button class="ok" data-action="del-set" data-ex="${e.id}" data-i="${i}" aria-label="Apagar série ${i+1}">✓</button>
       </div>`;
     } else {
-      /* já vem preenchido com a META de hoje (peso e reps da progressão); sem meta,
-         repete a última vez, como antes */
-      const ref = (prev && prev.sets[i]) || (prev && prev.sets[prev.sets.length-1]) || done[done.length-1] || null;
+      /* A série pendente vem com o que você FEZ da última vez NESTA MESMA POSIÇÃO — é a
+         marca a bater. Antes vinha a meta já preenchida, então bastava tocar em ✓ para
+         registrar um número que você não fez.
+         Exceção: quando fechou a faixa toda, a carga sobe e o ciclo recomeça no piso
+         (8 nas três), que é a sua regra de progressão dupla. */
+      const refPos = (prev && prev.sets[i]) || null;                 // mesma posição de série
+      const ref = refPos || (prev && prev.sets[prev.sets.length-1]) || done[done.length-1] || null;
       let pw = ref ? String(ref.weight) : "", pr = ref ? String(ref.reps) : "";
-      if(alvoHoje && alvoHoje.peso != null && alvoHoje.metaReps != null){
-        pw = String(alvoHoje.peso); pr = String(alvoHoje.metaReps);
-        if(done.length) pw = String(done[done.length-1].weight);   // já começou: segue o peso do dia
+      let dica = "";
+      if(alvoHoje && alvoHoje.tipo === "subir"){
+        /* fechou a faixa: recomeça no piso com a carga maior. Quando o app ainda não
+           sabe o degrau da máquina, o peso fica o antigo para você trocar na mão — mas
+           as reps já vão para o piso, que é o que muda no ciclo. */
+        pr = String(alvoHoje.metaReps);
+        pw = alvoHoje.peso != null ? String(alvoHoje.peso) : pw;
+        dica = alvoHoje.peso != null
+          ? `fechou ${fmtW(alvoHoje.de)} × ${refPos ? refPos.reps : alvoHoje.range.max} → <span class="meta">carga nova ${fmtW(alvoHoje.peso)} kg, meta ${alvoHoje.metaReps}</span>`
+          : `fechou ${fmtW(alvoHoje.de)} × ${refPos ? refPos.reps : alvoHoje.range.max} → <span class="meta">suba o pino e faça ${alvoHoje.metaReps}</span>`;
+      } else if(alvoHoje && alvoHoje.tipo === "manter"){
+        pw = String(alvoHoje.peso);
+        if(refPos){
+          pr = String(refPos.reps);
+          const falta = Math.max(0, alvoHoje.range.max - refPos.reps);
+          dica = `última: <b>${fmtW(refPos.weight)} × ${refPos.reps}</b> → <span class="meta">meta ${alvoHoje.range.max}${falta ? ` (falta ${falta})` : " ✓"}</span>`;
+        } else {
+          pr = String(alvoHoje.range.min);
+          dica = `série nova → <span class="meta">meta ${alvoHoje.range.max}</span>`;
+        }
+      } else if(refPos){
+        dica = `última: <b>${fmtW(refPos.weight)} × ${refPos.reps}</b>`;
       }
+      if(done.length) pw = String(done[done.length-1].weight);       // já começou: segue o peso do dia
       /* peso do corpo: o kg vem do seu último peso registrado (dá para escrever por cima) */
       if(e.bw && !done.length){ const b = lastBodyWeight(); if(b) pw = String(b.kg); }
       else if(e.bw && done.length) pw = String(done[done.length-1].weight);
@@ -1267,7 +1366,7 @@ function renderEx(g, e){
         <input type="number" inputmode="decimal" step="any" min="0" id="w${i}" value="${pw}" placeholder="kg" aria-label="Peso da série ${i+1}">
         <input type="number" inputmode="numeric" step="1" min="1" id="r${i}" value="${pr}" placeholder="reps" aria-label="Repetições da série ${i+1}">
         <button class="ok" data-action="log-set" data-ex="${e.id}" data-i="${i}" aria-label="Confirmar série ${i+1}">✓</button>
-      </div>`;
+      </div>${dica ? `<div class="setlast">${dica}</div>` : ""}`;
     }
   }
 
@@ -1290,7 +1389,9 @@ function renderEx(g, e){
     <div class="pills" style="margin-top:-4px">
       <span class="pill" style="${done.length>=e.targetSets?"color:var(--good);border-color:var(--good)":done.length?"color:var(--gold);border-color:var(--gold)":""}">${done.length}/${e.targetSets} séries hoje</span>
       ${e.bw?`<span class="pill" title="O kg já vem com o seu último peso corporal">🧍 peso do corpo</span>`:""}
-      ${e.reps?`<span class="pill" title="Faixa de repetições alvo">alvo ${esc(e.reps)} reps</span>`:""}
+      ${e.reps
+        ? `<span class="pill" style="color:var(--accent); border-color:var(--accent)" title="Faixa de repetições alvo — a carga sobe quando TODAS as séries fecham o topo">🎯 meta ${esc(e.reps)} reps</span>`
+        : `<button class="pill" data-action="edit-ex" data-gym="${g.id}" data-id="${e.id}" style="cursor:pointer; color:var(--gold); border-color:var(--gold)" title="Sem faixa de reps o app não consegue sugerir a progressão">⚠️ defina a faixa de reps</button>`}
       <span class="pill">descanso ${e.restSec}s</span>
       ${e.gymId === null ? '<span class="pill glob">🌐 em todas as academias</span>' : ""}
       <button class="pill" data-action="edit-ex" data-gym="${g.id}" data-id="${e.id}" style="cursor:pointer">✏️ editar</button>
@@ -1301,6 +1402,17 @@ function renderEx(g, e){
 
     <div class="section"><h2>Treino de hoje · ${fmtDate(todayStr())}</h2>
       ${targetHtml(e)}
+      ${(() => { const dpH = tlog ? dpState(e, tlog) : null;
+        if(!dpH) return "";
+        return `<div class="card" style="padding:10px 12px; margin-bottom:10px">
+          <div class="sub" style="margin-bottom:2px">Hoje, com ${fmtW(dpH.peso)} kg — ${dpH.reps.join(" · ")}</div>
+          ${dpBarHtml(dpH)}
+          <div class="sub" style="font-size:.72rem">${dpH.fechou
+            ? `Fechou ${dpH.range.max} em todas ✓ — no próximo treino a carga sobe.`
+            : dpH.seriesFaltando
+              ? `Faltam ${dpH.seriesFaltando} série${dpH.seriesFaltando>1?"s":""} e ${dpH.faltam} rep${dpH.faltam===1?"":"s"} para fechar a carga.`
+              : `Faltam ${dpH.faltam} rep${dpH.faltam===1?"":"s"} para a carga subir.`}</div>
+        </div>`; })()}
       <div class="card">
         <div class="sethead"><span>#</span><span>kg</span><span>reps</span><span></span></div>
         ${rows}
@@ -1333,7 +1445,7 @@ function renderProg(e, rec){
   }
   const sbs = setBySet(e.id);
   const metricHints = {
-    forca: "Carga da sessão = média do 1RM estimado das suas 3 melhores séries do dia. Usa mais de uma série de propósito: uma série solta não faz o número pular.",
+    forca: "Carga da sessão = média do 1RM estimado de TODAS as séries de trabalho do dia (as do peso mais alto). Aquecimento leve fica de fora; a série do fim conta igual às outras — é ela que trava a subida de carga. 1RM estimado pela fórmula de Epley: peso × (1 + reps/30).",
     peso: "Maior peso que você já colocou no exercício, sessão a sessão.",
     volume: "Volume = soma de (peso × reps) da sessão. Mede o total de trabalho do dia."
   };
@@ -1360,7 +1472,9 @@ function renderProg(e, rec){
     </div>
     <div class="row" style="margin-top:10px; gap:16px; flex-wrap:wrap">
       <div><div class="sub">Carga da sessão</div><div class="bignum">${fmtNum(t.atual)} <small>kg</small></div></div>
-      ${rec ? `<div><div class="sub">🏆 Melhor série</div><div class="bignum">${fmtNum(rec.rm.v)} <small>kg · ${fmtDate(rec.rm.d)}</small></div></div>` : ""}
+      ${(() => { const bs = bestSession(e.id, null);
+        return bs.v ? `<div><div class="sub">🏆 Melhor sessão</div><div class="bignum">${fmtNum(bs.v)} <small>kg · ${fmtDate(bs.d)}</small></div></div>` : ""; })()}
+      ${rec ? `<div><div class="sub">Melhor série</div><div class="bignum" style="font-size:1.1rem">${fmtNum(rec.rm.v)} <small>kg · ${fmtDate(rec.rm.d)}</small></div></div>` : ""}
     </div>
     ${sbsHtml}
     <div class="seg" role="tablist" style="margin-top:14px">
@@ -2290,10 +2404,11 @@ function toast(msg){
 /* ===================== celebração de recorde ===================== */
 const prBox = document.getElementById("pr"), prCard = document.getElementById("prcard");
 function celebratePR(kind, value, unit){
-  const titles = {forca:"Recorde de força!", peso:"Nova carga máxima!", reps:"Recorde de repetições!"};
+  const titles = {forca:"Recorde de força!", peso:"Nova carga máxima!", reps:"Recorde de repetições!",
+    sessao:"Sessão mais forte de todas!"};
   prCard.innerHTML = `<div class="big">🎉🏆</div>
     <h2>${titles[kind]}</h2>
-    <p>Você superou seu melhor de antes:</p>
+    <p>${kind === "sessao" ? "Somando TODAS as séries de trabalho, hoje foi a sua melhor sessão neste exercício:" : "Você superou seu melhor de antes:"}</p>
     <div class="val">${value} ${unit}</div>
     <button data-action="close-pr">Boraa! 💪</button>`;
   prBox.classList.add("on");
@@ -2582,6 +2697,7 @@ document.addEventListener("click", ev => {
     if(!r || r < 1){ toast("Informe as repetições."); return; }
     const e = exById(exId), cur = route();
     const pr = detectPR(exId, w, r);
+    const melhorAntes = bestSession(exId, todayStr());
     let l = todayLog(exId);
     if(!l){ l = {id:uid(), exerciseId:exId, gymId:cur.gymId, date:todayStr(), sets:[]}; db.logs.push(l); }
     /* carimba em qual treino a série foi feita: sem isso um exercício global aparecia
@@ -2589,7 +2705,17 @@ document.addEventListener("click", ev => {
     l.sets.push(gymRoutine ? {weight:w, reps:r, rt:gymRoutine} : {weight:w, reps:r});
     if(pendingExtra > 0 && l.sets.length > e.targetSets) pendingExtra--;
     save();
-    if(pr) celebratePR(pr.kind, pr.value, pr.unit);
+    /* Recorde de FORÇA agora é da sessão inteira, não de uma série solta: só festeja
+       quando a média das séries de trabalho de hoje passa a da melhor sessão anterior.
+       Confere ao fechar a última série planejada, então dispara uma vez só. */
+    const dnAgora = l.sets.length;
+    let prSessao = null;
+    if(dnAgora === e.targetSets && melhorAntes.v > 0){
+      const hoje = sessionLoad(l.sets);
+      if(hoje > melhorAntes.v * 1.01) prSessao = {v:hoje, de:melhorAntes.v};
+    }
+    if(prSessao) celebratePR("sessao", fmtNum(prSessao.v), `kg (antes ${fmtNum(prSessao.de)})`);
+    else if(pr) celebratePR(pr.kind, pr.value, pr.unit);
     /* o rótulo vai para a barra de descanso E para a notificação: você sabe em qual série está */
     const dn = l.sets.length;
     const lbl = dn >= e.targetSets
@@ -3075,33 +3201,62 @@ async function openSuggest(){
   try{
     await ExDb.load();
     suggState.results = ExDb.search(q);
-    /* com a chave configurada, a IA entra SEMPRE. A busca local casa palavra com palavra,
-       então devolve lista cheia e errada com a mesma cara de lista cheia e certa
-       ("voador invertido" trazia "Reverse Crunch" em primeiro). Contar resultados não
-       distingue as duas, e é uma chamada curta por busca — cabe no plano gratuito. */
-    if(geminiKey()){ await aiSuggest(true); return; }
+    /* A lista local aparece NA HORA e a IA refina depois, em segundo plano. Antes a tela
+       ficava parada esperando a resposta da IA, e uma busca que era instantânea passou a
+       ter uns segundos de espera. Agora a espera não bloqueia nada: a lista já está lá e
+       se reorganiza sozinha quando a resposta chega. */
+    /* marca ANTES de desenhar, senão o aviso de "perguntando para a IA" só apareceria
+       no redesenho seguinte — ou seja, quando já não fosse mais preciso */
+    suggState.buscando = !!(geminiKey() && !aiExCache()[norm(q)]);
     renderSuggest();
+    if(geminiKey()) aiSuggest(true);
   }catch(e){
     openModal(`<h2>Sugestões</h2><div class="empty">Não deu para carregar a base agora.<br>Confira a internet e tente de novo.</div>
       <button class="btn ghost" data-action="sugg-back">Voltar</button>`);
   }
 }
+/* respostas da IA guardadas: procurar o mesmo termo de novo é instantâneo e não gasta
+   cota. Fica no aparelho (não sincroniza — é cache, não dado seu). */
+const AI_EX_LS = "fitglobal.aiex.v1";
+function aiExCache(){
+  try{ return JSON.parse(localStorage.getItem(AI_EX_LS) || "{}"); }catch(e){ return {}; }
+}
+function aiExCacheSet(q, r){
+  try{
+    const c = aiExCache();
+    c[norm(q)] = r;
+    const ks = Object.keys(c);
+    if(ks.length > 200) delete c[ks[0]];                 // não deixa crescer sem fim
+    localStorage.setItem(AI_EX_LS, JSON.stringify(c));
+  }catch(e){}
+}
 async function aiSuggest(auto){
   const q = suggState.query;
+  const guardado = aiExCache()[norm(q)];
+  if(guardado){ suggState.buscando = false; aplicaAi(guardado); renderSuggest(); return; }
   suggState.buscando = true; suggState.aiErro = "";
-  openModal(`<h2>🤖 Entendendo "${esc(q)}"…</h2><div class="empty">Perguntando para a IA qual exercício é.</div>`);
+  if(!auto) renderSuggest();                             // mostra o "pensando" no lugar do botão
   try{
     await ExDb.load();
-    const r = await aiExercise(q);
-    suggState.ai = r;
-    const achou = mergeSearch(r.en.concat([q]));
-    if(achou.length) suggState.results = achou;
+    /* se a IA demorar demais, a busca local já está na tela e continua valendo */
+    const r = await Promise.race([
+      aiExercise(q),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("A IA demorou demais — ficou o resultado da busca normal.")), 12000))
+    ]);
+    aiExCacheSet(q, r);
+    aplicaAi(r);
   }catch(e){
     suggState.aiErro = (e && e.message) || String(e);
     if(!auto) toast(suggState.aiErro);
   }
   suggState.buscando = false;
-  renderSuggest();
+  /* só redesenha se o modal ainda for o da sugestão desta busca */
+  if(suggState.query === q && modal.classList.contains("on")) renderSuggest();
+}
+function aplicaAi(r){
+  suggState.ai = r;
+  const achou = mergeSearch((r.en || []).concat([suggState.query]));
+  if(achou.length) suggState.results = achou;
 }
 function renderSuggest(){
   const rs = suggState.results;
@@ -3113,7 +3268,9 @@ function renderSuggest(){
       </div>` : ""}
     ${suggState.aiErro ? `<div class="sub" style="color:var(--gold); margin-bottom:10px">🤖 ${esc(suggState.aiErro)}</div>` : ""}`;
   /* o botão de IA só aparece quando faz sentido: ainda não usei e existe chave */
-  const btnAi = (!ai && geminiKey())
+  const btnAi = suggState.buscando
+    ? `<div class="sub" style="margin-bottom:10px; color:var(--accent)">🤖 Perguntando para a IA qual exercício é… <span class="sub">a lista abaixo já vale, e melhora quando a resposta chegar.</span></div>`
+    : (!ai && geminiKey())
     ? `<button class="btn ghost sm" data-action="sugg-ai" style="margin-bottom:10px">🤖 Perguntar para a IA qual exercício é</button>`
     : (!geminiKey()
       ? `<div class="sub" style="margin-bottom:10px">🤖 A IA pode entender o nome que você usa (ex.: "biceps curl sentado" → rosca sentada) — configure a chave gratuita nos <b>Ajustes</b>.</div>`
