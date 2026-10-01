@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v3.4</title>
+<title>Fitness Global v3.5</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -400,8 +400,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "3.4";
-const APP_VERSION = 34;
+const APP_NAME_VERSION = "3.5";
+const APP_VERSION = 35;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -568,7 +568,7 @@ function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
 
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], sessions:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false, mealNotif:false, restOverlay:false, focus:null, doneDay:{}, kgFrom:null, exLang:"pt"}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], sessions:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false, mealNotif:false, restOverlay:false, soundSpk:false, focus:null, doneDay:{}, kgFrom:null, exLang:"pt"}, updatedAt:0}; }
 /* duração do bipe de fim de série (mesmo som, só mais longo) */
 const SOUNDLEN = { curto:0.45, medio:1.1, longo:2.4 };
 let db;
@@ -1607,9 +1607,16 @@ function renderSettings(){
       </div>
       <div class="setline">
         <div class="grow"><div class="t">Tocar som ao terminar</div>
-        <div class="d">${native.isNative ? "Só toca se houver <b>fone conectado</b> (com/sem fio). Sempre vibra." : "No navegador toca sempre que ligado (sem detecção de fone). Sempre vibra."}</div></div>
+        <div class="d">${native.isNative
+          ? `O som sai da <b>notificação</b> do Android, então toca com a tela apagada e com o app fechado. Sempre vibra.${db.settings.soundSpk ? "" : " Por padrão só toca com <b>fone conectado</b>."}`
+          : "No navegador toca sempre que ligado (sem detecção de fone). Sempre vibra."}</div></div>
         <button class="switch${s.sound?" on":""}" data-action="tg" data-k="sound" role="switch" aria-checked="${s.sound}" aria-label="Tocar som ao terminar"></button>
       </div>
+      ${(s.sound && native.isNative)?`<div class="setline">
+        <div class="grow"><div class="t">🔊 Tocar também no alto-falante</div>
+        <div class="d">Sem isso, o som só sai quando há fone conectado. Ligue para ouvir o fim da série na academia sem fone.</div></div>
+        <button class="switch${s.soundSpk?" on":""}" data-action="tg" data-k="soundSpk" role="switch" aria-checked="${!!s.soundSpk}" aria-label="Tocar no alto-falante"></button>
+      </div>`:""}
       ${s.sound?`<div class="setline">
         <div class="grow"><div class="t">Duração do som</div>
         <div class="d">Mesmo som, só mais prolongado — toque para ouvir</div>
@@ -1630,7 +1637,7 @@ function renderSettings(){
       </div>
       ${native.isNative?`<div class="setline">
         <div class="grow"><div class="t">Testar com a tela apagada</div>
-        <div class="d">Dispara em 10s — apague a tela e espere para conferir</div></div>
+        <div class="d">Dispara em 10s pelo <b>mesmo caminho</b> do fim do descanso — apague a tela e espere. É o teste que vale: se tocar aqui, toca no treino.</div></div>
         <button class="btn ghost sm" style="width:auto" data-action="test-bg">Testar 10s</button>
       </div>
       <div class="setline">
@@ -1982,7 +1989,10 @@ function startRest(sec, label, exId, gymId){
   if(db.settings.restOverlay) native.overlayStart(rest.end);
   if(!rest.iv) rest.iv = setInterval(tickRest, 250);
   if(db.settings.sound && !audioCtx){ try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){} }
-  native.scheduleRestEnd(rest.end, label);      // fecha o alarme nativo (tela apagada)
+  /* guarda se a notificação do fim vai sair com som: é o que decide se o app ainda
+     precisa tocar alguma coisa por conta própria quando chegar a hora */
+  rest.somNativo = false;
+  native.scheduleRestEnd(rest.end, label).then(ok => { rest.somNativo = !!ok; });
   keepAlive.on();                                // mantém o timer vivo no navegador
   if(!native.isNative && "Notification" in window && Notification.permission === "default") Notification.requestPermission();
   tickRest();
@@ -2012,16 +2022,23 @@ function finishRest(){
   stopRest(native.isNative);
   if(!wasRunning) return;
   doVibrate(vibePattern());
-  if(native.isNative) native.notifyNow(nome);        // notificação na barra, sai quando você arrasta
-  else if("Notification" in window && Notification.permission === "granted"){
-    try{ new Notification("Descanso concluído 💪", {body:nome || "Hora da próxima série!", silent:true, tag:"fitglobal-rest", requireInteraction:true}); }catch(e){}
+  if(native.isNative){
+    /* A notificação agendada já tocou e vibrou na hora certa, mesmo com a tela apagada.
+       Só repostamos aqui se ela ia sair MUDA — assim a barra fica com o aviso e o som,
+       quando existe, vem de uma fonte só (nada de bipe dobrado). */
+    if(!rest.somNativo) native.notifyNow(nome, false);
+    if(!rest.somNativo) maybeBeep();                 // fallback do app aberto
+  } else {
+    if("Notification" in window && Notification.permission === "granted"){
+      try{ new Notification("Descanso concluído 💪", {body:nome || "Hora da próxima série!", silent:true, tag:"fitglobal-rest", requireInteraction:true}); }catch(e){}
+    }
+    maybeBeep();                                     // no navegador não existe canal: o som é do JS
   }
-  maybeBeep();
   toast("Descanso concluído — próxima série! 💪");
 }
 async function maybeBeep(){
   if(!db.settings.sound || !audioCtx) return;
-  if(native.isNative && !(await native.headsetConnected())) return;   // som só com fone
+  if(native.isNative && !(await native.shouldSound())) return;
   playBeep();
 }
 /* tom pronto em WAV: o WebAudio às vezes está suspenso (tela apagada, app em segundo
@@ -2108,38 +2125,57 @@ const native = {
   get cap(){ return window.Capacitor; },
   get isNative(){ return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); },
   plugin(n){ return window.Capacitor && window.Capacitor.Plugins ? window.Capacitor.Plugins[n] : null; },
-  /* o Android ignora alterações num canal existente — por isso o id muda junto com os ajustes */
-  channelId(){ return "rest-v2-" + (db.settings.sound ? "som" : "mudo") + "-" + (db.settings.vibe || "media"); },
+  /* O Android NÃO deixa alterar um canal já criado: mexer no ajuste e recriar com o
+     mesmo id não muda nada, em silêncio. Por isso o id carrega o som e a vibração.
+     São dois canais, um com som e um mudo, porque a decisão de tocar depende do fone —
+     e ela é tomada na hora de agendar, não aqui. */
+  channelId(comSom){
+    const s = comSom ? ("som-" + (db.settings.soundLen || "medio")) : "mudo";
+    return "rest-v3-" + s + "-" + (db.settings.vibe || "media");
+  },
+  /* o tom fica em res/raw, um arquivo por duração escolhida */
+  soundFile(){ return "rest_" + (db.settings.soundLen || "medio"); },
+  /* o descanso vai tocar? som ligado E (fone conectado OU alto-falante liberado) */
+  async shouldSound(){
+    if(!db.settings.sound) return false;
+    if(db.settings.soundSpk) return true;
+    return await this.headsetConnected();
+  },
+  async makeChannel(comSom){
+    const LN = this.plugin("LocalNotifications"); if(!LN) return;
+    const id = this.channelId(comSom);
+    const RC = this.plugin("RestChannel");
+    if(RC){
+      try{
+        await RC.create({ id, name: comSom ? "Descanso (com som)" : "Descanso (mudo)",
+          pattern:vibePattern(), sound:!!comSom, soundName: comSom ? this.soundFile() : "" });
+        return;
+      }catch(e){}
+    }
+    try{
+      const ch = { id, name:"Descanso", description:"Fim do tempo de descanso",
+        importance:5, vibration:true, visibility:1 };
+      if(comSom) ch.sound = this.soundFile();
+      await LN.createChannel(ch);
+    }catch(e){}
+  },
   async init(){
     if(!this.isNative) return;
     const LN = this.plugin("LocalNotifications");
     if(LN){
       try{ await LN.requestPermissions(); }catch(e){}
-      /* canal com o padrão de vibração escolhido (plugin próprio); se falhar, usa o padrão do Capacitor */
-      const RC = this.plugin("RestChannel");
-      let done = false;
-      if(RC){
-        try{ await RC.create({ id:this.channelId(), name:"Descanso", pattern:vibePattern(), sound:!!db.settings.sound }); done = true; }catch(e){}
-      }
-      if(!done){
-        try{
-          const ch = { id:this.channelId(), name:"Descanso", description:"Fim do tempo de descanso",
-            importance:5, vibration:true, visibility:1 };
-          if(db.settings.sound) ch.sound = "default";
-          await LN.createChannel(ch);
-        }catch(e){}
-      }
+      await this.makeChannel(true);
+      await this.makeChannel(false);
     }
   },
   /* notificação imediata (quando o descanso acaba com o app aberto) — fica na barra até você arrastar.
      MESMO id da agendada (7001): uma sempre SUBSTITUI a outra, nunca empilha */
-  async notifyNow(label){
+  async notifyNow(label, comSom){
     if(!this.isNative) return;
     const LN = this.plugin("LocalNotifications"); if(!LN) return;
     try{
-      await this.init();
       await LN.schedule({ notifications:[{
-        id:7001, channelId:this.channelId(), title:"Descanso concluído 💪",
+        id:7001, channelId:this.channelId(!!comSom), title:"Descanso concluído 💪",
         body:label || "Hora da próxima série!",
         smallIcon:"ic_stat_icon", autoCancel:false, ongoing:false
       }]});
@@ -2151,29 +2187,38 @@ const native = {
     const LN = this.plugin("LocalNotifications"); if(!LN) return false;
     try{
       await this.init();
+      const comSom = await this.shouldSound();
       await LN.schedule({ notifications:[{
-        id:7002, channelId:this.channelId(), title:"Teste de vibração 📳",
-        body:"Se você sentiu isso com a tela apagada, está funcionando!",
+        id:7002, channelId:this.channelId(comSom), title:"Teste de descanso 📳" + (comSom ? "🔊" : ""),
+        body: comSom ? "Vibrou e tocou com a tela apagada? Então está funcionando."
+                     : "Vibrou com a tela apagada? Então está funcionando. (sem som: fone desconectado ou som desligado)",
         schedule:{ at:new Date(Date.now()+secs*1000), allowWhileIdle:true },
         smallIcon:"ic_stat_icon"
       }]});
       return true;
     }catch(e){ return false; }
   },
+  /* ESTA é a notificação que toca o som do fim do descanso. Ela é agendada no
+     AlarmManager do Android, então dispara com a tela apagada, com o app em segundo
+     plano e até com o app fechado — ao contrário do timer da WebView, que o Android
+     congela. Devolve se vai sair com som, para o app não tocar nada por cima. */
   async scheduleRestEnd(atMs, label){
-    if(!this.isNative) return;
-    const LN = this.plugin("LocalNotifications"); if(!LN) return;
+    if(!this.isNative) return false;
+    const LN = this.plugin("LocalNotifications"); if(!LN) return false;
+    const comSom = await this.shouldSound();
     try{
       await LN.cancel({ notifications:[{id:7001}] });
       /* limpa a notificação da série anterior que ainda estiver na barra — não empilha */
       try{ await LN.removeAllDeliveredNotifications(); }catch(e){}
+      await this.makeChannel(comSom);            // garante o canal antes de usar
       await LN.schedule({ notifications:[{
-        id:7001, channelId:this.channelId(), title:"Descanso concluído 💪",
+        id:7001, channelId:this.channelId(comSom), title:"Descanso concluído 💪",
         body:label || "Hora da próxima série!",
         schedule:{ at:new Date(atMs), allowWhileIdle:true },
         smallIcon:"ic_stat_icon", autoCancel:false, ongoing:false
       }]});
-    }catch(e){}
+      return comSom;
+    }catch(e){ return false; }
   },
   async cancelRest(){
     if(!this.isNative) return;
@@ -2767,8 +2812,8 @@ document.addEventListener("click", ev => {
   else if(a === "metric"){ exUI.metric = el.dataset.m; renderProg(exById(route().exId), records(route().exId)); }
 
   else if(a === "start-rest") startRest(+el.dataset.sec, el.dataset.name || "", el.dataset.ex || null, route().gymId || null);
-  else if(a === "rest-minus"){ rest.end -= 15000; const n=(lEl.textContent||"").replace(/^Descanso · /,""); native.scheduleRestEnd(rest.end, n); native.restOngoing(rest.end, n); if(rest.end <= Date.now()) finishRest(); else { if(db.settings.restOverlay) native.overlayStart(rest.end); tickRest(); } }
-  else if(a === "rest-plus"){ rest.end += 15000; const n=(lEl.textContent||"").replace(/^Descanso · /,""); native.scheduleRestEnd(rest.end, n); native.restOngoing(rest.end, n); if(db.settings.restOverlay) native.overlayStart(rest.end); tickRest(); }
+  else if(a === "rest-minus"){ rest.end -= 15000; const n=(lEl.textContent||"").replace(/^Descanso · /,""); native.scheduleRestEnd(rest.end, n).then(ok=>{rest.somNativo=!!ok;}); native.restOngoing(rest.end, n); if(rest.end <= Date.now()) finishRest(); else { if(db.settings.restOverlay) native.overlayStart(rest.end); tickRest(); } }
+  else if(a === "rest-plus"){ rest.end += 15000; const n=(lEl.textContent||"").replace(/^Descanso · /,""); native.scheduleRestEnd(rest.end, n).then(ok=>{rest.somNativo=!!ok;}); native.restOngoing(rest.end, n); if(db.settings.restOverlay) native.overlayStart(rest.end); tickRest(); }
   else if(a === "sh-open"){
     /* se você foi até o Samsung Health, o app assume que o treino do relógio começou —
        é isso que faz ele lembrar de ENCERRAR no fim */
@@ -2798,14 +2843,17 @@ document.addEventListener("click", ev => {
     }
     /* a tabela TACO só é lida quando o modo é ligado — não custa nada ficar desligado */
     if(k === "macros" && db.settings.macros) loadTaco().then(render);
-    save(); applyWake(); if(k === "sound") native.init(); render();
+    save(); applyWake();
+    if(k === "sound" || k === "soundSpk") native.init();
+    render();
   }
   else if(a === "ask-notif"){ Notification.requestPermission().then(() => render()); }
   else if(a === "overlay-ask"){ closeModal(); native.overlayAsk(); }
   else if(a === "overlay-later"){ db.settings.restOverlay = false; save(); closeModal(); render(); }
   else if(a === "overlay-perm"){ overlayPermForm(); }
   else if(a === "web-copy"){ copyText(WEB_URL).then(ok => toast(ok ? "Link copiado 📋" : WEB_URL)); }
-  else if(a === "set-vibe"){ db.settings.vibe = el.dataset.v; save(); doVibrate(vibePattern()); render(); }
+  else if(a === "set-vibe"){ db.settings.vibe = el.dataset.v; save(); doVibrate(vibePattern()); native.init(); render(); }
+  /* duração nova = canal novo (o Android não deixa alterar canal existente) */
   else if(a === "set-soundlen"){ db.settings.soundLen = el.dataset.v; save(); playBeep(); native.init(); render(); }
   else if(a === "test-vibe"){
     const ok = doVibrate(vibePattern());

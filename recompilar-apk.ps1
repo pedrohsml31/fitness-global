@@ -46,6 +46,14 @@ if ((Test-Path "$src\native-patch\AndroidManifest.xml") -and (Test-Path $mf)) {
     Copy-Item "$src\native-patch\AndroidManifest.xml" $mf -Force
 }
 
+# Os tons do fim do descanso moram em res\raw e sao o som do CANAL da notificacao -
+# e o que faz tocar com a tela apagada. Sem esta copia o canal fica mudo.
+$raw = "$native\android\app\src\main\res\raw"
+if (Test-Path "$src\native-patch\raw") {
+    New-Item -ItemType Directory -Force $raw | Out-Null
+    Copy-Item "$src\native-patch\raw\*.wav" $raw -Force
+}
+
 # O FileProvider precisa enxergar a pasta onde o app baixa o APK novo; sem isso o
 # instalador do Android recusa o arquivo.
 $fp = "$native\android\app\src\main\res\xml\file_paths.xml"

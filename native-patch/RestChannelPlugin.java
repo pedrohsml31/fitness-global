@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
+import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
@@ -46,6 +47,7 @@ public class RestChannelPlugin extends Plugin {
         String id = call.getString("id", "rest-custom");
         String name = call.getString("name", "Descanso");
         boolean withSound = Boolean.TRUE.equals(call.getBoolean("sound", false));
+        String soundName = call.getString("soundName", "");
 
         long[] pattern = { 0, 600, 150, 600 };
         try {
@@ -71,8 +73,25 @@ public class RestChannelPlugin extends Plugin {
         ch.setVibrationPattern(pattern);
         ch.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
         ch.enableLights(true);
-        if (!withSound) {
+        /* O SOM TEM QUE SAIR DAQUI, do canal da notificacao, e nao do JavaScript.
+           Com a tela apagada ou o app em segundo plano o Android congela os timers da
+           WebView: o fim do descanso so era detectado quando o app voltava, e o som
+           saia atrasado. A notificacao e agendada no AlarmManager, entao toca na hora
+           mesmo com o app fechado.
+           O tom vai em res/raw (um arquivo por duracao escolhida nos ajustes) em vez do
+           som padrao do sistema, para continuar sendo o bipe do app.
+           Canal no Android e IMUTAVEL depois de criado: por isso o id carrega o som e a
+           vibracao escolhidos — mudar o ajuste cria um canal novo em vez de tentar
+           alterar o antigo (que o Android ignoraria em silencio). */
+        if (!withSound || soundName.isEmpty()) {
             ch.setSound(null, null);
+        } else {
+            Uri som = Uri.parse("android.resource://" + getContext().getPackageName() + "/raw/" + soundName);
+            AudioAttributes attrs = new AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .build();
+            ch.setSound(som, attrs);
         }
         nm.createNotificationChannel(ch);
 
