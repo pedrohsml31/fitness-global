@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v3.7</title>
+<title>Fitness Global v3.8</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -410,8 +410,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "3.7";
-const APP_VERSION = 37;
+const APP_NAME_VERSION = "3.8";
+const APP_VERSION = 38;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -578,7 +578,7 @@ function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
 
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], sessions:[], ideas:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false, mealNotif:false, restOverlay:false, soundSpk:false, focus:null, doneDay:{}, kgFrom:null, exLang:"pt"}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], sessions:[], ideas:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false, mealNotif:false, restOverlay:false, soundSpk:false, unitOf:{}, focus:null, doneDay:{}, kgFrom:null, exLang:"pt"}, updatedAt:0}; }
 /* duração do bipe de fim de série (mesmo som, só mais longo) */
 const SOUNDLEN = { curto:0.45, medio:1.1, longo:2.4 };
 let db;
@@ -645,7 +645,53 @@ function exLogs(exId){
   return db.logs.filter(l => l.exerciseId === exId && l.sets.length)
     .sort((a,b) => a.date < b.date ? -1 : 1);
 }
-function todayLog(exId){ return db.logs.find(l => l.exerciseId === exId && l.date === todayStr()); }
+/* ---------- unidades (filiais) da mesma academia ----------
+   Você treina na Smart Fit, mas em 4-5 unidades, e a MESMA máquina pega carga diferente
+   em cada uma. Criar uma academia por unidade obrigaria a recriar todo exercício em
+   cada uma e partiria o histórico.
+
+   Aqui a academia tem unidades por dentro. O exercício continua UM só; quem muda é de
+   onde o app lê a carga: o exercício marcado como "a carga muda de unidade para
+   unidade" passa a enxergar só as sessões da unidade onde você está. Halteres não
+   mudam de academia para academia — esses ficam sem a marca e seguem com um histórico
+   só, como sempre foi.
+
+   Cada série registrada carimba a unidade (l.u), então o histórico antigo continua
+   valendo: sem carimbo, entra em qualquer leitura. */
+function gymUnits(gymId){ const g = gymById(gymId); return (g && g.units) || []; }
+function unitNow(gymId){
+  const us = gymUnits(gymId);
+  if(!us.length) return "";
+  const sel = (db.settings.unitOf || {})[gymId];
+  return us.some(u => u.id === sel) ? sel : us[0].id;      // sem escolha, a primeira
+}
+function unitName(gymId, uid){
+  const u = gymUnits(gymId).find(x => x.id === uid);
+  return u ? u.name : "";
+}
+/* o exercício separa carga por unidade? só se ele estiver marcado E a academia tiver unidades */
+function exPerUnit(e){
+  if(!e || !e.perUnit) return false;
+  const gid = e.gymId || route().gymId;
+  return gymUnits(gid).length > 1;
+}
+/* sessões que valem para a ANÁLISE deste exercício (progressão, gráfico, recordes).
+   Sessão sem carimbo de unidade entra sempre: é histórico de antes das unidades. */
+function logsOf(exId){
+  const e = exById(exId);
+  const all = exLogs(exId);
+  if(!exPerUnit(e)) return all;
+  const u = unitNow(e.gymId || route().gymId);
+  return all.filter(l => !l.u || l.u === u);
+}
+function todayLog(exId){
+  const e = exById(exId);
+  const hoje = db.logs.filter(l => l.exerciseId === exId && l.date === todayStr());
+  if(!hoje.length) return undefined;
+  if(!exPerUnit(e)) return hoje[0];
+  const u = unitNow(e.gymId || route().gymId);
+  return hoje.find(l => (l.u || "") === u) || hoje.find(l => !l.u);
+}
 function e1rm(w, r){ return r >= 1 ? w * (1 + r/30) : 0; }
 function bestE1rmOfSets(sets){ return Math.max(...sets.map(s => e1rm(s.weight, s.reps))); }
 
@@ -675,7 +721,7 @@ function sessionVolume(sets){ return (sets || []).reduce((a,s) => a + s.weight*s
 /* melhor sessão já feita (fora de uma data, para comparar a de hoje com o passado) */
 function bestSession(exId, exceto){
   let v = 0, d = "";
-  exLogs(exId).forEach(l => {
+  logsOf(exId).forEach(l => {
     if(l.date === exceto) return;
     const x = sessionLoad(l.sets);
     if(x > v){ v = x; d = l.date; }
@@ -683,7 +729,7 @@ function bestSession(exId, exceto){
   return {v, d};
 }
 function loadSeries(exId){
-  return exLogs(exId).map(l => ({d:l.date, v:sessionLoad(l.sets), n:l.sets.length}));
+  return logsOf(exId).map(l => ({d:l.date, v:sessionLoad(l.sets), n:l.sets.length}));
 }
 function median(v){
   const a = v.slice().sort((x,y) => x-y), n = a.length;
@@ -727,7 +773,7 @@ function loadTrend(exId, janela){
    vez, a 2ª contra a 2ª, e assim por diante. É o que responde "progredi de verdade?" —
    comparar a 1ª série (descansado) com a 3ª (cansado) não diz nada. */
 function setBySet(exId){
-  const logs = exLogs(exId);
+  const logs = logsOf(exId);
   if(logs.length < 2) return null;
   const cur = logs[logs.length-1], prev = logs[logs.length-2];
   const n = Math.min(cur.sets.length, prev.sets.length);
@@ -743,7 +789,7 @@ function setBySet(exId){
           dias: daysBetween(prev.date, cur.date)};
 }
 function records(exId){
-  const logs = exLogs(exId);
+  const logs = logsOf(exId);
   if(!logs.length) return null;
   let rm = {v:0,d:""}, wt = {v:0,d:""};
   logs.forEach(l => l.sets.forEach(s => {
@@ -954,7 +1000,7 @@ function renderIdeas(){
 }
 
 function summaryLine(exId){
-  const logs = exLogs(exId);
+  const logs = logsOf(exId);
   if(!logs.length) return "Sem registros ainda";
   const l = logs[logs.length-1];
   const best = l.sets.reduce((a,s) => s.weight > a.weight ? s : a, l.sets[0]);
@@ -966,6 +1012,46 @@ function summaryLine(exId){
    (o plano não dizia), então fica o padrão do app, 90s — dá para mudar exercício a
    exercício depois. */
 const TEMPLATES = [{
+  id: "estetico-abc-gpt",
+  nome: "Shape estético A / B / C",
+  autor: "ChatGPT",
+  desc: "3x por semana (ex.: seg/qua/sex), ~50–60 min. V-taper: ombro largo, costas boas, braço proporcional, peito cheio, panturrilha e antebraço sem ficar para trás, perna atlética sem gastar volume demais.",
+  nota: "No plano original o treino C diz \"24 séries\", mas os exercícios listados somam 26. Mantive as séries de cada exercício exatamente como vieram — quem está errado é o total, não as linhas. O A e o B batem certo (22 cada).",
+  treinos: [
+    {nome:"A — Peito superior + largura", nota:"Superséries: bíceps + tríceps · panturrilha + antebraço", itens:[
+      {g:"Peito",       n:"Supino inclinado máquina",            s:3, r:"6–10"},
+      {g:"Costas",      n:"Puxada alta neutra/pronada",          s:3, r:"6–10"},
+      {g:"Ombro",       n:"Elevação lateral máquina",            s:3, r:"10–20"},
+      {g:"Bíceps",      n:"Rosca Scott máquina",                 s:2, r:"8–12"},
+      {g:"Tríceps",     n:"Tríceps pushdown",                    s:2, r:"8–12"},
+      {g:"Quadríceps",  n:"Hack squat",                          s:2, r:"6–10"},
+      {g:"Posterior",   n:"Flexora sentada",                     s:2, r:"8–12"},
+      {g:"Panturrilha", n:"Panturrilha em pé",                   s:3, r:"8–15"},
+      {g:"Antebraço",   n:"Wrist curl",                          s:2, r:"10–15"}]},
+    {nome:"B — Costas + peito", itens:[
+      {g:"Costas",      n:"Remada articulada apoiada",           s:3, r:"6–10"},
+      {g:"Peito",       n:"Chest press horizontal",              s:3, r:"6–10"},
+      {g:"Ombro",       n:"Elevação lateral cabo/máquina",       s:3, r:"10–20"},
+      {g:"Bíceps",      n:"Rosca martelo",                       s:2, r:"8–12"},
+      {g:"Tríceps",     n:"Tríceps overhead cabo",               s:2, r:"8–12"},
+      {g:"Quadríceps",  n:"Leg press",                           s:2, r:"8–12"},
+      {g:"Posterior",   n:"Flexora deitada",                     s:2, r:"8–12"},
+      {g:"Panturrilha", n:"Panturrilha",                         s:3, r:"10–15"},
+      {g:"Abdômen",     n:"Crunch máquina/cabo",                 s:2, r:"10–20"}]},
+    {nome:"C — V-taper + braços", itens:[
+      {g:"Costas",      n:"Puxada unilateral / high row para quadril", s:3, r:"8–12"},
+      {g:"Peito",       n:"Pec deck ou chest press",             s:3, r:"8–12"},
+      {g:"Ombro",       n:"Elevação lateral máquina/cabo",       s:3, r:"12–20"},
+      {g:"Ombro",       n:"Reverse fly",                         s:2, r:"10–20"},
+      {g:"Bíceps",      n:"Rosca máquina/cabo",                  s:2, r:"8–15"},
+      {g:"Tríceps",     n:"Tríceps máquina/pushdown",            s:2, r:"8–15"},
+      {g:"Quadríceps",  n:"Extensora ou pendulum",               s:2, r:"10–15"},
+      {g:"Posterior",   n:"Flexora",                             s:2, r:"10–15"},
+      {g:"Panturrilha", n:"Panturrilha",                         s:3, r:"10–15"},
+      {g:"Antebraço",   n:"Reverse curl",                        s:2, r:"10–15"},
+      {g:"Abdômen",     n:"Crunch",                              s:2, r:"10–20"}]}
+  ]
+}, {
   id: "fullbody-abc-gpt",
   nome: "Full Body A / B / C",
   autor: "ChatGPT",
@@ -1072,7 +1158,11 @@ function parseReps(s){
   return n ? {min:+n[1], max:+n[1]} : null;
 }
 function loadStep(exId){
-  const ws = [...new Set(exLogs(exId).flatMap(l => l.sets.map(s => s.weight)))].sort((a,b)=>a-b);
+  /* o degrau que VOCÊ definiu no exercício manda: é a anilha/pino que a máquina tem.
+     Sem ele, o app continua deduzindo do histórico o menor salto já dado. */
+  const ex = exById(exId);
+  if(ex && typeof ex.step === "number" && ex.step > 0) return ex.step;
+  const ws = [...new Set(logsOf(exId).flatMap(l => l.sets.map(s => s.weight)))].sort((a,b)=>a-b);
   let step = null;
   for(let i=1;i<ws.length;i++){
     const d = Math.round((ws[i]-ws[i-1])*100)/100;
@@ -1113,7 +1203,7 @@ function dpState(e, log){
 function nextTarget(e){
   const range = parseReps(e.reps);
   if(!range) return {falta:"reps"};
-  const logs = exLogs(e.id);
+  const logs = logsOf(e.id);
   if(!logs.length) return {falta:"historico", range};
   /* o plano de hoje sai da última sessão FECHADA. Usando o log de hoje, a meta mudava
      no meio do treino: bastava a 1ª série boa para ele já mandar subir a carga. */
@@ -1179,6 +1269,39 @@ function dpBarHtml(dp){
 /* ---- rotinas (Treino A, B, C…) dentro de uma academia ----
    A rotina guarda a LISTA de exercícios (exIds), não o contrário: assim o mesmo
    exercício pode estar em mais de um treino e os exercícios globais funcionam igual. */
+/* barra de unidades: só aparece quando a academia tem filiais cadastradas */
+function unitBarHtml(g){
+  const us = gymUnits(g.id);
+  if(!us.length){
+    return `<div class="pills" style="margin:-2px 0 8px">
+      <button class="pill" data-action="units-edit" data-gym="${g.id}" style="cursor:pointer; color:var(--muted)">📍 ＋ unidades (filiais)</button></div>`;
+  }
+  const atual = unitNow(g.id);
+  return `<div class="pills" style="margin:-2px 0 8px">
+    <span class="sub" style="align-self:center; font-size:.7rem">📍</span>
+    ${us.map(u => `<button class="pill${u.id===atual?" on":""}" data-action="unit-sel" data-gym="${g.id}" data-u="${u.id}" style="cursor:pointer">${esc(u.name)}</button>`).join("")}
+    <button class="pill" data-action="units-edit" data-gym="${g.id}" style="cursor:pointer; color:var(--muted)">✏️</button></div>`;
+}
+/* cadastro das unidades */
+function unitsForm(gymId){
+  const g = gymById(gymId); if(!g) return;
+  const us = gymUnits(gymId);
+  openModal(`<h2>📍 Unidades de ${esc(g.name)}</h2>
+    <p class="sub" style="margin-bottom:12px">Para quando é a <b>mesma rede</b> e você treina em filiais diferentes (Smart Fit Centro, Shopping…).
+      Os exercícios continuam sendo os mesmos — só a <b>carga</b> passa a ser contada por unidade,
+      e só nos exercícios que você marcar como "a carga muda de unidade para unidade".</p>
+    ${us.length ? us.map(u => `<div class="wkrow">
+      <span class="wd">${esc(u.name)}</span>
+      <button class="xbtn" data-action="unit-ren" data-gym="${gymId}" data-u="${u.id}" aria-label="Renomear" style="color:var(--muted)">✎</button>
+      <button class="xbtn" data-action="unit-del" data-gym="${gymId}" data-u="${u.id}" aria-label="Excluir">✕</button>
+    </div>`).join("") : `<div class="empty">Nenhuma unidade ainda.</div>`}
+    <div class="field" style="margin-top:12px"><label for="u-new">Nova unidade</label>
+      <input id="u-new" placeholder="Ex.: Centro, Shopping, Av. Brasil" maxlength="40"></div>
+    <button class="btn" data-action="unit-add" data-gym="${gymId}">＋ Adicionar unidade</button>
+    <button class="btn ghost" data-action="close-modal" style="margin-top:8px">Fechar</button>`);
+  setTimeout(()=>{ const i=document.getElementById("u-new"); if(i) i.focus(); }, 60);
+}
+
 function gymRoutines(gymId){
   return (db.routines||[]).filter(r=>r.gymId===gymId).sort((a,b)=>(a.order||0)-(b.order||0));
 }
@@ -1351,6 +1474,7 @@ function renderGym(g){
         ? `<button class="iconbtn" data-action="reorder-done" aria-label="Concluir">✓</button>`
         : `<button class="iconbtn" data-action="gym-menu" data-id="${g.id}" aria-label="Opções da academia">⋮</button>`}
     </div>
+    ${reorderMode ? "" : unitBarHtml(g)}
     ${reorderMode ? "" : `<div class="pills" style="margin:-2px 0 10px">
       <button class="pill${gymRoutine?"":" on"}" data-action="rt-sel" data-v="" style="cursor:pointer">Todos (${gymExercises(g.id).length})</button>
       ${rts.map(r=>`<button class="pill${gymRoutine===r.id?" on":""}" data-action="rt-sel" data-v="${r.id}" style="cursor:pointer">${esc(r.name)} (${routineExercises(r,g.id).length})</button>`).join("")}
@@ -1454,8 +1578,11 @@ function renderEx(g, e){
   /* mesma margem de 1% do detectPR, senão o histórico fica coalhado de "recorde" */
   if(logs.length){ let m = 0; logs.forEach(l => { const v = bestE1rmOfSets(l.sets); if(v > m * 1.01){ m = Math.max(m, v); prDates.add(l.date); } else if(v > m) m = v; }); }
 
+  const temUnidades = gymUnits(e.gymId || g.id).length > 1;
   const hist = logs.slice(-40).reverse().map(l => `
-    <div class="hist"><div class="d">${fmtDate(l.date)}${prDates.has(l.date) ? ' <span class="pill pr">🏆 recorde</span>' : ""}</div>
+    <div class="hist"><div class="d">${fmtDate(l.date)}${
+      temUnidades && l.u ? ` <span class="pill" style="font-weight:600">📍 ${esc(unitName(e.gymId || g.id, l.u))}</span>` : ""}${
+      prDates.has(l.date) ? ' <span class="pill pr">🏆 recorde</span>' : ""}</div>
     <div class="s">${l.sets.map(s => `${fmtW(s.weight)} kg × ${s.reps}`).join("&ensp;·&ensp;")}</div></div>`).join("");
 
   view.innerHTML = `
@@ -1467,6 +1594,8 @@ function renderEx(g, e){
     <div class="pills" style="margin-top:-4px">
       <span class="pill" style="${done.length>=e.targetSets?"color:var(--good);border-color:var(--good)":done.length?"color:var(--gold);border-color:var(--gold)":""}">${done.length}/${e.targetSets} séries hoje</span>
       ${e.bw?`<span class="pill" title="O kg já vem com o seu último peso corporal">🧍 peso do corpo</span>`:""}
+      ${exPerUnit(e)?`<span class="pill" style="color:var(--accent); border-color:var(--accent)" title="Carga contada só nesta unidade">📍 ${esc(unitName(e.gymId||g.id, unitNow(e.gymId||g.id)))}</span>`:""}
+      ${typeof e.step === "number" && e.step>0?`<span class="pill" title="Degrau de carga desta máquina">⬆ +${fmtW(e.step)} kg</span>`:""}
       ${e.reps
         ? `<span class="pill" style="color:var(--accent); border-color:var(--accent)" title="Faixa de repetições alvo — a carga sobe quando TODAS as séries fecham o topo">🎯 meta ${esc(e.reps)} reps</span>`
         : `<button class="pill" data-action="edit-ex" data-gym="${g.id}" data-id="${e.id}" style="cursor:pointer; color:var(--gold); border-color:var(--gold)" title="Sem faixa de reps o app não consegue sugerir a progressão">⚠️ defina a faixa de reps</button>`}
@@ -1568,7 +1697,7 @@ function renderProg(e, rec){
 /* ---- gráfico ---- */
 function metricPoints(e){
   const pts = [];
-  exLogs(e.id).forEach(l => {
+  logsOf(e.id).forEach(l => {
     let v;
     if(exUI.metric === "forca") v = sessionLoad(l.sets);
     else if(exUI.metric === "peso") v = Math.max(...l.sets.map(s => s.weight));
@@ -1894,6 +2023,8 @@ function exFormSnapshot(){
   if(g("f-rest")) exFormCtx.rest = g("f-rest").value;
   if(g("f-notes")) exFormCtx.notes = g("f-notes").value;
   if(g("f-global")) exFormCtx.global = g("f-global").checked;
+  if(g("f-step")) exFormCtx.step = g("f-step").value;
+  if(g("f-perunit")) exFormCtx.perUnit = g("f-perunit").checked;
   if(g("f-photo")) exFormCtx.photo = g("f-photo").value;
 }
 function exForm(gymId, e, pre){
@@ -1901,9 +2032,10 @@ function exForm(gymId, e, pre){
     name: e ? exName(e) : "", sets: e ? e.targetSets : 3, rest: e ? e.restSec : 90,
     notes: (e && e.notes) || "", global: e ? e.gymId === null : false, photo: (e && e.photo) || "",
     reps: (e && e.reps) || "", bw: e ? !!e.bw : false,
-    namePt: (e && e.namePt) || "", nameEn: (e && e.nameEn) || ""
+    namePt: (e && e.namePt) || "", nameEn: (e && e.nameEn) || "",
+    step: (e && typeof e.step === "number") ? e.step : "", perUnit: e ? !!e.perUnit : false
   }, pre || {});
-  exFormCtx = {gymId, id: e ? e.id : "", name:v.name, sets:v.sets, rest:v.rest, notes:v.notes, global:v.global, photo:v.photo, reps:v.reps, bw:v.bw, namePt:v.namePt, nameEn:v.nameEn};
+  exFormCtx = {gymId, id: e ? e.id : "", name:v.name, sets:v.sets, rest:v.rest, notes:v.notes, global:v.global, photo:v.photo, reps:v.reps, bw:v.bw, namePt:v.namePt, nameEn:v.nameEn, step:v.step, perUnit:v.perUnit};
   openModal(`<h2>${e ? "Editar exercício" : "Novo exercício"}</h2>
     <div class="field"><label for="f-name">Nome</label>
     <input id="f-name" value="${esc(v.name)}" placeholder="Ex.: Supino reto" maxlength="60">
@@ -1931,7 +2063,14 @@ function exForm(gymId, e, pre){
       <input id="f-reps" value="${esc(v.reps)}" placeholder="8–12" maxlength="12"></div>
       <div class="field" style="flex:1"><label for="f-rest">Descanso (s)</label>
       <input id="f-rest" type="number" inputmode="numeric" min="5" max="900" step="5" value="${esc(v.rest)}"></div>
+      <div class="field" style="flex:1"><label for="f-step">Degrau (kg)</label>
+      <input id="f-step" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.step)}" placeholder="auto"></div>
     </div>
+    <div class="hint" style="margin:-6px 0 12px">De quanto em quanto a carga desta máquina sobe (2,5 · 5 · 10…). É o valor que o app soma quando você fecha a faixa de reps. Em branco = ele deduz do seu histórico.</div>
+    ${gymUnits(gymId).length > 1 ? `<label class="check">
+      <input type="checkbox" id="f-perunit" ${v.perUnit ? "checked" : ""}>
+      <div class="grow"><div class="t">📍 A carga muda de unidade para unidade</div>
+      <div class="d">Marque em <b>máquina</b>: cada filial tem a sua, e a carga não é comparável. O app passa a ler só as sessões da unidade onde você está. Deixe desmarcado em <b>halteres e barra</b>, que são iguais em todo lugar.</div></div></label>` : ""}
     <div class="field"><label for="f-notes">📝 Observações (opcional)</label>
     <textarea id="f-notes" maxlength="600" placeholder="Ex.: regulagem do banco no furo 4, pegada média, encosto 2 furos, cabo na polia baixa…">${esc(v.notes)}</textarea>
     <div class="hint">Aparece no topo da tela do exercício, na hora do treino.</div></div>
@@ -2735,6 +2874,39 @@ document.addEventListener("click", ev => {
     db.routines = (db.routines||[]).filter(x=>x.id!==r.id);
     gymRoutine = ""; save(); closeModal(); render(); toast("Treino excluído");
   }
+  else if(a === "units-edit"){ unitsForm(el.dataset.gym); }
+  else if(a === "unit-sel"){
+    db.settings.unitOf = db.settings.unitOf || {};
+    db.settings.unitOf[el.dataset.gym] = el.dataset.u;
+    save(); render();
+    toast("📍 " + unitName(el.dataset.gym, el.dataset.u));
+  }
+  else if(a === "unit-add"){
+    const g = gymById(el.dataset.gym); if(!g) return;
+    const v = (document.getElementById("u-new").value || "").trim();
+    if(!v){ toast("Dê um nome à unidade."); return; }
+    g.units = g.units || [];
+    if(g.units.some(u => norm(u.name) === norm(v))){ toast("Já existe uma unidade com esse nome."); return; }
+    g.units.push({id:uid(), name:v});
+    save(); unitsForm(g.id); render();
+  }
+  else if(a === "unit-ren"){
+    const g = gymById(el.dataset.gym); if(!g) return;
+    const u = (g.units||[]).find(x => x.id === el.dataset.u); if(!u) return;
+    const v = prompt("Novo nome da unidade:", u.name);
+    if(v === null || !v.trim()) return;
+    u.name = v.trim(); save(); unitsForm(g.id); render();
+  }
+  else if(a === "unit-del"){
+    const g = gymById(el.dataset.gym); if(!g) return;
+    const u = (g.units||[]).find(x => x.id === el.dataset.u); if(!u) return;
+    const quantos = db.logs.filter(l => l.u === u.id).length;
+    if(!confirm(`Excluir a unidade "${u.name}"?\n\n${quantos ? `${quantos} sessão(ões) feita(s) lá deixam de ser separadas, mas NÃO são apagadas.` : "Nenhuma sessão registrada nela."}`)) return;
+    g.units = g.units.filter(x => x.id !== u.id);
+    /* a sessão não some: perde só o carimbo, e volta a contar para todo mundo */
+    db.logs.forEach(l => { if(l.u === u.id) delete l.u; });
+    save(); unitsForm(g.id); render();
+  }
   else if(a === "tpl-open"){ templateForm(el.dataset.gym); }
   else if(a === "tpl-apply"){
     const gymId = el.dataset.gym, tpl = templateById(el.dataset.id);
@@ -2816,6 +2988,10 @@ document.addEventListener("click", ev => {
     const glob = document.getElementById("f-global").checked;
     const notes = document.getElementById("f-notes").value.trim();
     const photo = (document.getElementById("f-photo") || {value:""}).value;
+    const stepRaw = (document.getElementById("f-step") || {value:""}).value;
+    const stepN = parseFloat(String(stepRaw).replace(",", "."));
+    const step = (isFinite(stepN) && stepN > 0) ? stepN : undefined;
+    const perUnit = !!(document.getElementById("f-perunit") || {}).checked;
     if(!name){ toast("Dê um nome ao exercício."); return; }
     /* o par PT/EN só continua valendo se o nome digitado ainda for um dos dois; se você
        renomeou para algo seu, o botão de idioma não tem mais o que trocar */
@@ -2826,9 +3002,11 @@ document.addEventListener("click", ev => {
     if(el.dataset.id){
       const e = exById(el.dataset.id);
       e.name = name; e.namePt = pt || undefined; e.nameEn = en || undefined;
+      e.step = step; e.perUnit = perUnit || undefined;
       e.targetSets = sets; e.restSec = restS; e.reps = reps; e.bw = bw; e.notes = notes; e.photo = photo; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
     } else {
-      db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, namePt:pt||undefined, nameEn:en||undefined, targetSets:sets, restSec:restS, reps, bw, notes, photo, order: nextOrder()});
+      db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, namePt:pt||undefined, nameEn:en||undefined,
+        step, perUnit: perUnit || undefined, targetSets:sets, restSec:restS, reps, bw, notes, photo, order: nextOrder()});
     }
     exFormCtx = null;
     save(); closeModal(); render();
@@ -2879,7 +3057,10 @@ document.addEventListener("click", ev => {
     const pr = detectPR(exId, w, r);
     const melhorAntes = bestSession(exId, todayStr());
     let l = todayLog(exId);
-    if(!l){ l = {id:uid(), exerciseId:exId, gymId:cur.gymId, date:todayStr(), sets:[]}; db.logs.push(l); }
+    if(!l){ l = {id:uid(), exerciseId:exId, gymId:cur.gymId, date:todayStr(), sets:[]};
+      const uAtual = unitNow(cur.gymId);
+      if(uAtual) l.u = uAtual;                 // carimba em qual unidade foi feito
+      db.logs.push(l); }
     /* carimba em qual treino a série foi feita: sem isso um exercício global aparecia
        como "já fiz" em todas as rotinas ao mesmo tempo */
     l.sets.push(gymRoutine ? {weight:w, reps:r, rt:gymRoutine} : {weight:w, reps:r});

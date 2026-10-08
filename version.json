@@ -1,10 +1,10 @@
 {
-  "version": 37,
-  "name": "3.7",
+  "version": 38,
+  "name": "3.8",
   "minNative": 37,
   "files": [
     "index.html"
   ],
-  "notes": "SOM: a URI do tom do canal usava o caminho por nome, que nao resolve em parte dos aparelhos - e canal com som invalido VIBRA MAS NAO TOCA, que era o sintoma. Agora usa o ID numerico do recurso, como a propria Capacitor faz, e cai no som padrao do sistema se o arquivo faltar. Os canais foram recriados do zero (canal e imutavel no Android). Novo DIAGNOSTICO em Ajustes -> Descanso: mostra o que o ANDROID tem gravado (qual canal, se ele tem som de verdade, se os arquivos existem no APK, se as notificacoes estao liberadas, Nao Perturbe e fone), com botao para tocar o aviso na hora e para recriar os canais. EXERCICIOS: o catalogo tem DUAS fotos por exercicio (inicio e fim do movimento) e o app so usava a primeira. Agora da para tocar na foto e ver o outro angulo - a que estiver a mostra e a que fica salva. Ajuda quando a foto nao parece o exercicio certo.",
+  "notes": "UNIDADES: a academia agora tem filiais por dentro. Uma Smart Fit so, com Centro, Shopping etc., em vez de uma academia por unidade - os exercicios continuam sendo os mesmos. No exercicio voce marca \"a carga muda de unidade para unidade\" (maquina) e ele passa a ler so as sessoes da unidade onde voce esta; halteres e barra ficam sem a marca e seguem com um historico so. A unidade e escolhida numa barra no topo da academia e fica carimbada em cada serie registrada. O historico de antes continua valendo em todas as unidades. DEGRAU: cada exercicio pode ter o degrau da maquina (2,5 / 5 / 10 kg), e a sugestao de progressao usa esse valor em vez de deduzir do historico. TREINO NOVO: \"Shape estetico A / B / C\" entrou nos treinos prontos.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
