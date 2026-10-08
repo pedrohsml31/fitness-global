@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v3.6</title>
+<title>Fitness Global v3.7</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -410,8 +410,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "3.6";
-const APP_VERSION = 36;
+const APP_NAME_VERSION = "3.7";
+const APP_VERSION = 37;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1719,6 +1719,11 @@ function renderSettings(){
         <button class="btn ghost sm" style="width:auto" data-action="test-bg">Testar 10s</button>
       </div>
       <div class="setline">
+        <div class="grow"><div class="t">🔊 Não tocou? Veja o porquê</div>
+        <div class="d">Mostra o que o <b>Android</b> tem gravado: qual canal está em uso, se ele tem som de verdade, se as notificações estão liberadas e se o fone foi detectado. Também dá para tocar o aviso na hora.</div></div>
+        <button class="btn ghost sm" style="width:auto" data-action="sound-diag">Diagnóstico</button>
+      </div>
+      <div class="setline">
         <div class="grow"><div class="t">⚠️ Não vibra com a tela apagada?</div>
         <div class="d">É o Android economizando bateria. Em <b>Config. do Android → Apps → Fitness Global</b>:<br>
         • <b>Bateria</b> → "Sem restrições" / "Não otimizar"<br>
@@ -2209,7 +2214,9 @@ const native = {
      e ela é tomada na hora de agendar, não aqui. */
   channelId(comSom){
     const s = comSom ? ("som-" + (db.settings.soundLen || "medio")) : "mudo";
-    return "rest-v3-" + s + "-" + (db.settings.vibe || "media");
+    /* v4: os canais v3 podem ter ficado com a URI de som que não resolvia, e canal no
+       Android é imutável — a única forma de corrigir é com um id novo */
+    return "rest-v4-" + s + "-" + (db.settings.vibe || "media");
   },
   /* o tom fica em res/raw, um arquivo por duração escolhida */
   soundFile(){ return "rest_" + (db.settings.soundLen || "medio"); },
@@ -2293,6 +2300,9 @@ const native = {
         id:7001, channelId:this.channelId(comSom), title:"Descanso concluído 💪",
         body:label || "Hora da próxima série!",
         schedule:{ at:new Date(atMs), allowWhileIdle:true },
+        /* o som vai TAMBÉM aqui: no Android 8+ quem manda é o canal, mas assim a
+           Capacitor resolve o arquivo e libera a URI para a interface do sistema */
+        sound: comSom ? this.soundFile() : undefined,
         smallIcon:"ic_stat_icon", autoCancel:false, ongoing:false
       }]});
       return comSom;
@@ -2671,6 +2681,10 @@ document.addEventListener("click", ev => {
     save(); render();
     checkWorkoutDone();          // riscar o último que faltava também fecha o treino
   }
+  else if(a === "sound-diag"){ soundDiagForm(); }
+  /* o ouvinte de cliques não é async: estas duas rodam numa função própria */
+  else if(a === "sound-test-now"){ soundTestNow(); }
+  else if(a === "sound-rebuild"){ soundRebuild(); }
   else if(a === "dnd-recheck"){ dndCheck().then(r => toast(r && r.on ? "Ainda está no Não Perturbe" : "Não Perturbe desligado ✓")); }
   else if(a === "dl-photos"){
     const gymId = el.dataset.gym, rt = el.dataset.rt;
@@ -2753,12 +2767,20 @@ document.addEventListener("click", ev => {
   }
   else if(a === "sugg-ai"){ aiSuggest(false); }
   else if(a === "sugg-back"){ const c = exFormCtx; if(c) exForm(c.gymId, c.id ? exById(c.id) : null, c); else closeModal(); }
+  /* alterna entre as duas fotos sem escolher o exercício */
+  else if(a === "sugg-flip"){
+    ev.stopPropagation(); ev.preventDefault();
+    const k = el.dataset.n;
+    fotoAlt[k] = !fotoAlt[k];
+    if(el.dataset.gal) renderGallery(); else renderSuggest();
+    return;
+  }
   else if(a === "pick-sugg"){
     const x = suggState.results[+el.dataset.i]; if(!x) return;
     const c = exFormCtx || {gymId: route().gymId, id: ""};
     c.namePt = ptNameOf(x.n, x.e); c.nameEn = x.n;
     c.name = exLang() === "en" ? c.nameEn : c.namePt;
-    c.photo = ExDb.img(x.i);
+    c.photo = ExDb.img(fotoDe(x));
     exForm(c.gymId, c.id ? exById(c.id) : null, c);
     toast("Nome (PT e EN) e foto aplicados ✓");
   }
@@ -2771,7 +2793,7 @@ document.addEventListener("click", ev => {
     const c = exFormCtx || {gymId: route().gymId, id: ""};
     c.namePt = ptNameOf(x.n, x.e); c.nameEn = x.n;
     if(!c.name || !c.name.trim()) c.name = exLang() === "en" ? c.nameEn : c.namePt;   // não sobrescreve nome que ele já digitou
-    c.photo = ExDb.img(x.i);
+    c.photo = ExDb.img(fotoDe(x));
     exForm(c.gymId, c.id ? exById(c.id) : null, c);
     toast("Foto aplicada ✓");
   }
@@ -3146,7 +3168,8 @@ if("serviceWorker" in navigator && location.protocol.startsWith("http")){
 /* Base pública free-exercise-db (873 exercícios com fotos de domínio público) */
 const EXDB_URL = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json";
 const EXDB_IMG = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/";
-const EXDB_LS  = "fitglobal.exdb.v1";
+/* v2: a v1 so guardava uma foto por exercicio */
+const EXDB_LS  = "fitglobal.exdb.v2";
 
 function norm(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9\s-]/g," ").replace(/\s+/g," ").trim(); }
 
@@ -3243,7 +3266,10 @@ const ExDb = {
     this.loading = true;
     const r = await fetch(EXDB_URL, {cache:"force-cache"});
     const raw = await r.json();
-    this.list = raw.map(x => ({n:x.name, e:x.equipment||"", m:(x.primaryMuscles||[])[0]||"", i:(x.images||[])[0]||""}));
+    /* i2 = a segunda foto, o FIM do movimento. E ela que tira a duvida quando a
+       primeira (posicao inicial) parece outro exercicio. */
+    this.list = raw.map(x => ({n:x.name, e:x.equipment||"", m:(x.primaryMuscles||[])[0]||"",
+      i:(x.images||[])[0]||"", i2:(x.images||[])[1]||""}));
     this.loading = false;
     try{ localStorage.setItem(EXDB_LS, JSON.stringify(this.list)); }catch(e){}   // cache (~90 KB)
     return this.list;
@@ -3353,6 +3379,9 @@ let galState = {mus:"", eq:"machine", q:""};      // abre no que ele mais precis
 
 /* ===================== SUGESTÃO: estado ===================== */
 let suggState = {results:[], query:"", ai:null, aiErro:"", buscando:false};
+/* qual das duas fotos está à mostra, por exercício (toque na foto alterna) */
+let fotoAlt = {};
+function fotoDe(x){ return (fotoAlt[x.n] && x.i2) ? x.i2 : x.i; }
 async function openSuggest(){
   const q = (document.getElementById("f-name") || {}).value || "";
   exFormSnapshot();                                        // guarda o que já foi digitado
@@ -3452,12 +3481,15 @@ function renderSuggest(){
     ${rs.map((x,i) => {
       const pt = ptNameOf(x.n, x.e), main = exLang()==="pt" ? pt : x.n, alt = exLang()==="pt" ? x.n : pt;
       return `<button class="suggrow" data-action="pick-sugg" data-i="${i}">
-        <img src="${ExDb.img(x.i)}" alt="" loading="lazy">
+        <img src="${ExDb.img(fotoDe(x))}" alt="" loading="lazy"
+          ${x.i2?`data-action="sugg-flip" data-n="${esc(x.n)}" title="Toque para ver o outro ângulo do movimento" style="cursor:zoom-in"`:""}>
         <div style="min-width:0"><div class="t">${esc(main)}</div>
-        <div class="d">${esc(alt)}${x.e?" · "+esc(x.e):""}${x.m?" · "+esc(x.m):""}</div></div></button>`;
+        <div class="d">${esc(alt)}${x.e?" · "+esc(x.e):""}${x.m?" · "+esc(x.m):""}${
+          x.i2?` · <span style="color:var(--accent)">${fotoAlt[x.n]?"fim":"início"} ↻</span>`:""}</div></div></button>`;
     }).join("")}
     <button class="btn ghost" data-action="sugg-back" style="margin-top:12px">Voltar sem escolher</button>
-    <p class="sub" style="margin-top:8px">Fotos e nomes: base pública free-exercise-db${ai?" · a IA só entendeu o termo, a foto vem do catálogo":""}.</p>`);
+    <p class="sub" style="margin-top:8px">📷 <b>Toque na foto</b> para ver o outro ângulo (início e fim do movimento) — ajuda quando a primeira parece outro exercício. A foto que estiver à mostra é a que fica salva.<br>
+      Fotos e nomes: base pública free-exercise-db${ai?" · a IA só entendeu o termo, a foto vem do catálogo":""}.</p>`);
 }
 
 async function openGallery(){
@@ -3499,7 +3531,8 @@ function renderGallery(){
       ${list.length ? list.slice(0,120).map(x=>{
         const i = (ExDb.list||[]).indexOf(x);
         return `<button class="galcard" data-action="pick-gal" data-i="${i}">
-          <img src="${ExDb.img(x.i)}" alt="" loading="lazy" onerror="this.style.opacity=.15">
+          <img src="${ExDb.img(fotoDe(x))}" alt="" loading="lazy" onerror="this.style.opacity=.15"
+            ${x.i2?`data-action="sugg-flip" data-n="${esc(x.n)}" data-gal="1" title="Toque para ver o outro ângulo"`:""}>
           <span class="gt">${esc(ptNameOf(x.n, x.e))}</span>
           <span class="gd">${esc(x.n)}</span></button>`;
       }).join("") : `<div class="empty">Nada com esses filtros. Tire um filtro ou procure por outro nome.</div>`}
@@ -5754,6 +5787,89 @@ document.addEventListener("visibilitychange", () => {
     if(confirm("Sair do Fitness Global?")) App.exitApp();
   });
 })();
+
+/* ===================== diagnóstico do som =====================
+   Em vez de eu adivinhar por que não toca, o app pergunta ao ANDROID o que ele tem
+   gravado: qual canal está em uso, qual som esse canal tem de verdade, se os arquivos
+   existem no app, se a notificação está liberada e se o fone está conectado.
+   Canal é imutável depois de criado — sem olhar o que o Android guardou, um canal que
+   nasceu mudo continuaria mudo para sempre sem aparecer em lugar nenhum. */
+async function soundDiagForm(){
+  openModal(`<h2>🔊 Diagnóstico do som</h2><div class="empty">Perguntando ao Android…</div>`);
+  const RC = native.plugin("RestChannel");
+  const linhas = [];
+  const add = (t, v, ok) => linhas.push({t, v, ok});
+
+  const comSom = await native.shouldSound();
+  add("Versão do app", `v${APP_NAME_VERSION} (build ${APP_VERSION})`, true);
+
+  if(!native.isNative || !RC || !RC.soundInfo){
+    openModal(`<h2>🔊 Diagnóstico do som</h2>
+      <div class="empty">${native.isNative
+        ? "Este APK é antigo demais para o diagnóstico.<br><b>Instale a versão nova do APK</b> pelos Ajustes → Atualizar o app."
+        : "Só funciona no app instalado no celular."}</div>
+      <button class="btn ghost" data-action="close-modal">Fechar</button>`);
+    return;
+  }
+
+  let d = null;
+  try{ d = await RC.soundInfo({ids:[native.channelId(true), native.channelId(false)]}); }catch(e){}
+  if(!d || !d.ok){
+    openModal(`<h2>🔊 Diagnóstico do som</h2><div class="empty">Não deu para ler: ${esc((d&&d.erro)||"erro")}</div>
+      <button class="btn ghost" data-action="close-modal">Fechar</button>`);
+    return;
+  }
+
+  add("Build instalado no celular", String(d.build), Number(d.build) === APP_VERSION);
+  add("Som ligado nos ajustes", db.settings.sound ? "sim" : "NÃO", !!db.settings.sound);
+  add("Fone conectado", (await native.headsetConnected()) ? "sim" : "não", true);
+  add("Tocar no alto-falante", db.settings.soundSpk ? "ligado" : "desligado", true);
+  add("→ O descanso vai tocar?", comSom ? "SIM" : "NÃO — vai só vibrar", comSom);
+  add("Notificações liberadas", d.notifLigada ? "sim" : "NÃO", !!d.notifLigada);
+  const dnd = {1:"tudo passa", 2:"só prioridade", 3:"nada passa", 4:"só alarmes"}[d.filtroDnd] || d.filtroDnd;
+  add("Não Perturbe", dnd, d.filtroDnd === 1);
+
+  (d.arquivos||[]).forEach(a => add("Arquivo de som " + a.nome, a.achou ? "ok" : "NÃO ESTÁ NO APP", !!a.achou));
+  (d.canais||[]).forEach(c => {
+    if(!c.existe){ add("Canal " + c.id, "não existe ainda", true); return; }
+    const temSom = !!(c.som && c.som.length);
+    add("Canal " + c.id,
+      (c.bloqueado ? "BLOQUEADO nas notificações do Android" : "importância " + c.importancia) +
+      " · som: " + (temSom ? c.som : "NENHUM") + " · vibra: " + (c.vibra ? "sim" : "não"),
+      !c.bloqueado && (c.id.indexOf("mudo") >= 0 ? !temSom : temSom));
+  });
+
+  openModal(`<h2>🔊 Diagnóstico do som</h2>
+    <div class="card" style="padding:4px 12px; margin-bottom:12px">
+      ${linhas.map(l => `<div class="setline" style="padding:8px 0">
+        <div class="grow"><div class="t" style="font-size:.8rem">${esc(l.t)}</div>
+        <div class="d" style="word-break:break-all; color:${l.ok?"var(--muted)":"var(--bad)"}">${esc(String(l.v))}</div></div>
+        <span style="flex:none">${l.ok ? "✅" : "⚠️"}</span></div>`).join("")}
+    </div>
+    <button class="btn" data-action="sound-test-now">🔊 Tocar o aviso agora</button>
+    <button class="btn ghost" data-action="sound-rebuild" style="margin-top:8px">🔁 Recriar os canais do zero</button>
+    <button class="btn ghost" data-action="close-modal" style="margin-top:8px">Fechar</button>`);
+}
+
+/* dispara a notificação DE VERDADE agora — mesmo caminho do fim do descanso */
+async function soundTestNow(){
+  const comSom = await native.shouldSound();
+  await native.makeChannel(comSom);
+  await native.notifyNow("Teste — era para ter tocado agora", comSom);
+  toast(comSom ? "Mandei com som 🔊" : "Mandei sem som (fone desconectado?)");
+}
+/* canal é imutável: para mudar o som é preciso apagar e criar de novo */
+async function soundRebuild(){
+  const RC = native.plugin("RestChannel");
+  if(RC && RC.deleteChannel){
+    for(const id of [native.channelId(true), native.channelId(false)]){
+      try{ await RC.deleteChannel({id}); }catch(e){}
+    }
+  }
+  await native.init();
+  toast("Canais recriados ✓");
+  soundDiagForm();
+}
 
 /* ===================== Não Perturbe =====================
    No Não Perturbe o Android silencia a notificação do descanso: a vibração ainda vai,

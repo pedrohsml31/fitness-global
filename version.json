@@ -1,10 +1,10 @@
 {
-  "version": 36,
-  "name": "3.6",
-  "minNative": 35,
+  "version": 37,
+  "name": "3.7",
+  "minNative": 37,
   "files": [
     "index.html"
   ],
-  "notes": "Aba nova \"Ideias\": um caderninho para anotar na hora, na academia, o que voce quer mudar no app - em vez de tentar lembrar em casa. Uma ideia por linha (da para colar varias de uma vez), com a data de quando foi anotada. Cada ideia pode ser editada, marcada como ja feita (sai da lista em aberto e fica riscada) ou excluida, e ha um botao para copiar todas as em aberto de uma vez. Sincroniza como o resto, entao o que voce anota no celular aparece no PC.",
+  "notes": "SOM: a URI do tom do canal usava o caminho por nome, que nao resolve em parte dos aparelhos - e canal com som invalido VIBRA MAS NAO TOCA, que era o sintoma. Agora usa o ID numerico do recurso, como a propria Capacitor faz, e cai no som padrao do sistema se o arquivo faltar. Os canais foram recriados do zero (canal e imutavel no Android). Novo DIAGNOSTICO em Ajustes -> Descanso: mostra o que o ANDROID tem gravado (qual canal, se ele tem som de verdade, se os arquivos existem no APK, se as notificacoes estao liberadas, Nao Perturbe e fone), com botao para tocar o aviso na hora e para recriar os canais. EXERCICIOS: o catalogo tem DUAS fotos por exercicio (inicio e fim do movimento) e o app so usava a primeira. Agora da para tocar na foto e ver o outro angulo - a que estiver a mostra e a que fica salva. Ajuda quando a foto nao parece o exercicio certo.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

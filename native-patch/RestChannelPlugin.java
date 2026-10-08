@@ -83,10 +83,17 @@ public class RestChannelPlugin extends Plugin {
            Canal no Android e IMUTAVEL depois de criado: por isso o id carrega o som e a
            vibracao escolhidos — mudar o ajuste cria um canal novo em vez de tentar
            alterar o antigo (que o Android ignoraria em silencio). */
-        if (!withSound || soundName.isEmpty()) {
+        if (!withSound) {
             ch.setSound(null, null);
         } else {
-            Uri som = Uri.parse("android.resource://" + getContext().getPackageName() + "/raw/" + soundName);
+            /* A URI tem que usar o ID NUMERICO do recurso, nao o caminho por nome
+               ("android.resource://pkg/raw/nome"): a forma por nome nao resolve em
+               parte dos aparelhos, e canal com som invalido VIBRA MAS NAO TOCA — que
+               e exatamente o sintoma. E a mesma forma que a propria Capacitor usa.
+               Sem o arquivo, cai no som padrao de notificacao: tocar errado e melhor
+               que nao tocar. */
+            Uri som = rawUri(soundName);
+            if (som == null) som = android.provider.Settings.System.DEFAULT_NOTIFICATION_URI;
             AudioAttributes attrs = new AudioAttributes.Builder()
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .setUsage(AudioAttributes.USAGE_NOTIFICATION)
@@ -98,6 +105,87 @@ public class RestChannelPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("id", id);
         call.resolve(ret);
+    }
+
+    /** Uri do som em res/raw pelo ID numerico do recurso (null se nao existir). */
+    private Uri rawUri(String name) {
+        if (name == null || name.isEmpty()) return null;
+        int id = getContext().getResources().getIdentifier(name, "raw", getContext().getPackageName());
+        if (id == 0) return null;
+        return Uri.parse("android.resource://" + getContext().getPackageName() + "/" + id);
+    }
+
+    /**
+     * Diagnostico do som: devolve o que o ANDROID realmente tem gravado para cada canal,
+     * em vez do que o app acha que mandou. Canal e imutavel depois de criado, entao um
+     * canal antigo com som nulo continuaria mudo para sempre sem isso aparecer em lugar
+     * nenhum.
+     */
+    @PluginMethod
+    public void soundInfo(PluginCall call) {
+        JSObject r = new JSObject();
+        try {
+            NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) { r.put("ok", false); call.resolve(r); return; }
+
+            JSArray chs = new JSArray();
+            JSArray ids = call.getArray("ids");
+            List<String> lista = ids != null ? ids.toList() : new java.util.ArrayList<String>();
+            for (Object o : lista) {
+                String id = String.valueOf(o);
+                NotificationChannel c = nm.getNotificationChannel(id);
+                JSObject j = new JSObject();
+                j.put("id", id);
+                j.put("existe", c != null);
+                if (c != null) {
+                    j.put("importancia", c.getImportance());
+                    j.put("som", c.getSound() == null ? "" : c.getSound().toString());
+                    j.put("vibra", c.shouldVibrate());
+                    j.put("bloqueado", c.getImportance() == NotificationManager.IMPORTANCE_NONE);
+                }
+                chs.put(j);
+            }
+            r.put("canais", chs);
+
+            JSArray raws = new JSArray();
+            for (String n : new String[]{"rest_curto", "rest_medio", "rest_longo"}) {
+                JSObject j = new JSObject();
+                j.put("nome", n);
+                int id = getContext().getResources().getIdentifier(n, "raw", getContext().getPackageName());
+                j.put("id", id);
+                j.put("achou", id != 0);
+                raws.put(j);
+            }
+            r.put("arquivos", raws);
+            r.put("notifLigada", nm.areNotificationsEnabled());
+            r.put("filtroDnd", nm.getCurrentInterruptionFilter());
+            r.put("build", nativeBuild());
+            r.put("ok", true);
+        } catch (Exception e) {
+            r.put("ok", false);
+            r.put("erro", String.valueOf(e.getMessage()));
+        }
+        call.resolve(r);
+    }
+
+    private int nativeBuild() {
+        try {
+            android.content.pm.PackageInfo pi = getContext().getPackageManager()
+                    .getPackageInfo(getContext().getPackageName(), 0);
+            return (int) (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? pi.getLongVersionCode() : pi.versionCode);
+        } catch (Exception e) { return 0; }
+    }
+
+    /** Apaga um canal, para o app poder recriar com som novo (canal e imutavel). */
+    @PluginMethod
+    public void deleteChannel(PluginCall call) {
+        try {
+            NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                nm.deleteNotificationChannel(call.getString("id", ""));
+            }
+        } catch (Exception ignored) { }
+        call.resolve();
     }
 
     /**
