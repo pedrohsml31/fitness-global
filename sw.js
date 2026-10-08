@@ -1,4 +1,4 @@
-const CACHE = "fitglobal-v35";
+const CACHE = "fitglobal-v36";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {

@@ -1,10 +1,10 @@
 {
-  "version": 35,
-  "name": "3.5",
+  "version": 36,
+  "name": "3.6",
   "minNative": 35,
   "files": [
     "index.html"
   ],
-  "notes": "CONSERTO: o som do fim da serie nao tocava com a tela apagada nem com o app em segundo plano - so saia, atrasado, quando voce abria o app. O som era tocado pelo JavaScript, e o Android congela os timers da pagina quando ela nao esta na frente. Agora o som sai da propria NOTIFICACAO do Android, que e agendada no alarme do sistema: toca na hora certa com a tela apagada, com o app em segundo plano e ate com o app fechado. O tom e um arquivo dentro do app, um para cada duracao escolhida nos ajustes. Novo interruptor \"tocar tambem no alto-falante\", para ouvir o fim da serie sem fone. O teste de 10s dos ajustes agora usa exatamente o mesmo caminho do descanso de verdade - se tocar nele, toca no treino. Esta versao mexe no app por dentro, entao pede para instalar o APK uma vez.",
+  "notes": "Aba nova \"Ideias\": um caderninho para anotar na hora, na academia, o que voce quer mudar no app - em vez de tentar lembrar em casa. Uma ideia por linha (da para colar varias de uma vez), com a data de quando foi anotada. Cada ideia pode ser editada, marcada como ja feita (sai da lista em aberto e fica riscada) ou excluida, e ha um botao para copiar todas as em aberto de uma vez. Sincroniza como o resto, entao o que voce anota no celular aparece no PC.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

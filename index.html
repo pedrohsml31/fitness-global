@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v3.5</title>
+<title>Fitness Global v3.6</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -206,8 +206,8 @@ input[type=number]{font-variant-numeric:tabular-nums;}
 #tabbar{position:fixed; left:0; right:0; bottom:0; z-index:35; display:flex;
   background:color-mix(in srgb, var(--surface) 96%, black); border-top:1px solid var(--border);
   padding-bottom:env(safe-area-inset-bottom);}
-#tabbar button{flex:1; padding:8px 4px 7px; display:flex; flex-direction:column; align-items:center; gap:2px;
-  color:var(--faint); font-size:.66rem; font-weight:700;}
+#tabbar button{flex:1; padding:8px 2px 7px; display:flex; flex-direction:column; align-items:center; gap:2px;
+  color:var(--faint); font-size:.62rem; font-weight:700; line-height:1.1;}
 #tabbar button .ic{font-size:1.35rem; line-height:1;}
 #tabbar button.on{color:var(--accent);}
 #app{padding-bottom:150px;}
@@ -296,6 +296,15 @@ table.xls td.dl.up{color:var(--good);} table.xls td.dl.down{color:var(--bad);}  
 .setlast{font-size:.68rem; color:var(--faint); padding:0 0 8px 42px; margin-top:-5px;}
 .setlast b{color:var(--muted);}
 .setlast .meta{color:var(--accent);}
+/* ===== ideias / melhorias ===== */
+.idearow{display:flex; align-items:flex-start; gap:8px; padding:10px 0; border-bottom:1px solid var(--border);}
+.idearow:last-child{border-bottom:none;}
+.idearow .tx{flex:1; min-width:0; word-break:break-word; line-height:1.35;}
+.idearow .dt{display:block; font-size:.66rem; color:var(--faint); margin-top:3px;}
+.idearow.feita .tx{color:var(--faint); text-decoration:line-through;}
+.ideatick{flex:none; width:30px; height:30px; border-radius:9px; background:var(--surface2);
+  border:1px solid var(--border); color:var(--faint); font-weight:800;}
+.ideatick.on{background:color-mix(in srgb, var(--good) 22%, var(--surface)); border-color:var(--good); color:var(--good);}
 .skipbtn{flex:none; color:var(--faint);}
 .skipbtn.on{color:var(--gold); border-color:color-mix(in srgb, var(--gold) 45%, var(--border));}
 .vtag{font-size:.62rem; font-weight:800; color:var(--faint); vertical-align:middle;
@@ -375,6 +384,7 @@ input[type=range]{accent-color:var(--accent);}
   <button data-action="tab" data-t="treino"><span class="ic">🏋️</span>Treino</button>
   <button data-action="tab" data-t="food"><span class="ic">🍽️</span>Alimentação</button>
   <button data-action="tab" data-t="progress"><span class="ic">📊</span>Evolução</button>
+  <button data-action="tab" data-t="ideas"><span class="ic">💡</span>Ideias</button>
 </nav>
 
 <div id="modal"><div class="sheet" id="sheet"></div></div>
@@ -400,8 +410,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "3.5";
-const APP_VERSION = 35;
+const APP_NAME_VERSION = "3.6";
+const APP_VERSION = 36;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -568,7 +578,7 @@ function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
 
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], sessions:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false, mealNotif:false, restOverlay:false, soundSpk:false, focus:null, doneDay:{}, kgFrom:null, exLang:"pt"}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], sessions:[], ideas:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false, mealNotif:false, restOverlay:false, soundSpk:false, focus:null, doneDay:{}, kgFrom:null, exLang:"pt"}, updatedAt:0}; }
 /* duração do bipe de fim de série (mesmo som, só mais longo) */
 const SOUNDLEN = { curto:0.45, medio:1.1, longo:2.4 };
 let db;
@@ -756,6 +766,7 @@ function route(){
   if(p[0] === "foodplan") return {name:"foodplan"};
   if(p[0] === "foodreport") return {name:"foodreport"};
   if(p[0] === "progress") return {name:"progress"};
+  if(p[0] === "ideas") return {name:"ideas"};
   return {name:"home"};
 }
 window.addEventListener("hashchange", () => { pendingExtra = 0; reorderMode = false; closeModal(); render(); });
@@ -782,6 +793,7 @@ function render(){
   else if(r.name === "foodplan") renderFoodPlan();
   else if(r.name === "foodreport") renderFoodReport();
   else if(r.name === "progress") renderProgress();
+  else if(r.name === "ideas") renderIdeas();
   else renderHome();
   updateTabs(r.name);
   window.scrollTo(0, keepY);
@@ -789,7 +801,7 @@ function render(){
 }
 function updateTabs(name){
   const tab = (name === "food" || name === "foodplan" || name === "foodreport") ? "food"
-    : name === "progress" ? "progress" : "treino";
+    : name === "progress" ? "progress" : name === "ideas" ? "ideas" : "treino";
   document.querySelectorAll("#tabbar button").forEach(b => b.classList.toggle("on", b.dataset.t === tab));
 }
 
@@ -873,6 +885,72 @@ function sessionsHtml(){
     ${list.length > 8 ? `<button class="btn ghost sm" data-action="sessions-all" style="margin-top:8px">${
       sessionsAll ? "Mostrar menos" : `Ver todos (${list.length})`}</button>` : ""}
   </div></div>`;
+}
+
+/* ===================== ideias de melhoria =====================
+   Caderninho para anotar na hora, na academia, o que você quer mudar no app — em vez de
+   tentar lembrar em casa. Uma ideia por linha, com data de quando foi anotada.
+   Entra no seed() e no Sync.data(), então aparece no PC também. */
+let ideasVerFeitas = false;
+function ideaList(){
+  return (db.ideas || []).slice().sort((a, b) => {
+    if(!!a.done !== !!b.done) return a.done ? 1 : -1;     // feitas vão para o fim
+    return (b.ts || 0) - (a.ts || 0);                      // mais recentes primeiro
+  });
+}
+function addIdeas(texto){
+  const linhas = String(texto || "").split("\n").map(x => x.trim()).filter(Boolean);
+  if(!linhas.length) return 0;
+  db.ideas = db.ideas || [];
+  /* 1 ms entre elas só para manter a ordem em que você digitou */
+  linhas.forEach((t, i) => db.ideas.push({id:uid(), t, ts: Date.now() + i, done:false}));
+  save();
+  return linhas.length;
+}
+function renderIdeas(){
+  const todas = ideaList();
+  const abertas = todas.filter(i => !i.done);
+  const feitas = todas.filter(i => i.done);
+  const mostra = ideasVerFeitas ? todas : abertas;
+  view.innerHTML = `
+    <div class="topbar">
+      <h1>💡 Ideias</h1>
+      <span class="pill">${abertas.length} em aberto</span>
+      <button class="iconbtn" data-action="go" data-h="#/settings" aria-label="Ajustes">⚙️</button>
+    </div>
+
+    <div class="section"><h2>Anotar agora</h2>
+      <div class="card">
+        <div class="field" style="margin-bottom:8px">
+          <textarea id="idea-new" rows="3" placeholder="Ex.: botão de repetir treino de ontem&#10;mostrar tempo total do treino&#10;avisar quando faltar proteína no dia"></textarea>
+          <div class="sub" style="margin-top:4px; font-size:.76rem">Uma ideia por linha — dá para colar várias de uma vez.</div>
+        </div>
+        <button class="btn" data-action="idea-add">＋ Anotar</button>
+      </div>
+    </div>
+
+    <div class="section"><h2>${ideasVerFeitas ? "Todas" : "Em aberto"}</h2>
+      <div class="card">
+        ${mostra.length ? mostra.map(i => `
+          <div class="idearow${i.done ? " feita" : ""}">
+            <button class="ideatick${i.done ? " on" : ""}" data-action="idea-done" data-id="${i.id}"
+              title="${i.done ? "Marcar como não feita" : "Marcar como já feita"}">${i.done ? "✓" : ""}</button>
+            <span class="tx">${esc(i.t)}<span class="dt">${fmtDate(localDateOf(i.ts))} · ${fmtTime(i.ts)}${i.done ? " · feita ✓" : ""}</span></span>
+            <button class="xbtn" data-action="idea-edit" data-id="${i.id}" aria-label="Editar" style="color:var(--muted)">✎</button>
+            <button class="xbtn" data-action="idea-del" data-id="${i.id}" aria-label="Excluir">✕</button>
+          </div>`).join("")
+          : `<div class="empty">${abertas.length || feitas.length
+              ? "Nada em aberto — tudo que você anotou já está marcado como feito."
+              : "Nada anotado ainda.<br>Viu algo que quer mudar? Escreva aí em cima na hora."}</div>`}
+      </div>
+      <div class="btnrow" style="margin-top:10px">
+        ${feitas.length ? `<button class="btn ghost sm" data-action="idea-toggle-feitas" style="width:auto">${
+          ideasVerFeitas ? `🙈 Esconder as feitas (${feitas.length})` : `👁 Ver as feitas (${feitas.length})`}</button>` : ""}
+        ${abertas.length ? `<button class="btn ghost sm" data-action="idea-copy" style="width:auto">📋 Copiar as em aberto</button>` : ""}
+      </div>
+      ${feitas.length ? `<button class="btn danger sm" data-action="idea-clear-done" style="margin-top:10px">🗑 Apagar as ${feitas.length} já feitas</button>` : ""}
+    </div>`;
+  setTimeout(() => { const t = document.getElementById("idea-new"); if(t) t.focus(); }, 60);
 }
 
 function summaryLine(exId){
@@ -2326,7 +2404,7 @@ const Sync = {
      que entrar aqui — o mealNotes ficou de fora na v13 e os comentários de refeição
      nunca chegavam nos outros aparelhos. */
   data(){ return {gyms:db.gyms, exercises:db.exercises, routines:db.routines, logs:db.logs, food:db.food, urges:db.urges,
-    plan:db.plan, body:db.body, sessions:db.sessions, mealNotes:db.mealNotes, free:db.free, foodMap:db.foodMap,
+    plan:db.plan, body:db.body, sessions:db.sessions, ideas:db.ideas, mealNotes:db.mealNotes, free:db.free, foodMap:db.foodMap,
     settings:Object.assign({}, db.settings, {sync:null}), updatedAt:db.updatedAt}; },
   async getRemote(){
     const r = await fetch(this.url(), {cache:"no-store"});
@@ -2497,6 +2575,41 @@ document.addEventListener("click", ev => {
     toast(exLang() === "en" ? "Nomes em inglês 🌐" : "Nomes em português 🌐");
   }
   else if(a === "sessions-all"){ sessionsAll = !sessionsAll; render(); }
+  else if(a === "idea-add"){
+    const t = document.getElementById("idea-new");
+    const q = addIdeas(t ? t.value : "");
+    if(!q){ toast("Escreva alguma coisa primeiro."); return; }
+    if(t) t.value = "";
+    render();
+    toast(q === 1 ? "Anotado ✓" : `${q} ideias anotadas ✓`);
+  }
+  else if(a === "idea-done"){
+    const i = (db.ideas||[]).find(x => x.id === el.dataset.id); if(!i) return;
+    i.done = !i.done; save(); render();
+  }
+  else if(a === "idea-edit"){
+    const i = (db.ideas||[]).find(x => x.id === el.dataset.id); if(!i) return;
+    const v = prompt("Editar a ideia:", i.t);
+    if(v === null) return;
+    if(!v.trim()){ toast("Para apagar, use o ✕."); return; }
+    i.t = v.trim(); save(); render();
+  }
+  else if(a === "idea-del"){
+    const i = (db.ideas||[]).find(x => x.id === el.dataset.id); if(!i) return;
+    if(!confirm(`Excluir esta ideia?\n\n"${i.t}"`)) return;
+    db.ideas = db.ideas.filter(x => x.id !== el.dataset.id); save(); render(); toast("Excluída");
+  }
+  else if(a === "idea-toggle-feitas"){ ideasVerFeitas = !ideasVerFeitas; render(); }
+  else if(a === "idea-clear-done"){
+    const q = (db.ideas||[]).filter(x => x.done).length;
+    if(!confirm(`Apagar as ${q} ideias já feitas?`)) return;
+    db.ideas = (db.ideas||[]).filter(x => !x.done); save(); render(); toast(`${q} apagada(s)`);
+  }
+  /* copiar pronto para colar no chat com quem vai programar */
+  else if(a === "idea-copy"){
+    const txt = ideaList().filter(i => !i.done).map(i => "- " + i.t).join("\n");
+    copyText(txt).then(ok => toast(ok ? "Copiado 📋" : "Não deu para copiar"));
+  }
   else if(a === "del-session"){
     ev.stopPropagation();
     db.sessions = (db.sessions || []).filter(x => x.id !== el.dataset.id);
@@ -5150,7 +5263,8 @@ document.addEventListener("click", ev => {
   }
   const a = el.dataset.action;
 
-  if(a === "tab"){ const t=el.dataset.t; location.hash = t==="treino"?"#/":t==="food"?"#/food":"#/progress"; }
+  if(a === "tab"){ const t=el.dataset.t;
+    location.hash = t==="treino"?"#/" : t==="food"?"#/food" : t==="ideas"?"#/ideas" : "#/progress"; }
 
   else if(a === "food-day"){ foodDay = shiftDay(foodDay, +el.dataset.d); render(); }
   else if(a === "add-food"){ foodForm(null); }
