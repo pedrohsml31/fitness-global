@@ -1,10 +1,10 @@
 {
-  "version": 38,
-  "name": "3.8",
+  "version": 39,
+  "name": "3.9",
   "minNative": 37,
   "files": [
     "index.html"
   ],
-  "notes": "UNIDADES: a academia agora tem filiais por dentro. Uma Smart Fit so, com Centro, Shopping etc., em vez de uma academia por unidade - os exercicios continuam sendo os mesmos. No exercicio voce marca \"a carga muda de unidade para unidade\" (maquina) e ele passa a ler so as sessoes da unidade onde voce esta; halteres e barra ficam sem a marca e seguem com um historico so. A unidade e escolhida numa barra no topo da academia e fica carimbada em cada serie registrada. O historico de antes continua valendo em todas as unidades. DEGRAU: cada exercicio pode ter o degrau da maquina (2,5 / 5 / 10 kg), e a sugestao de progressao usa esse valor em vez de deduzir do historico. TREINO NOVO: \"Shape estetico A / B / C\" entrou nos treinos prontos.",
+  "notes": "Busca de exercicio: a IA comeca a pensar ENQUANTO voce digita o nome (0,8 s depois de parar), em vez de so ao tocar na lupa - quando voce toca, a resposta normalmente ja chegou. Uma chamada so por termo, nada de gastar cota a cada letra. Conserto de sincronizacao: a conta que decide \"este aparelho esta vazio, adoto a nuvem por cima\" esquecia os treinos A/B/C, o historico de treinos e as ideias - um aparelho que so tivesse isso era tratado como vazio e sobrescrito. Agora conta tudo.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

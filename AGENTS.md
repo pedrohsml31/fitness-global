@@ -54,7 +54,8 @@ Neste projeto o script `recompilar-apk.ps1` escreve isso automaticamente em
 - Campo novo no `db` **tem** que entrar no `seed()` e no `Sync.data()`, senão ele nunca
   chega nos outros aparelhos. O `Sync._adopt()` copia a lista de campos do próprio
   `seed()` — não voltar a escrever os nomes à mão lá: campo esquecido nessa lista volta
-  **vazio** no aparelho que baixa da nuvem.
+  **vazio** no aparelho que baixa da nuvem. O `Sync.dataCount()` também sai do `seed()`:
+  ele decide se o aparelho está "vazio" e pode ser sobrescrito pela nuvem.
 
 ## Atualização do app
 

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v3.8</title>
+<title>Fitness Global v3.9</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -410,8 +410,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "3.8";
-const APP_VERSION = 38;
+const APP_NAME_VERSION = "3.9";
+const APP_VERSION = 39;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -2528,7 +2528,23 @@ const Sync = {
   activeCode(){ return this.cfg() && this.cfg().code; },
   enabled(){ const c = this.activeConfig(); return !!(c && c.apiKey && c.projectId && this.activeCode()); },
   /* quantos registros existem — usado para NUNCA sobrescrever a nuvem com um app vazio */
-  dataCount(o){ o = o || db; return ["gyms","exercises","logs","food","urges","plan","body"].reduce((n,k)=>n+((o[k]||[]).length),0); },
+  /* Esta conta decide "aparelho vazio -> adoto a nuvem por cima" e "nunca apagar a
+     nuvem com um app vazio". Antes eram 7 nomes escritos a mão, e ficavam de fora as
+     rotinas, o histórico de treinos e as ideias: um aparelho que só tivesse isso era
+     tratado como VAZIO e sobrescrito. A lista sai do seed(), como no _adopt — campo
+     novo entra sozinho. Lista conta itens; objeto (comentários, mapa de nutrição) conta
+     chaves. */
+  dataCount(o){
+    o = o || db;
+    const base = seed();
+    return Object.keys(base).reduce((n, k) => {
+      if(k === "settings" || k === "updatedAt") return n;
+      const v = o[k];
+      if(Array.isArray(v)) return n + v.length;
+      if(v && typeof v === "object") return n + Object.keys(v).length;
+      return n;
+    }, 0);
+  },
   url(){
     const c = this.activeConfig();
     return "https://firestore.googleapis.com/v1/projects/" + c.projectId +
@@ -4440,6 +4456,26 @@ function foodForm(food, pre){
   setTimeout(()=>{ const f=sheet.querySelector(".ffn")||document.getElementById("ff-name"); if(f) f.focus(); },50);
   if(pre && pre.meal) toast(`Adicionando em ${pre.meal}`);
 }
+/* ---- a IA começa a pensar ENQUANTO você digita o nome do exercício ----
+   Antes ela só era chamada ao tocar em 🔍, e você ficava esperando a resposta. Agora,
+   0,8 s depois de você parar de digitar, o app já pergunta em segundo plano e guarda no
+   cache. Quando você toca em 🔍, a resposta normalmente já chegou e a lista sai pronta.
+   Não muda nada no que você faz, e não gasta cota com o mesmo termo duas vezes. */
+let aiPreT = null, aiPreUltimo = "";
+function aiPrefetch(q){
+  clearTimeout(aiPreT);
+  q = String(q || "").trim();
+  if(!geminiKey() || q.length < 3) return;
+  aiPreT = setTimeout(async () => {
+    const k = norm(q);
+    if(k === aiPreUltimo || aiExCache()[k]) return;
+    aiPreUltimo = k;
+    try{ const r = await aiExercise(q); aiExCacheSet(q, r); }catch(e){}
+  }, 800);
+}
+sheet.addEventListener("input", ev => {
+  if(ev.target && ev.target.id === "f-name") aiPrefetch(ev.target.value);
+});
 /* enquanto voce digita na ultima linha, ja aparece outra vazia embaixo */
 sheet.addEventListener("input", ev => {
   const t = ev.target;
