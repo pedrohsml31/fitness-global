@@ -107,6 +107,64 @@ public class RestChannelPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /* ---------------- som do fim do descanso (ver RestSoundReceiver) ---------------- */
+    private static final int SOUND_REQ = 7101;
+
+    private android.app.PendingIntent soundIntent(String sound, boolean spk, int flag) {
+        Intent i = new Intent(getContext(), RestSoundReceiver.class);
+        i.setAction(RestSoundReceiver.ACTION);
+        if (sound != null) i.putExtra("sound", sound);
+        i.putExtra("spk", spk);
+        return android.app.PendingIntent.getBroadcast(getContext(), SOUND_REQ, i,
+                flag | android.app.PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    /** Agenda o bipe no AlarmManager: toca na hora com a tela apagada e o app fechado. */
+    @PluginMethod
+    public void scheduleSound(PluginCall call) {
+        long at = call.getLong("at", 0L);
+        String sound = call.getString("sound", "rest_medio");
+        boolean spk = Boolean.TRUE.equals(call.getBoolean("spk", false));
+        JSObject r = new JSObject();
+        try {
+            android.app.AlarmManager am = (android.app.AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
+            android.app.PendingIntent pi = soundIntent(sound, spk, android.app.PendingIntent.FLAG_UPDATE_CURRENT);
+            boolean exato = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am.canScheduleExactAlarms();
+            if (exato) am.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at, pi);
+            else am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, at, pi);
+            r.put("ok", true);
+            r.put("exato", exato);
+        } catch (Exception e) {
+            r.put("ok", false);
+            r.put("erro", String.valueOf(e.getMessage()));
+        }
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void cancelSound(PluginCall call) {
+        try {
+            android.app.AlarmManager am = (android.app.AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
+            android.app.PendingIntent pi = soundIntent(null, false, android.app.PendingIntent.FLAG_NO_CREATE);
+            if (pi != null) { am.cancel(pi); pi.cancel(); }
+        } catch (Exception ignored) { }
+        call.resolve();
+    }
+
+    /** Toca AGORA pelo mesmo caminho e com a mesma regra — e diz o que decidiu. */
+    @PluginMethod
+    public void playSoundNow(PluginCall call) {
+        String sound = call.getString("sound", "rest_medio");
+        boolean spk = Boolean.TRUE.equals(call.getBoolean("spk", false));
+        String via = RestSoundReceiver.decide(getContext(), spk);
+        if ("fone".equals(via) || "alto-falante".equals(via)) {
+            RestSoundReceiver.play(getContext(), sound, "fone".equals(via), null);
+        }
+        JSObject r = new JSObject();
+        r.put("via", via);
+        call.resolve(r);
+    }
+
     /** Uri do som em res/raw pelo ID numerico do recurso (null se nao existir). */
     private Uri rawUri(String name) {
         if (name == null || name.isEmpty()) return null;
@@ -158,6 +216,20 @@ public class RestChannelPlugin extends Plugin {
             }
             r.put("arquivos", raws);
             r.put("notifLigada", nm.areNotificationsEnabled());
+            android.media.AudioManager au = (android.media.AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+            if (au != null) {
+                r.put("ringer", au.getRingerMode());          // 0 silencioso · 1 vibrar · 2 normal
+                r.put("volMidia", au.getStreamVolume(android.media.AudioManager.STREAM_MUSIC));
+                r.put("volMidiaMax", au.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC));
+                r.put("volNotif", au.getStreamVolume(android.media.AudioManager.STREAM_NOTIFICATION));
+                r.put("fone", RestSoundReceiver.headsetOn(au));
+            }
+            r.put("decideSpk", RestSoundReceiver.decide(getContext(), true));
+            r.put("decideSemSpk", RestSoundReceiver.decide(getContext(), false));
+            try {
+                android.app.AlarmManager am2 = (android.app.AlarmManager) getContext().getSystemService(Context.ALARM_SERVICE);
+                r.put("alarmeExato", Build.VERSION.SDK_INT < Build.VERSION_CODES.S || am2.canScheduleExactAlarms());
+            } catch (Exception e) { r.put("alarmeExato", false); }
             r.put("filtroDnd", nm.getCurrentInterruptionFilter());
             r.put("build", nativeBuild());
             r.put("ok", true);

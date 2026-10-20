@@ -34,6 +34,12 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
+        <!-- Toca o bipe do fim do descanso quando o alarme dispara (tela apagada, app
+             fechado). Pelo canal de mídia quando há fone: o silencioso não cala. -->
+        <receiver
+            android:name=".RestSoundReceiver"
+            android:exported="false" />
+
         <!-- Health Connect: tela de política de privacidade (rationale) -->
         <activity
             android:name="com.fit_up.health.capacitor.PermissionsRationaleActivity"

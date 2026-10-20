@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v4.0</title>
+<title>Fitness Global v4.1</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -410,8 +410,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "4.0";
-const APP_VERSION = 40;
+const APP_NAME_VERSION = "4.1";
+const APP_VERSION = 41;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1905,13 +1905,13 @@ function renderSettings(){
       <div class="setline">
         <div class="grow"><div class="t">Tocar som ao terminar</div>
         <div class="d">${native.isNative
-          ? `O som sai da <b>notificação</b> do Android, então toca com a tela apagada e com o app fechado. Sempre vibra.${db.settings.soundSpk ? "" : " Por padrão só toca com <b>fone conectado</b>."}`
+          ? `Toca com a tela apagada e com o app fechado. <b>Com fone</b>: toca sempre, <b>mesmo no silencioso ou no vibrar</b>. <b>Sem fone</b>: só se "tocar no alto-falante" estiver ligado, e aí respeita o silencioso. Sempre vibra.`
           : "No navegador toca sempre que ligado (sem detecção de fone). Sempre vibra."}</div></div>
         <button class="switch${s.sound?" on":""}" data-action="tg" data-k="sound" role="switch" aria-checked="${s.sound}" aria-label="Tocar som ao terminar"></button>
       </div>
       ${(s.sound && native.isNative)?`<div class="setline">
         <div class="grow"><div class="t">🔊 Tocar também no alto-falante</div>
-        <div class="d">Sem isso, o som só sai quando há fone conectado. Ligue para ouvir o fim da série na academia sem fone.</div></div>
+        <div class="d">Sem fone, o som só sai se isto estiver ligado — e mesmo assim não toca com o celular no silencioso ou no vibrar. Com fone, toca sempre.</div></div>
         <button class="switch${s.soundSpk?" on":""}" data-action="tg" data-k="soundSpk" role="switch" aria-checked="${!!s.soundSpk}" aria-label="Tocar no alto-falante"></button>
       </div>`:""}
       ${s.sound?`<div class="setline">
@@ -2779,9 +2779,13 @@ const native = {
     const LN = this.plugin("LocalNotifications"); if(!LN) return false;
     try{
       await this.init();
-      const comSom = await this.shouldSound();
+      const RC2 = this.plugin("RestChannel");
+      if(this.hasNativeSound() && db.settings.sound){
+        try{ await RC2.scheduleSound({at: Date.now() + secs*1000, sound: this.soundFile(), spk: !!db.settings.soundSpk}); }catch(e){}
+      }
+      const comSom = this.hasNativeSound() ? false : await this.shouldSound();
       await LN.schedule({ notifications:[{
-        id:7002, channelId:this.channelId(comSom), title:"Teste de descanso 📳" + (comSom ? "🔊" : ""),
+        id:7002, channelId:this.channelId(comSom), title:"Teste de descanso 📳" + (db.settings.sound ? "🔊" : ""),
         body: comSom ? "Vibrou e tocou com a tela apagada? Então está funcionando."
                      : "Vibrou com a tela apagada? Então está funcionando. (sem som: fone desconectado ou som desligado)",
         schedule:{ at:new Date(Date.now()+secs*1000), allowWhileIdle:true },
@@ -2794,9 +2798,34 @@ const native = {
      AlarmManager do Android, então dispara com a tela apagada, com o app em segundo
      plano e até com o app fechado — ao contrário do timer da WebView, que o Android
      congela. Devolve se vai sair com som, para o app não tocar nada por cima. */
+  /* o APK a partir do build 41 toca o bipe ele mesmo (RestSoundReceiver), por alarme */
+  hasNativeSound(){ const RC = this.plugin("RestChannel"); return !!(RC && RC.scheduleSound); },
   async scheduleRestEnd(atMs, label){
     if(!this.isNative) return false;
     const LN = this.plugin("LocalNotifications"); if(!LN) return false;
+    /* APK novo: a notificação vai SEMPRE pelo canal mudo (só vibra) e o bipe é agendado à
+       parte, no AlarmManager. É ele que decide na hora de tocar: com fone, pela mídia,
+       mesmo no silencioso; sem fone, só com o alto-falante liberado e o celular no normal.
+       O som da notificação não serve para isso: o Android cala notificação no silencioso
+       e no vibrar, com ou sem fone. */
+    if(this.hasNativeSound()){
+      const RC = this.plugin("RestChannel");
+      try{
+        await LN.cancel({ notifications:[{id:7001}] });
+        await this.makeChannel(false);
+        await LN.schedule({ notifications:[{
+          id:7001, channelId:this.channelId(false), title:"Descanso concluído 💪",
+          body:label || "Hora da próxima série!",
+          schedule:{ at:new Date(atMs), allowWhileIdle:true },
+          smallIcon:"ic_stat_icon", autoCancel:false, ongoing:false
+        }]});
+      }catch(e){}
+      if(!db.settings.sound){ try{ await RC.cancelSound(); }catch(e){} return false; }
+      try{
+        const r = await RC.scheduleSound({at: Math.round(atMs), sound: this.soundFile(), spk: !!db.settings.soundSpk});
+        return !!(r && r.ok);
+      }catch(e){ return false; }
+    }
     const comSom = await this.shouldSound();
     try{
       /* cancel(7001) já tira da barra o aviso da série anterior (a Capacitor chama
@@ -2822,6 +2851,10 @@ const native = {
     if(!this.isNative) return;
     const LN = this.plugin("LocalNotifications"); if(!LN) return;
     try{ await LN.cancel({ notifications:[{id:7001}] }); }catch(e){}
+    /* pulou o descanso: o bipe agendado também sai. No fim natural isto não é chamado —
+       o alarme do bipe dispara na mesma hora e não pode ser cancelado por engano */
+    const RC = this.plugin("RestChannel");
+    if(RC && RC.cancelSound){ try{ await RC.cancelSound(); }catch(e){} }
   },
   async headsetConnected(){
     const P = this.plugin("Headset");
@@ -6547,13 +6580,27 @@ async function soundDiagForm(){
   add("Som ligado nos ajustes", db.settings.sound ? "sim" : "NÃO — está desligado", !!db.settings.sound);
   add("Fone conectado", fone ? "sim" : "não detectado", !mudoPorFone);
   add("Tocar no alto-falante", db.settings.soundSpk ? "ligado" : "desligado — sem fone, fica mudo", !mudoPorFone);
-  add("→ O descanso vai tocar?", comSom ? "SIM" : ("NÃO — vai só vibrar" + (mudoPorFone ? " (sem fone e alto-falante desligado)" : !db.settings.sound ? " (som desligado)" : "")), comSom);
+  if(!native.hasNativeSound()) add("→ O descanso vai tocar?", comSom ? "SIM" : ("NÃO — vai só vibrar" + (mudoPorFone ? " (sem fone e alto-falante desligado)" : !db.settings.sound ? " (som desligado)" : "")), comSom);
   add("Notificações liberadas", d.notifLigada ? "sim" : "NÃO", !!d.notifLigada);
   const dnd = {1:"tudo passa", 2:"só prioridade", 3:"nada passa", 4:"só alarmes"}[d.filtroDnd] || d.filtroDnd;
   add("Não Perturbe", dnd, d.filtroDnd === 1);
 
+  if(typeof d.ringer === "number"){
+    const modo = {0:"silencioso", 1:"vibrar", 2:"normal"}[d.ringer] || d.ringer;
+    add("Modo do celular", modo + (d.ringer === 2 ? "" : " — com fone toca mesmo assim; sem fone, não"), true);
+    if(d.fone) add("Volume de mídia (é por ele que o fone toca)", d.volMidia + " de " + d.volMidiaMax, d.volMidia > 0);
+    else if(db.settings.soundSpk) add("Volume de notificação (alto-falante)", String(d.volNotif), d.volNotif > 0);
+    add("Alarme na hora exata", d.alarmeExato ? "permitido" : "NÃO — o bipe pode atrasar alguns minutos", !!d.alarmeExato);
+    const via = db.settings.soundSpk ? d.decideSpk : d.decideSemSpk;
+    const SE = {"fone":"toca no fone 🎧", "alto-falante":"toca no alto-falante 🔊",
+      "silencioso":"não toca: sem fone e celular no silencioso/vibrar",
+      "sem-fone":"não toca: sem fone e \"tocar no alto-falante\" desligado", "sem-audio":"não toca: áudio indisponível"};
+    add("→ Se o descanso acabasse agora", db.settings.sound ? (SE[via] || via) : "não toca (som desligado)",
+      db.settings.sound && (via === "fone" || via === "alto-falante"));
+  }
   (d.arquivos||[]).forEach(a => add("Arquivo de som " + a.nome, a.achou ? "ok" : "NÃO ESTÁ NO APP", !!a.achou));
   (d.canais||[]).forEach(c => {
+    if(native.hasNativeSound() && c.id.indexOf("mudo") < 0) return;     // som não vem mais do canal
     if(!c.existe){ add("Canal " + c.id, "não existe ainda", true); return; }
     const temSom = !!(c.som && c.som.length);
     add("Canal " + c.id,
@@ -6577,7 +6624,25 @@ async function soundDiagForm(){
 }
 
 /* dispara a notificação DE VERDADE agora — mesmo caminho do fim do descanso */
+const SOM_VIA = {
+  "fone": "Tocou no fone 🎧",
+  "alto-falante": "Tocou no alto-falante 🔊",
+  "silencioso": "Não tocou: sem fone e o celular está no silencioso/vibrar",
+  "sem-fone": "Não tocou: sem fone e \"tocar no alto-falante\" desligado",
+  "sem-audio": "Não tocou: o Android não liberou o áudio"
+};
 async function soundTestNow(){
+  const RC = native.plugin("RestChannel");
+  if(native.hasNativeSound()){
+    await native.makeChannel(false);
+    await native.notifyNow("Teste — vibração do aviso", false, 7003);
+    if(!db.settings.sound){ toast("O som do descanso está desligado nos ajustes"); return; }
+    try{
+      const r = await RC.playSoundNow({sound: native.soundFile(), spk: !!db.settings.soundSpk});
+      toast(SOM_VIA[r && r.via] || "Não deu para tocar");
+    }catch(e){ toast("Não deu para tocar"); }
+    return;
+  }
   const comSom = await native.shouldSound();
   await native.makeChannel(comSom);
   await native.notifyNow("Teste — era para ter tocado agora", comSom, 7003);

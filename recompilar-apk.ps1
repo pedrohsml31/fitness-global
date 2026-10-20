@@ -33,7 +33,7 @@ if ((Test-Path "$src\native-patch\HealthPlugin.kt") -and (Test-Path $hp)) {
 # Os plugins nativos proprios (canal de descanso, fone, Nao Perturbe) tambem moram em
 # native-patch. Sem esta copia, mexer neles nao chegava ao APK.
 $javaDir = "$native\android\app\src\main\java\com\pedro\fitnessglobal"
-foreach ($p in @("RestChannelPlugin.java","HeadsetPlugin.java","UpdaterPlugin.java","MainActivity.java")) {
+foreach ($p in @("RestChannelPlugin.java","RestSoundReceiver.java","HeadsetPlugin.java","UpdaterPlugin.java","MainActivity.java")) {
     if ((Test-Path "$src\native-patch\$p") -and (Test-Path $javaDir)) {
         Copy-Item "$src\native-patch\$p" "$javaDir\$p" -Force
     }

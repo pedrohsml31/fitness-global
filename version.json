@@ -1,10 +1,10 @@
 {
-  "version": 40,
-  "name": "4.0",
-  "minNative": 37,
+  "version": 41,
+  "name": "4.1",
+  "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "SOM: o diagnostico pintava de verde justamente as linhas que explicavam o \"so vibra\" (sem fone e com o alto-falante desligado, o app fica mudo de proposito). Agora elas ficam vermelhas, com um botao para ligar o som no alto-falante. O cronometro da barra do celular voltou: o app apagava TODAS as notificacoes ao agendar o fim do descanso, inclusive ele. MEDALHAS: bronze/prata/ouro em Evolucao -> Medalhas, com aviso na hora. Metas de corpo absolutas que voce define. TREINO: grupo muscular no exercicio; ver o treino por grupo; \"1 exercicio por grupo\" (fechou um biceps, os outros biceps do treino saem do dia); exercicio global some das outras academias depois de comecado; faixa de reps em dois campos; ordem do treino visivel no topo; corrigir/apagar sessoes do historico; modo simulacao. BUSCA: a IA escolhe direto do catalogo, entao todo resultado vem com a foto certa. TREINO C com 24 series. SEGURANCA: medidor de forca do codigo de sincronizacao e troca por um codigo seguro.",
+  "notes": "SOM DO DESCANSO: com fone, agora toca MESMO com o celular no silencioso ou no vibrar - pelo canal de midia, que o silencioso nao cala, direto no fone (e se tiver musica, ela abaixa um instante). Sem fone, so toca se \"tocar no alto-falante\" estiver ligado, e ai respeita o silencioso. O app decide na hora em que o descanso acaba, entao vale colocar ou tirar o fone no meio do descanso. O som de notificacao nao servia: o Android cala notificacao no silencioso e no vibrar, com ou sem fone. O diagnostico agora mostra o modo do celular, o volume de midia e o que aconteceria se o descanso acabasse agora. Esta versao mexe no app por dentro: o Android pede um toque em Instalar.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
