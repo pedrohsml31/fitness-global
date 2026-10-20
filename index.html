@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v3.9</title>
+<title>Fitness Global v4.0</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -410,8 +410,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "3.9";
-const APP_VERSION = 39;
+const APP_NAME_VERSION = "4.0";
+const APP_VERSION = 40;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -578,7 +578,7 @@ function vibePattern(){ return VIBE[db.settings.vibe] || VIBE.media; }
 
 /* ===================== dados ===================== */
 const LS = "fitglobal.v1";
-function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], sessions:[], ideas:[], mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false, mealNotif:false, restOverlay:false, soundSpk:false, unitOf:{}, focus:null, doneDay:{}, kgFrom:null, exLang:"pt"}, updatedAt:0}; }
+function seed(){ return {gyms:[], exercises:[], routines:[], logs:[], food:[], urges:[], plan:[], body:[], sessions:[], ideas:[], ach:{}, mealNotes:{}, free:{}, foodMap:{}, settings:{sound:false, soundLen:"medio", autoRest:true, wake:false, vibe:"media", sync:null, weightFrom:"2026-07-20", actFrom:null, ignoreAuto:true, scaleWins:true, freeWeek:0, macros:false, mealNotif:false, restOverlay:false, soundSpk:false, unitOf:{}, oneGroup:true, groupView:false, goals:{}, achInit:false, focus:null, doneDay:{}, kgFrom:null, exLang:"pt"}, updatedAt:0}; }
 /* duração do bipe de fim de série (mesmo som, só mais longo) */
 const SOUNDLEN = { curto:0.45, medio:1.1, longo:2.4 };
 let db;
@@ -592,7 +592,12 @@ function save(touch){
   localStorage.setItem(LS, JSON.stringify(db));
   clearTimeout(_saveT);
   _saveT = setTimeout(() => Sync.push(), 700);
+  /* toda gravação pode ter destravado medalha: confere 1,5 s depois (uma vez só,
+     mesmo que várias gravações aconteçam juntas) e avisa na hora */
+  clearTimeout(_achT);
+  _achT = setTimeout(() => { try{ checkAch(); }catch(e){} }, 1500);
 }
+let _achT = null;
 const uid = () => Math.random().toString(36).slice(2,9) + Date.now().toString(36);
 function todayStr(){
   const d = new Date();
@@ -658,6 +663,40 @@ function exLogs(exId){
 
    Cada série registrada carimba a unidade (l.u), então o histórico antigo continua
    valendo: sem carimbo, entra em qualquer leitura. */
+/* ---------- grupo muscular do exercício ----------
+   Base de três coisas: ver o treino agrupado, a regra "1 exercício por grupo por treino"
+   do full body, e as medalhas. A lista é a mesma dos treinos prontos. */
+const GRUPOS = ["Peito","Costas","Ombro","Bíceps","Tríceps","Quadríceps","Posterior","Glúteo","Panturrilha","Antebraço","Abdômen"];
+/* músculo do catálogo free-exercise-db -> grupo. Só o que bate sem dúvida: adutor,
+   abdutor, lombar, trapézio e pescoço ficam sem grupo para você escolher. */
+const MUS2GRP = {chest:"Peito", lats:"Costas", "middle back":"Costas", shoulders:"Ombro",
+  biceps:"Bíceps", triceps:"Tríceps", quadriceps:"Quadríceps", hamstrings:"Posterior",
+  glutes:"Glúteo", calves:"Panturrilha", forearms:"Antebraço", abdominals:"Abdômen"};
+function grpOf(e){ return (e && e.grp) || ""; }
+/* os treinos prontos guardavam o grupo só no texto da observação ("Peito · ChatGPT").
+   Isto tira de lá, uma vez — é dado seu, não chute. */
+function migrateGroups40(){
+  if(db.settings.migGrp40) return;
+  db.exercises.forEach(e => {
+    if(e.grp || !e.notes) return;
+    const m = String(e.notes).match(/^([^·]+)\s·\s/);
+    if(m && GRUPOS.includes(m[1].trim())) e.grp = m[1].trim();
+  });
+  /* treino C do "Shape estético": você definiu 3 séries de ombro, então o Reverse fly
+     (2º exercício de ombro) sai do TREINO. O exercício e o histórico dele ficam. */
+  (db.routines || []).forEach(r => {
+    if(!/^C — V-taper \+ braços/.test(r.name || "")) return;
+    r.exIds = (r.exIds || []).filter(id => { const x = exById(id); return !(x && norm(x.name) === norm("Reverse fly")); });
+  });
+  db.settings.migGrp40 = true;
+  save(false);
+}
+/* exercício global (🌐) que você JÁ COMEÇOU hoje em outra academia: some das demais */
+function globalBusyElsewhere(e, gymId){
+  if(!e || e.gymId !== null) return false;
+  return db.logs.some(l => l.exerciseId === e.id && l.date === todayStr() && l.sets.length && l.gymId && l.gymId !== gymId);
+}
+
 function gymUnits(gymId){ const g = gymById(gymId); return (g && g.units) || []; }
 function unitNow(gymId){
   const us = gymUnits(gymId);
@@ -684,7 +723,25 @@ function logsOf(exId){
   const u = unitNow(e.gymId || route().gymId);
   return all.filter(l => !l.u || l.u === u);
 }
+/* ---------- modo simulação ----------
+   Para testar pesos sem sujar o histórico: as séries vão para uma lista à parte, só na
+   memória. Não entram no histórico, na progressão, nos recordes, no foco do dia, no
+   "treino concluído" nem na nuvem. Fica só neste aparelho e some ao sair do modo. */
+let simLogs = [];
+let simMode = (() => { try{ return localStorage.getItem("fitglobal.sim") === "1"; }catch(e){ return false; } })();
+function setSim(v){
+  simMode = !!v;
+  try{ localStorage.setItem("fitglobal.sim", simMode ? "1" : "0"); }catch(e){}
+  if(!simMode) simLogs = [];
+}
+function simBannerHtml(){
+  return simMode ? `<div class="updbanner" style="margin-bottom:10px">
+    <span style="font-size:1.2rem">🧪</span>
+    <div class="grow"><b>Modo simulação</b><div class="sub">Nada do que você registrar fica salvo nem conta no treino.</div></div>
+    <button class="btn ghost sm" style="width:auto" data-action="sim-off">Sair</button></div>` : "";
+}
 function todayLog(exId){
+  if(simMode) return simLogs.find(l => l.exerciseId === exId);
   const e = exById(exId);
   const hoje = db.logs.filter(l => l.exerciseId === exId && l.date === todayStr());
   if(!hoje.length) return undefined;
@@ -857,7 +914,7 @@ function renderHome(){
   /* a academia onde você está treinando hoje sobe para o topo e fica destacada */
   const lista = f ? db.gyms.slice().sort((a, b) => (b.id === f.gym) - (a.id === f.gym)) : db.gyms;
   const cards = lista.map(g => {
-    const exs = gymExercises(g.id), n = exs.length;
+    const exs = gymExercises(g.id).filter(e => !globalBusyElsewhere(e, g.id)), n = exs.length;
     /* quantos exercícios você já começou hoje aqui (zera sozinho quando o dia vira) */
     const feitos = exs.filter(e => { const l = todayLog(e.id); return l && l.sets.length; }).length;
     const foco = fst && f.gym === g.id;
@@ -1016,7 +1073,7 @@ const TEMPLATES = [{
   nome: "Shape estético A / B / C",
   autor: "ChatGPT",
   desc: "3x por semana (ex.: seg/qua/sex), ~50–60 min. V-taper: ombro largo, costas boas, braço proporcional, peito cheio, panturrilha e antebraço sem ficar para trás, perna atlética sem gastar volume demais.",
-  nota: "No plano original o treino C diz \"24 séries\", mas os exercícios listados somam 26. Mantive as séries de cada exercício exatamente como vieram — quem está errado é o total, não as linhas. O A e o B batem certo (22 cada).",
+  nota: "Treino C ajustado para 24 séries pela sua divisão por grupo (3 peito, 3 costas, 3 ombro, 2 bíceps, 2 tríceps, 2 quadríceps, 2 posterior, 3 panturrilha, 2 abdômen, 2 antebraço): saiu o Reverse fly, que era o segundo exercício de ombro. O plano original listava 26.",
   treinos: [
     {nome:"A — Peito superior + largura", nota:"Superséries: bíceps + tríceps · panturrilha + antebraço", itens:[
       {g:"Peito",       n:"Supino inclinado máquina",            s:3, r:"6–10"},
@@ -1042,7 +1099,6 @@ const TEMPLATES = [{
       {g:"Costas",      n:"Puxada unilateral / high row para quadril", s:3, r:"8–12"},
       {g:"Peito",       n:"Pec deck ou chest press",             s:3, r:"8–12"},
       {g:"Ombro",       n:"Elevação lateral máquina/cabo",       s:3, r:"12–20"},
-      {g:"Ombro",       n:"Reverse fly",                         s:2, r:"10–20"},
       {g:"Bíceps",      n:"Rosca máquina/cabo",                  s:2, r:"8–15"},
       {g:"Tríceps",     n:"Tríceps máquina/pushdown",            s:2, r:"8–15"},
       {g:"Quadríceps",  n:"Extensora ou pendulum",               s:2, r:"10–15"},
@@ -1114,7 +1170,7 @@ async function applyTemplate(tplId, gymId){
     if(ex){ porNome[k] = ex; reusados.push(ex.name); return; }
     let foto = "";
     if(cat){ const hit = ExDb.search(i.n)[0]; if(hit) foto = ExDb.img(hit.i); }
-    const novo = {id:uid(), gymId, name:i.n, targetSets:i.s, restSec:90, reps:i.r,
+    const novo = {id:uid(), gymId, name:i.n, grp: GRUPOS.includes(i.g) ? i.g : undefined, targetSets:i.s, restSec:90, reps:i.r,
       notes:`${i.g} · ${tpl.autor}`, photo:foto, order: ordem++};
     db.exercises.push(novo); porNome[k] = novo; criados.push(novo.name);
   }));
@@ -1150,6 +1206,15 @@ function templateForm(gymId){
    (8/8/8). Não fechou? Mesmo peso, e a meta é justamente a série que ficou para trás.
    O degrau de carga sai do SEU histórico — o menor salto que você já deu nesse
    exercício. Sem isso o app não chuta: ele diz que não sabe e pergunta. */
+/* os dois campos viram o mesmo texto "8–12" de sempre: o resto do app (parseReps,
+   treinos prontos, sincronização) continua lendo igual */
+function joinReps(a, b){
+  const x = parseInt(a, 10), y = parseInt(b, 10);
+  if(x > 0 && y > 0) return x === y ? String(x) : Math.min(x,y) + "–" + Math.max(x,y);
+  if(x > 0) return String(x);
+  if(y > 0) return String(y);
+  return "";
+}
 function parseReps(s){
   const t = String(s||"").replace(/\s/g,"");
   const m = t.match(/(\d+)[–\-—a](\d+)/);
@@ -1362,7 +1427,7 @@ function focusList(f){
   const g = db.gyms.find(x => x.id === f.gym); if(!g) return null;
   const r = f.rt ? routineById(f.rt) : null;
   if(f.rt && !r) return null;                       // treino apagado depois
-  const exs = r ? routineExercises(r, g.id) : gymExercises(g.id);
+  const exs = (r ? routineExercises(r, g.id) : gymExercises(g.id)).filter(e => !globalBusyElsewhere(e, g.id));
   return {g, r, exs, st: exs.map(e => exStateToday(e, f.rt || ""))};
 }
 function workoutStats(f){
@@ -1431,7 +1496,8 @@ function renderGym(g){
   if(gymRoutine && !routineById(gymRoutine)) gymRoutine = "";      // rotina apagada
   const rAtiva = gymRoutine ? routineById(gymRoutine) : null;
   const rid = rAtiva ? rAtiva.id : "";
-  let exs = rAtiva ? routineExercises(rAtiva, g.id) : gymExercises(g.id);
+  let exs = (rAtiva ? routineExercises(rAtiva, g.id) : gymExercises(g.id))
+    .filter(e => !globalBusyElsewhere(e, g.id));     // 🌐 já começado em outra academia hoje
   /* ordem do dia: o que falta primeiro, depois o que já terminei, e os pulados por
      último — para o que importa agora ficar sempre no topo */
   if(!reorderMode){
@@ -1464,7 +1530,16 @@ function renderGym(g){
       <button class="xbtn skipbtn${st==="skip"?" on":""}" data-action="skip-ex" data-id="${e.id}" data-rt="${rid}"
         title="${st==="skip"?"Voltar para a lista de hoje":"Hoje eu não vou fazer esse"}">${st==="skip"?"↩":"✕"}</button>
       ${sc}${mini}<span class="chev">›</span></div>`;
-  }).join("");
+  });
+  /* visão por grupo muscular: mesmos cartões, com um título por grupo. Dentro de cada
+     grupo continua a ordem do dia (em andamento, a fazer, feito, pulado). */
+  let itemsHtml = items.join("");
+  if(db.settings.groupView && !reorderMode && exs.length){
+    const porGrupo = {};
+    exs.forEach((e, i) => { const k = grpOf(e) || "Sem grupo"; (porGrupo[k] = porGrupo[k] || []).push(items[i]); });
+    const ordem = GRUPOS.filter(k => porGrupo[k]).concat(porGrupo["Sem grupo"] ? ["Sem grupo"] : []);
+    itemsHtml = ordem.map(k => `<div class="sub" style="margin:12px 0 6px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; font-size:.7rem">${esc(k)} · ${porGrupo[k].length}</div>${porGrupo[k].join("")}`).join("");
+  }
   const canReorder = exs.length > 1;
   view.innerHTML = `
     <div class="topbar">
@@ -1474,6 +1549,7 @@ function renderGym(g){
         ? `<button class="iconbtn" data-action="reorder-done" aria-label="Concluir">✓</button>`
         : `<button class="iconbtn" data-action="gym-menu" data-id="${g.id}" aria-label="Opções da academia">⋮</button>`}
     </div>
+    ${reorderMode ? "" : simBannerHtml()}
     ${reorderMode ? "" : unitBarHtml(g)}
     ${reorderMode ? "" : `<div class="pills" style="margin:-2px 0 10px">
       <button class="pill${gymRoutine?"":" on"}" data-action="rt-sel" data-v="" style="cursor:pointer">Todos (${gymExercises(g.id).length})</button>
@@ -1481,6 +1557,7 @@ function renderGym(g){
       <button class="pill" data-action="rt-new" data-gym="${g.id}" style="cursor:pointer; color:var(--accent)">＋ treino</button>
       <button class="pill" data-action="tpl-open" data-gym="${g.id}" style="cursor:pointer">🤖 pronto</button>
       ${exLangPill()}
+      <button class="pill${db.settings.groupView?" on":""}" data-action="group-view" style="cursor:pointer" title="Mostrar os exercícios separados por grupo muscular">🧩 por grupo</button>
     </div>`}
     ${reorderMode ? "" : focusBarHtml(g, rid)}
     ${(() => { if(reorderMode) return "";
@@ -1493,8 +1570,8 @@ function renderGym(g){
     })()}
     ${reorderMode ? "" : dndWarnHtml()}
     ${(!reorderMode && exs.some(e=>e.photo && e.photo.slice(0,5) !== "data:")) ? `<button class="btn ghost sm" data-action="dl-photos" data-gym="${g.id}" data-rt="${rid}" style="margin-bottom:10px">📥 Salvar as fotos no app (funcionar sem internet)</button>` : ""}
-    <div class="section"><h2>${rAtiva ? esc(rAtiva.name) : "Exercícios"}${rAtiva&&rAtiva.src?` <span class="pill">por ${esc(rAtiva.src)}</span>`:""}${rAtiva?` <button class="xbtn" data-action="rt-menu" data-id="${rAtiva.id}" aria-label="Opções do treino" style="vertical-align:middle">⋮</button>`:""}</h2>
-      ${items || `<div class="empty">${rAtiva
+    <div class="section"><h2>${(!reorderMode && canReorder) ? `<button class="xbtn" data-action="reorder-on" title="Mudar a ordem dos exercícios${rAtiva?" deste treino":""}" style="float:right; color:var(--accent)">⇅ ordem</button>` : ""}${rAtiva ? esc(rAtiva.name) : "Exercícios"}${rAtiva&&rAtiva.src?` <span class="pill">por ${esc(rAtiva.src)}</span>`:""}${rAtiva?` <button class="xbtn" data-action="rt-menu" data-id="${rAtiva.id}" aria-label="Opções do treino" style="vertical-align:middle">⋮</button>`:""}</h2>
+      ${itemsHtml || `<div class="empty">${rAtiva
         ? "Este treino ainda não tem exercício.<br>Toque em <b>Escolher exercícios</b> abaixo."
         : "Nenhum exercício nesta academia ainda."}</div>`}
       ${reorderMode
@@ -1580,7 +1657,7 @@ function renderEx(g, e){
 
   const temUnidades = gymUnits(e.gymId || g.id).length > 1;
   const hist = logs.slice(-40).reverse().map(l => `
-    <div class="hist"><div class="d">${fmtDate(l.date)}${
+    <div class="hist" data-action="hist-edit" data-id="${l.id}" style="cursor:pointer" title="Toque para corrigir ou apagar"><div class="d">${fmtDate(l.date)}${
       temUnidades && l.u ? ` <span class="pill" style="font-weight:600">📍 ${esc(unitName(e.gymId || g.id, l.u))}</span>` : ""}${
       prDates.has(l.date) ? ' <span class="pill pr">🏆 recorde</span>' : ""}</div>
     <div class="s">${l.sets.map(s => `${fmtW(s.weight)} kg × ${s.reps}`).join("&ensp;·&ensp;")}</div></div>`).join("");
@@ -1602,8 +1679,10 @@ function renderEx(g, e){
       <span class="pill">descanso ${e.restSec}s</span>
       ${e.gymId === null ? '<span class="pill glob">🌐 em todas as academias</span>' : ""}
       <button class="pill" data-action="edit-ex" data-gym="${g.id}" data-id="${e.id}" style="cursor:pointer">✏️ editar</button>
+      ${simMode ? "" : `<button class="pill" data-action="sim-on" style="cursor:pointer" title="Testar pesos sem que contem no treino">🧪 simular</button>`}
     </div>
 
+    ${simBannerHtml()}
     ${e.photo ? `<img class="exphoto" src="${esc(e.photo)}" alt="Foto do exercício ${esc(exName(e))}" loading="lazy" onerror="this.style.display='none'">` : ""}
     ${e.notes ? `<div class="card notecard">📝 ${esc(e.notes)}</div>` : ""}
 
@@ -1797,6 +1876,17 @@ function renderSettings(){
         <div class="d">${embedded ? "Já vem configurado neste app — só defina o mesmo código nos dois aparelhos" : "Salva seus treinos na nuvem e mantém celular e PC iguais"}</div></div>
         <button class="btn ghost sm" style="width:auto" data-action="sync-config">${syncOn ? "Editar" : (embedded ? "Definir código" : "Configurar")}</button>
       </div>
+      ${syncOn ? (() => { const f = syncCodeStrength(Sync.activeCode());
+        return `<div class="setline">
+        <div class="grow"><div class="t">🔐 Segurança do código</div>
+        <div class="d" style="color:${f.ok ? "var(--muted)" : "var(--bad)"}">Seu código é a senha dos seus dados na nuvem: ${esc(f.txt)}.</div></div>
+        ${f.ok ? "" : `<button class="btn sm" style="width:auto" data-action="sync-secure">Trocar</button>`}
+      </div>
+      ${db.settings.sync && db.settings.sync.oldCode ? `<div class="setline">
+        <div class="grow"><div class="t">🗑 Cofre do código antigo</div>
+        <div class="d">Ainda está na nuvem. Apague depois de trocar o código no PC e nos outros aparelhos.</div></div>
+        <button class="btn danger sm" style="width:auto" data-action="sync-del-old">Apagar</button>
+      </div>` : ""}`; })() : ""}
       ${syncOn ? `<div class="setline">
         <div class="grow"><div class="t">Restaurar da nuvem</div>
         <div class="d">Baixa o que está salvo na nuvem e substitui este aparelho</div></div>
@@ -1876,6 +1966,19 @@ function renderSettings(){
         <div class="grow"><div class="t">Notificação ao fim do descanso</div>
         <div class="d">${native.isNative ? "Ativa (app) — vibra mesmo com a tela apagada ✓" : notifState === "granted" ? "Ativada ✓" : notifState === "denied" ? "Bloqueada no navegador" : notifState === "unsupported" ? "Não suportada" : "Toque para permitir"}</div></div>
         ${!native.isNative && notifState === "default" ? '<button class="btn ghost sm" style="width:auto" data-action="ask-notif">Permitir</button>' : ""}
+      </div>
+    </div></div>
+
+    <div class="section"><h2>Treino</h2><div class="card">
+      <div class="setline">
+        <div class="grow"><div class="t">🧩 1 exercício por grupo muscular</div>
+        <div class="d">Lógica do full body: ao fechar as séries de um exercício de um grupo (bíceps, por exemplo), os outros do mesmo grupo <b>neste treino</b> viram "hoje não" sozinhos. Precisa do grupo muscular marcado no exercício.</div></div>
+        <button class="switch${s.oneGroup!==false?" on":""}" data-action="tg" data-k="oneGroup" role="switch" aria-checked="${s.oneGroup!==false}"></button>
+      </div>
+      <div class="setline">
+        <div class="grow"><div class="t">🗂 Mostrar o treino por grupo muscular</div>
+        <div class="d">Os exercícios aparecem separados por grupo. Também dá para trocar pelo 🧩 na tela da academia.</div></div>
+        <button class="switch${s.groupView?" on":""}" data-action="tg" data-k="groupView" role="switch" aria-checked="${!!s.groupView}"></button>
       </div>
     </div></div>
 
@@ -1998,6 +2101,191 @@ function overlayPermForm(){
     <button class="btn ghost" data-action="overlay-later" style="margin-top:8px">Agora não</button>`);
 }
 
+/* corrigir ou apagar uma sessão já registrada (qualquer dia) */
+function histEditForm(logId){
+  const l = db.logs.find(x => x.id === logId); if(!l) return;
+  const e = exById(l.exerciseId);
+  openModal(`<h2>✎ ${esc(exName(e))} · ${fmtDate(l.date)}</h2>
+    <p class="sub" style="margin-bottom:10px">Corrija o peso ou as reps, ou apague a série que entrou errada.</p>
+    <div class="sethead"><span>#</span><span>kg</span><span>reps</span><span></span></div>
+    ${l.sets.map((s, i) => `<div class="setrow">
+      <div class="num">${i+1}</div>
+      <input id="hw${i}" type="number" inputmode="decimal" step="any" min="0" value="${s.weight}">
+      <input id="hr${i}" type="number" inputmode="numeric" step="1" min="1" value="${s.reps}">
+      <button class="ok" data-action="hist-del-set" data-id="${l.id}" data-i="${i}" aria-label="Apagar série ${i+1}" style="color:var(--bad)">✕</button>
+    </div>`).join("")}
+    <button class="btn" data-action="hist-save" data-id="${l.id}" style="margin-top:6px">Salvar correções</button>
+    <button class="btn danger sm" data-action="hist-del-all" data-id="${l.id}" style="margin-top:10px">🗑 Apagar a sessão inteira</button>
+    <button class="btn ghost" data-action="close-modal" style="margin-top:8px">Cancelar</button>`);
+}
+
+/* ===================== CONQUISTAS =====================
+   Medalhas de bronze, prata e ouro, calculadas do histórico que você JÁ TEM — as que
+   você já merecia aparecem desbloqueadas na primeira vez, sem festa para cada uma.
+   Desbloqueou, fica: perder peso de volta ou ficar uma semana parado não tira medalha.
+   As de corpo usam a SUA meta (peso e % de gordura). O app não inventa meta de corpo:
+   sem ela, essas duas ficam esperando você preencher. */
+const TIERS = [{k:"bronze", em:"🥉", nome:"Bronze"}, {k:"prata", em:"🥈", nome:"Prata"}, {k:"ouro", em:"🥇", nome:"Ouro"}];
+function trainDays(){
+  const s = new Set();
+  db.logs.forEach(l => { if(l.sets && l.sets.length) s.add(l.date); });
+  return [...s].sort();
+}
+function bestWeekStreak(minDias){
+  const porSemana = {};
+  trainDays().forEach(d => { const k = weekKeyOf(d); porSemana[k] = (porSemana[k] || 0) + 1; });
+  const boas = Object.keys(porSemana).filter(k => porSemana[k] >= minDias).sort();
+  let best = 0, cur = 0, ant = null;
+  boas.forEach(k => { cur = (ant && shiftDay(ant, 7) === k) ? cur + 1 : 1; best = Math.max(best, cur); ant = k; });
+  return best;
+}
+/* sessões agrupadas por exercício — e por unidade, quando a carga muda de filial */
+function exSessionGroups(){
+  const g = {};
+  db.logs.forEach(l => {
+    if(!l.sets || !l.sets.length) return;
+    const e = exById(l.exerciseId); if(!e) return;
+    const k = l.exerciseId + "|" + (e.perUnit ? (l.u || "") : "");
+    (g[k] = g[k] || {e, logs:[]}).logs.push(l);
+  });
+  return Object.values(g).map(x => { x.logs.sort((a,b) => a.date < b.date ? -1 : 1); return x; });
+}
+function progressCounts(){
+  let subidas = 0, ciclos = 0, recordes = 0;
+  exSessionGroups().forEach(({e, logs}) => {
+    let wAnt = null, melhor = 0;
+    logs.forEach((l, i) => {
+      const w = workSets(l).w;
+      if(wAnt !== null && w > wAnt + 0.001) subidas++;
+      wAnt = w;
+      const dp = dpState(e, l);
+      if(dp && dp.fechou) ciclos++;
+      const v = sessionLoad(l.sets);
+      if(i > 0 && v > melhor * 1.01) recordes++;
+      melhor = Math.max(melhor, v);
+    });
+  });
+  return {subidas, ciclos, recordes};
+}
+function dietCounts(){
+  const datas = [];
+  db.plan.forEach(m => { if(m.created) datas.push(m.created); if(m.date) datas.push(m.date); });
+  db.food.forEach(f => datas.push(f.date));
+  const hoje = todayStr();
+  let dias100 = 0, melhorSemBinge = 0, seq = 0;
+  if(!datas.length) return {dias100, semBinge:0};
+  let d = datas.sort()[0];
+  if(daysBetween(d, hoje) > 800) d = shiftDay(hoje, -800);
+  const comComida = new Set(db.food.map(f => f.date));
+  const binge = new Set(db.food.filter(f => f.binge).map(f => f.date).concat(db.urges.filter(u => u.gaveIn).map(u => u.date)));
+  for(; d <= hoje; d = shiftDay(d, 1)){
+    const ad = adherence(d);
+    if(ad.t > 0 && ad.d === ad.t && !ad.open) dias100++;
+    if(comComida.has(d) && !binge.has(d)){ seq++; melhorSemBinge = Math.max(melhorSemBinge, seq); }
+    else seq = 0;
+  }
+  return {dias100, semBinge: melhorSemBinge};
+}
+/* meta de corpo ABSOLUTA: quanto do caminho até ela já foi feito (0 a 1) */
+function goalProgress(serie, alvo){
+  if(typeof alvo !== "number" || !isFinite(alvo) || serie.length < 2) return null;
+  const ini = serie[0], fim = serie[serie.length - 1];
+  if(ini === alvo) return 1;
+  const p = alvo < ini ? (ini - fim) / (ini - alvo) : (fim - ini) / (alvo - ini);
+  return Math.max(0, Math.min(1, p));
+}
+function medalDefs(){
+  const dias = trainDays().length;
+  let series = 0, volume = 0;
+  db.logs.forEach(l => (l.sets || []).forEach(x => { series++; volume += x.weight * x.reps; }));
+  const pc = progressCounts(), dc = dietCounts();
+  const gl = db.settings.goals || {};
+  const pesos = bodySorted().map(b => b.kg);
+  const bfs = db.body.filter(b => typeof b.bf === "number").sort((a,b) => a.date < b.date ? -1 : 1).map(b => b.bf);
+  const gp = goalProgress(pesos, gl.kg), gb = goalProgress(bfs, gl.bf);
+  return [
+    {id:"freq",   em:"🏋️", nome:"Frequência",       desc:"Dias de treino registrados",                            v:dias,       metas:[10, 50, 150]},
+    {id:"streak", em:"🔥", nome:"Sequência",        desc:"Semanas seguidas com 3 treinos ou mais",                 v:bestWeekStreak(3), metas:[4, 12, 26], un:"sem."},
+    {id:"series", em:"📦", nome:"Séries",           desc:"Séries feitas no total",                                 v:series,     metas:[500, 2500, 10000]},
+    {id:"volume", em:"🏗️", nome:"Toneladas",        desc:"Peso × reps somado em toda a sua vida de treino",        v:Math.round(volume/1000), metas:[50, 250, 1000], un:"t"},
+    {id:"subida", em:"📈", nome:"Carga subindo",    desc:"Vezes que a carga de trabalho subiu de uma sessão para a seguinte", v:pc.subidas, metas:[5, 25, 75]},
+    {id:"ciclo",  em:"🎯", nome:"Faixa fechada",    desc:"Sessões em que TODAS as séries bateram o topo da faixa de reps", v:pc.ciclos, metas:[5, 25, 75]},
+    {id:"record", em:"🏆", nome:"Sessão recorde",   desc:"Sessões mais fortes que todas as anteriores do exercício", v:pc.recordes, metas:[5, 25, 75]},
+    {id:"peso",   em:"⚖️", nome:"Meta de peso",     desc: typeof gl.kg === "number" ? `Caminho até ${fmtW(gl.kg)} kg` : "Defina a sua meta de peso abaixo",
+      v: gp === null ? 0 : Math.round(gp * 100), metas:[33, 66, 100], un:"%", semMeta: typeof gl.kg !== "number"},
+    {id:"bf",     em:"🔻", nome:"Meta de gordura",  desc: typeof gl.bf === "number" ? `Caminho até ${fmtW(gl.bf)}% de gordura` : "Defina a sua meta de % de gordura abaixo",
+      v: gb === null ? 0 : Math.round(gb * 100), metas:[33, 66, 100], un:"%", semMeta: typeof gl.bf !== "number"},
+    {id:"dieta",  em:"🍽️", nome:"Dieta em dia",     desc:"Dias com o plano alimentar 100% cumprido",              v:dc.dias100, metas:[7, 30, 100]},
+    {id:"binge",  em:"🛡️", nome:"Sem compulsão",    desc:"Maior sequência de dias registrados sem binge",          v:dc.semBinge, metas:[7, 30, 90]}
+  ];
+}
+function checkAch(){
+  db.ach = db.ach || {};
+  const novos = [];
+  medalDefs().forEach(m => m.metas.forEach((alvo, i) => {
+    const k = m.id + ":" + TIERS[i].k;
+    if(!db.ach[k] && m.v >= alvo && !m.semMeta){ db.ach[k] = todayStr(); novos.push({m, i}); }
+  }));
+  if(!novos.length) return;
+  /* primeira vez: as medalhas que você já tinha entram caladas, sem uma festa para cada */
+  if(!db.settings.achInit){
+    db.settings.achInit = true;
+    localStorage.setItem(LS, JSON.stringify(db));
+    Sync.push();
+    toast(`🏆 Você já tinha ${novos.length} medalha${novos.length===1?"":"s"} — veja em Evolução → Conquistas`);
+    return;
+  }
+  localStorage.setItem(LS, JSON.stringify(db));
+  Sync.push();
+  const top = novos.sort((a, b) => b.i - a.i)[0];        // festeja a de nível mais alto
+  celebrateMedal(top.m, top.i, novos.length);
+  if(route().name === "progress") render();
+}
+function celebrateMedal(m, i, total){
+  const t = TIERS[i];
+  prCard.innerHTML = `<div class="big">${t.em}${m.em}</div>
+    <h2>Medalha de ${t.nome.toLowerCase()}!</h2>
+    <p><b>${esc(m.nome)}</b> — ${esc(m.desc)}</p>
+    <div class="val">${fmtNum(m.metas[i])}${m.un ? " " + m.un : ""}</div>
+    ${total > 1 ? `<p class="sub">e mais ${total - 1} medalha${total-1===1?"":"s"} agora — veja em Evolução → Conquistas</p>` : ""}
+    <button data-action="close-pr">Boraa! 💪</button>`;
+  prBox.classList.add("on");
+  doVibrate([60,40,60,40,60,40,300]);
+}
+function achSection(){
+  const defs = medalDefs(), ach = db.ach || {};
+  const total = defs.length * 3, tem = Object.keys(ach).length;
+  const gl = db.settings.goals || {};
+  const cards = defs.map(m => {
+    const prox = m.metas.findIndex((alvo, i) => !ach[m.id + ":" + TIERS[i].k]);
+    const alvo = prox >= 0 ? m.metas[prox] : m.metas[2];
+    const base = prox > 0 ? m.metas[prox - 1] : 0;
+    const pct = prox < 0 ? 100 : Math.max(0, Math.min(100, (m.v - base) / (alvo - base) * 100));
+    return `<div class="card" style="margin-bottom:10px">
+      <div class="row" style="gap:10px; align-items:flex-start">
+        <span style="font-size:1.6rem">${m.em}</span>
+        <div class="grow"><b>${esc(m.nome)}</b><div class="sub">${esc(m.desc)}</div>
+          <div class="row" style="gap:6px; margin-top:8px; flex-wrap:wrap">
+            ${TIERS.map((t, i) => { const d = ach[m.id + ":" + t.k];
+              return `<span class="pill" style="${d ? "" : "opacity:.35"}" title="${d ? "Desbloqueada em " + fmtDate(d) : "Falta"}">${t.em} ${fmtNum(m.metas[i])}${m.un ? " " + m.un : ""}</span>`; }).join("")}
+          </div>
+          ${m.semMeta ? "" : `<div class="dpbar" style="margin-top:8px"><div class="dpfill${prox < 0 ? " full" : ""}" style="width:${pct.toFixed(1)}%"></div>
+            <span class="dptxt">${prox < 0 ? "todas as medalhas ✓" : `${fmtNum(m.v)}${m.un ? " " + m.un : ""} de ${fmtNum(alvo)} para ${TIERS[prox].nome.toLowerCase()}`}</span></div>`}
+        </div></div></div>`;
+  }).join("");
+  return `<div class="section"><h2>🏆 ${tem} de ${total} medalhas</h2>${cards}</div>
+    <div class="section"><h2>Suas metas de corpo</h2><div class="card">
+      <p class="sub" style="margin-bottom:10px">As medalhas de corpo medem o caminho do seu primeiro registro até a meta: bronze a 1/3, prata a 2/3, ouro ao chegar. O peso respeita o "contar a partir de" da tela de peso.</p>
+      <div class="btnrow">
+        <div class="field" style="flex:1"><label for="goal-kg">Meta de peso (kg)</label>
+          <input id="goal-kg" type="number" inputmode="decimal" step="any" min="20" max="400" value="${typeof gl.kg === "number" ? gl.kg : ""}" placeholder="—"></div>
+        <div class="field" style="flex:1"><label for="goal-bf">Meta de gordura (%)</label>
+          <input id="goal-bf" type="number" inputmode="decimal" step="any" min="2" max="60" value="${typeof gl.bf === "number" ? gl.bf : ""}" placeholder="—"></div>
+      </div>
+      <button class="btn" data-action="save-goals">Salvar metas</button>
+    </div></div>`;
+}
+
 /* ===================== modal ===================== */
 const modal = document.getElementById("modal"), sheet = document.getElementById("sheet");
 function openModal(html){ sheet.innerHTML = html; modal.classList.add("on"); }
@@ -2018,7 +2306,8 @@ function exFormSnapshot(){
   const g = id => document.getElementById(id);
   if(g("f-name")) exFormCtx.name = g("f-name").value;
   if(g("f-sets")) exFormCtx.sets = g("f-sets").value;
-  if(g("f-reps")) exFormCtx.reps = g("f-reps").value;
+  if(g("f-rmin") || g("f-rmax")) exFormCtx.reps = joinReps(g("f-rmin") && g("f-rmin").value, g("f-rmax") && g("f-rmax").value);
+  if(g("f-grp")) exFormCtx.grp = g("f-grp").value;
   if(g("f-bw")) exFormCtx.bw = g("f-bw").checked;
   if(g("f-rest")) exFormCtx.rest = g("f-rest").value;
   if(g("f-notes")) exFormCtx.notes = g("f-notes").value;
@@ -2033,9 +2322,10 @@ function exForm(gymId, e, pre){
     notes: (e && e.notes) || "", global: e ? e.gymId === null : false, photo: (e && e.photo) || "",
     reps: (e && e.reps) || "", bw: e ? !!e.bw : false,
     namePt: (e && e.namePt) || "", nameEn: (e && e.nameEn) || "",
-    step: (e && typeof e.step === "number") ? e.step : "", perUnit: e ? !!e.perUnit : false
+    step: (e && typeof e.step === "number") ? e.step : "", perUnit: e ? !!e.perUnit : false,
+    grp: (e && e.grp) || ""
   }, pre || {});
-  exFormCtx = {gymId, id: e ? e.id : "", name:v.name, sets:v.sets, rest:v.rest, notes:v.notes, global:v.global, photo:v.photo, reps:v.reps, bw:v.bw, namePt:v.namePt, nameEn:v.nameEn, step:v.step, perUnit:v.perUnit};
+  exFormCtx = {gymId, id: e ? e.id : "", name:v.name, sets:v.sets, rest:v.rest, notes:v.notes, global:v.global, photo:v.photo, reps:v.reps, bw:v.bw, namePt:v.namePt, nameEn:v.nameEn, step:v.step, perUnit:v.perUnit, grp:v.grp};
   openModal(`<h2>${e ? "Editar exercício" : "Novo exercício"}</h2>
     <div class="field"><label for="f-name">Nome</label>
     <input id="f-name" value="${esc(v.name)}" placeholder="Ex.: Supino reto" maxlength="60">
@@ -2059,13 +2349,19 @@ function exForm(gymId, e, pre){
     <div class="btnrow">
       <div class="field" style="flex:1"><label for="f-sets">Séries alvo</label>
       <input id="f-sets" type="number" inputmode="numeric" min="1" max="20" value="${esc(v.sets)}"></div>
-      <div class="field" style="flex:1"><label for="f-reps">Reps alvo</label>
-      <input id="f-reps" value="${esc(v.reps)}" placeholder="8–12" maxlength="12"></div>
+      <div class="field" style="flex:1"><label for="f-rmin">Reps mín</label>
+      <input id="f-rmin" type="number" inputmode="numeric" min="1" max="100" value="${(parseReps(v.reps)||{}).min||""}" placeholder="8"></div>
+      <div class="field" style="flex:1"><label for="f-rmax">Reps máx</label>
+      <input id="f-rmax" type="number" inputmode="numeric" min="1" max="100" value="${(parseReps(v.reps)||{}).max||""}" placeholder="12"></div>
       <div class="field" style="flex:1"><label for="f-rest">Descanso (s)</label>
       <input id="f-rest" type="number" inputmode="numeric" min="5" max="900" step="5" value="${esc(v.rest)}"></div>
       <div class="field" style="flex:1"><label for="f-step">Degrau (kg)</label>
       <input id="f-step" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.step)}" placeholder="auto"></div>
     </div>
+    <div class="field"><label for="f-grp">Grupo muscular</label>
+      <select id="f-grp"><option value="">— sem grupo —</option>
+        ${GRUPOS.map(x=>`<option value="${x}"${(v.grp||"")===x?" selected":""}>${x}</option>`).join("")}</select>
+      <div class="hint">Usado para agrupar o treino, para a regra "1 exercício por grupo" e nas medalhas.</div></div>
     <div class="hint" style="margin:-6px 0 12px">De quanto em quanto a carga desta máquina sobe (2,5 · 5 · 10…). É o valor que o app soma quando você fecha a faixa de reps. Em branco = ele deduz do seu histórico.</div>
     ${gymUnits(gymId).length > 1 ? `<label class="check">
       <input type="checkbox" id="f-perunit" ${v.perUnit ? "checked" : ""}>
@@ -2105,6 +2401,73 @@ function routinePickForm(rid, gymId){
     <div class="sub" style="margin:10px 0">${dentro.length} de ${todos.length} marcados${dentro.length?" · a ordem do treino segue a ordem em que você marcou":""}</div>
     <button class="btn" data-action="rt-done">Pronto</button>`);
 }
+/* ---------- força do código de sincronização ----------
+   Conferi as regras do Firestore de fora: LISTAR os cofres está bloqueado (ninguém
+   baixa a coleção inteira), mas LER um cofre é liberado para quem souber o código.
+   Ou seja, o código É a senha dos seus dados. Curto ou óbvio = adivinhável. */
+const SYNC_MIN = 16;
+function syncCodeStrength(code){
+  code = String(code || "");
+  if(code.length >= 20) return {ok:true, txt:`forte (${code.length} caracteres)`};
+  if(code.length >= SYNC_MIN) return {ok:true, txt:`bom (${code.length} caracteres)`};
+  return {ok:false, txt:`FRACO (${code.length} caracteres) — quem adivinhar lê e muda seus dados`};
+}
+/* 24 caracteres aleatórios do gerador criptográfico, sem os que confundem (0/O, 1/l/I) */
+function newSyncCode(){
+  const abc = "abcdefghjkmnpqrstuvwxyz23456789";
+  const v = new Uint32Array(24); crypto.getRandomValues(v);
+  const c = [...v].map(x => abc[x % abc.length]).join("");
+  return c.slice(0,6) + "-" + c.slice(6,12) + "-" + c.slice(12,18) + "-" + c.slice(18);
+}
+function syncSecureForm(){
+  const atual = Sync.activeCode();
+  const novo = newSyncCode();
+  openModal(`<h2>🔐 Trocar por um código seguro</h2>
+    <p class="sub" style="margin-bottom:10px">O app cria um código longo e aleatório, copia <b>todos os seus dados</b> para ele na nuvem e passa a usar o novo.</p>
+    <div class="card" style="text-align:center; font-family:monospace; font-size:1.05rem; word-break:break-all; padding:14px">${esc(novo)}</div>
+    <p class="sub" style="margin:10px 0">Depois você digita esse <b>mesmo código</b> no PC e nos outros aparelhos (Ajustes → Sincronização → Editar). Até fazer isso, eles continuam no código antigo e <b>não recebem</b> o que você fizer aqui.</p>
+    <button class="btn" data-action="sync-secure-go" data-code="${esc(novo)}">Usar este código</button>
+    <button class="btn ghost" data-action="close-modal" style="margin-top:8px">Cancelar</button>`);
+}
+async function syncSecureGo(novo){
+  const cfg = db.settings.sync; if(!cfg) return;
+  const antigo = cfg.code;
+  try{
+    cfg.code = novo;
+    db.updatedAt = Date.now();
+    await Sync.putRemote();                       // copia tudo para o cofre novo
+    const conf = await Sync.getRemote();          // e confere que chegou mesmo
+    if(!conf || Sync.dataCount(conf) < Sync.dataCount(db)) throw new Error("a cópia não conferiu");
+    cfg.oldCode = antigo;                         // para poder apagar o antigo depois
+    save();
+    openModal(`<h2>✅ Código trocado</h2>
+      <p class="sub" style="margin-bottom:10px">Seus dados já estão no cofre novo. Agora digite este código no PC e nos outros aparelhos:</p>
+      <div class="card" style="text-align:center; font-family:monospace; font-size:1.05rem; word-break:break-all; padding:14px">${esc(novo)}</div>
+      <button class="btn" data-action="sync-copy-code" style="margin-top:10px">📋 Copiar o código</button>
+      <p class="sub" style="margin:12px 0 8px">Quando <b>todos</b> os aparelhos estiverem no código novo, apague o cofre antigo — senão ele continua lá, legível para quem souber o código fraco.</p>
+      <button class="btn ghost" data-action="close-modal">Fechar</button>`);
+    Sync.restart();
+  }catch(e){
+    cfg.code = antigo; save();
+    toast("Não deu para trocar: " + ((e && e.message) || "erro") + ". Nada mudou.");
+  }
+}
+async function syncDeleteOld(){
+  const cfg = db.settings.sync; if(!cfg || !cfg.oldCode) return;
+  if(!confirm("Apagar da nuvem o cofre do código ANTIGO?\n\nFaça isso só depois de trocar o código no PC e nos outros aparelhos — os que ainda estiverem no antigo param de sincronizar.")) return;
+  const c = Sync.activeConfig();
+  const u = "https://firestore.googleapis.com/v1/projects/" + c.projectId +
+    "/databases/(default)/documents/vaults/" + encodeURIComponent(cfg.oldCode) + "?key=" + c.apiKey;
+  try{
+    const r = await fetch(u, {method:"DELETE"});
+    if(!r.ok && r.status !== 404) throw new Error("HTTP " + r.status);
+    delete cfg.oldCode; save(); render();
+    toast("Cofre antigo apagado ✓");
+  }catch(e){
+    toast("A nuvem não deixou apagar (" + ((e && e.message) || "erro") + "). Dá para apagar pelo console do Firebase.");
+  }
+}
+
 function syncForm(){
   const cur = db.settings.sync || {};
   const embedded = !!FIREBASE_CONFIG;
@@ -2394,12 +2757,17 @@ const native = {
   },
   /* notificação imediata (quando o descanso acaba com o app aberto) — fica na barra até você arrastar.
      MESMO id da agendada (7001): uma sempre SUBSTITUI a outra, nunca empilha */
-  async notifyNow(label, comSom){
+  async notifyNow(label, comSom, id){
     if(!this.isNative) return;
     const LN = this.plugin("LocalNotifications"); if(!LN) return;
+    id = id || 7001;
     try{
+      /* a Capacitor liga setOnlyAlertOnce(true) em toda notificação: se já existir uma
+         com o mesmo id na barra, a nova chega SEM som. O teste usa outro id e limpa antes. */
+      if(id !== 7001){ try{ await LN.cancel({ notifications:[{id}] }); }catch(e){} }
       await LN.schedule({ notifications:[{
-        id:7001, channelId:this.channelId(!!comSom), title:"Descanso concluído 💪",
+        id, channelId:this.channelId(!!comSom), title:"Descanso concluído 💪",
+        sound: comSom ? this.soundFile() : undefined,
         body:label || "Hora da próxima série!",
         smallIcon:"ic_stat_icon", autoCancel:false, ongoing:false
       }]});
@@ -2431,9 +2799,12 @@ const native = {
     const LN = this.plugin("LocalNotifications"); if(!LN) return false;
     const comSom = await this.shouldSound();
     try{
+      /* cancel(7001) já tira da barra o aviso da série anterior (a Capacitor chama
+         dismissVisibleNotification). Aqui havia um removeAllDeliveredNotifications(),
+         que no Android é cancelAll(): apagava TODAS as notificações do app — inclusive a
+         contagem regressiva que tinha acabado de ser posta. Era por isso que o
+         cronômetro da barra sumiu. */
       await LN.cancel({ notifications:[{id:7001}] });
-      /* limpa a notificação da série anterior que ainda estiver na barra — não empilha */
-      try{ await LN.removeAllDeliveredNotifications(); }catch(e){}
       await this.makeChannel(comSom);            // garante o canal antes de usar
       await LN.schedule({ notifications:[{
         id:7001, channelId:this.channelId(comSom), title:"Descanso concluído 💪",
@@ -2569,7 +2940,7 @@ const Sync = {
      que entrar aqui — o mealNotes ficou de fora na v13 e os comentários de refeição
      nunca chegavam nos outros aparelhos. */
   data(){ return {gyms:db.gyms, exercises:db.exercises, routines:db.routines, logs:db.logs, food:db.food, urges:db.urges,
-    plan:db.plan, body:db.body, sessions:db.sessions, ideas:db.ideas, mealNotes:db.mealNotes, free:db.free, foodMap:db.foodMap,
+    plan:db.plan, body:db.body, sessions:db.sessions, ideas:db.ideas, ach:db.ach, mealNotes:db.mealNotes, free:db.free, foodMap:db.foodMap,
     settings:Object.assign({}, db.settings, {sync:null}), updatedAt:db.updatedAt}; },
   async getRemote(){
     const r = await fetch(this.url(), {cache:"no-store"});
@@ -2734,6 +3105,44 @@ document.addEventListener("click", ev => {
     location.hash = "#/gym/" + el.dataset.id;
   }
   else if(a === "close-modal"){ closeModal(); }
+  else if(a === "sync-secure"){ syncSecureForm(); }
+  else if(a === "sync-secure-go"){ syncSecureGo(el.dataset.code); }
+  else if(a === "sync-del-old"){ syncDeleteOld(); }
+  else if(a === "sync-copy-code"){ copyText(Sync.activeCode()).then(ok => toast(ok ? "Código copiado 📋" : "Não deu para copiar")); }
+  else if(a === "save-goals"){
+    /* peso NUNCA é arredondado: guarda exatamente o que você digitou */
+    const kg = parseFloat(String(document.getElementById("goal-kg").value).replace(",", "."));
+    const bf = parseFloat(String(document.getElementById("goal-bf").value).replace(",", "."));
+    db.settings.goals = {};
+    if(isFinite(kg) && kg >= 20 && kg <= 400) db.settings.goals.kg = kg;
+    if(isFinite(bf) && bf >= 2 && bf <= 60) db.settings.goals.bf = bf;
+    save(); render(); toast("Metas salvas ✓");
+  }
+  else if(a === "sim-on"){ setSim(true); render(); toast("🧪 Simulação ligada — nada fica salvo"); }
+  else if(a === "sim-off"){ setSim(false); render(); toast("Simulação desligada"); }
+  else if(a === "hist-edit"){ histEditForm(el.dataset.id); }
+  else if(a === "hist-save"){
+    const l = db.logs.find(x => x.id === el.dataset.id); if(!l) return;
+    for(let i = 0; i < l.sets.length; i++){
+      const w = parseFloat(String(document.getElementById("hw"+i).value).replace(",", "."));
+      const r = parseInt(document.getElementById("hr"+i).value, 10);
+      if(isNaN(w) || w < 0 || !r || r < 1){ toast(`Série ${i+1}: confira o peso e as reps.`); return; }
+      l.sets[i].weight = w; l.sets[i].reps = r;
+    }
+    save(); closeModal(); render(); toast("Sessão corrigida ✓");
+  }
+  else if(a === "hist-del-set"){
+    const l = db.logs.find(x => x.id === el.dataset.id); if(!l) return;
+    l.sets.splice(+el.dataset.i, 1);
+    if(!l.sets.length){ db.logs = db.logs.filter(x => x.id !== l.id); save(); closeModal(); render(); toast("Sessão apagada"); return; }
+    save(); histEditForm(l.id); render();
+  }
+  else if(a === "hist-del-all"){
+    const l = db.logs.find(x => x.id === el.dataset.id); if(!l) return;
+    if(!confirm(`Apagar a sessão de ${fmtDate(l.date)} inteira (${l.sets.length} série${l.sets.length===1?"":"s"})?`)) return;
+    db.logs = db.logs.filter(x => x.id !== l.id); save(); closeModal(); render(); toast("Sessão apagada");
+  }
+  else if(a === "group-view"){ db.settings.groupView = !db.settings.groupView; save(); render(); }
   else if(a === "ex-lang"){
     db.settings.exLang = exLang() === "en" ? "pt" : "en";
     save(); render();
@@ -2837,6 +3246,8 @@ document.addEventListener("click", ev => {
     checkWorkoutDone();          // riscar o último que faltava também fecha o treino
   }
   else if(a === "sound-diag"){ soundDiagForm(); }
+  else if(a === "diag-spk-on"){ db.settings.soundSpk = true; save(); native.init().then(soundDiagForm); }
+  else if(a === "diag-sound-on"){ db.settings.sound = true; save(); native.init().then(soundDiagForm); }
   /* o ouvinte de cliques não é async: estas duas rodam numa função própria */
   else if(a === "sound-test-now"){ soundTestNow(); }
   else if(a === "sound-rebuild"){ soundRebuild(); }
@@ -2968,6 +3379,7 @@ document.addEventListener("click", ev => {
     const c = exFormCtx || {gymId: route().gymId, id: ""};
     c.namePt = ptNameOf(x.n, x.e); c.nameEn = x.n;
     c.name = exLang() === "en" ? c.nameEn : c.namePt;
+    if(!c.grp && MUS2GRP[norm(x.m)]) c.grp = MUS2GRP[norm(x.m)];
     c.photo = ExDb.img(fotoDe(x));
     exForm(c.gymId, c.id ? exById(c.id) : null, c);
     toast("Nome (PT e EN) e foto aplicados ✓");
@@ -2980,6 +3392,7 @@ document.addEventListener("click", ev => {
     const x = (ExDb.list||[])[+el.dataset.i]; if(!x) return;
     const c = exFormCtx || {gymId: route().gymId, id: ""};
     c.namePt = ptNameOf(x.n, x.e); c.nameEn = x.n;
+    if(!c.grp && MUS2GRP[norm(x.m)]) c.grp = MUS2GRP[norm(x.m)];
     if(!c.name || !c.name.trim()) c.name = exLang() === "en" ? c.nameEn : c.namePt;   // não sobrescreve nome que ele já digitou
     c.photo = ExDb.img(fotoDe(x));
     exForm(c.gymId, c.id ? exById(c.id) : null, c);
@@ -2999,7 +3412,8 @@ document.addEventListener("click", ev => {
     const name = document.getElementById("f-name").value.trim();
     const sets = Math.max(1, parseInt(document.getElementById("f-sets").value, 10) || 3);
     const restS = Math.max(5, parseInt(document.getElementById("f-rest").value, 10) || 90);
-    const reps = ((document.getElementById("f-reps")||{value:""}).value || "").trim();
+    const reps = joinReps((document.getElementById("f-rmin")||{}).value, (document.getElementById("f-rmax")||{}).value);
+    const grp = (document.getElementById("f-grp")||{value:""}).value || undefined;
     const bw = !!(document.getElementById("f-bw") || {}).checked;
     const glob = document.getElementById("f-global").checked;
     const notes = document.getElementById("f-notes").value.trim();
@@ -3018,11 +3432,11 @@ document.addEventListener("click", ev => {
     if(el.dataset.id){
       const e = exById(el.dataset.id);
       e.name = name; e.namePt = pt || undefined; e.nameEn = en || undefined;
-      e.step = step; e.perUnit = perUnit || undefined;
+      e.step = step; e.perUnit = perUnit || undefined; e.grp = grp;
       e.targetSets = sets; e.restSec = restS; e.reps = reps; e.bw = bw; e.notes = notes; e.photo = photo; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
     } else {
       db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, namePt:pt||undefined, nameEn:en||undefined,
-        step, perUnit: perUnit || undefined, targetSets:sets, restSec:restS, reps, bw, notes, photo, order: nextOrder()});
+        step, perUnit: perUnit || undefined, grp, targetSets:sets, restSec:restS, reps, bw, notes, photo, order: nextOrder()});
     }
     exFormCtx = null;
     save(); closeModal(); render();
@@ -3076,7 +3490,7 @@ document.addEventListener("click", ev => {
     if(!l){ l = {id:uid(), exerciseId:exId, gymId:cur.gymId, date:todayStr(), sets:[]};
       const uAtual = unitNow(cur.gymId);
       if(uAtual) l.u = uAtual;                 // carimba em qual unidade foi feito
-      db.logs.push(l); }
+      if(simMode) simLogs.push(l); else db.logs.push(l); }
     /* carimba em qual treino a série foi feita: sem isso um exercício global aparecia
        como "já fiz" em todas as rotinas ao mesmo tempo */
     l.sets.push(gymRoutine ? {weight:w, reps:r, rt:gymRoutine} : {weight:w, reps:r});
@@ -3091,16 +3505,34 @@ document.addEventListener("click", ev => {
       const hoje = sessionLoad(l.sets);
       if(hoje > melhorAntes.v * 1.01) prSessao = {v:hoje, de:melhorAntes.v};
     }
-    if(prSessao) celebratePR("sessao", fmtNum(prSessao.v), `kg (antes ${fmtNum(prSessao.de)})`);
-    else if(pr) celebratePR(pr.kind, pr.value, pr.unit);
+    if(!simMode){
+      if(prSessao) celebratePR("sessao", fmtNum(prSessao.v), `kg (antes ${fmtNum(prSessao.de)})`);
+      else if(pr) celebratePR(pr.kind, pr.value, pr.unit);
+    }
     /* o rótulo vai para a barra de descanso E para a notificação: você sabe em qual série está */
     const dn = l.sets.length;
     const lbl = dn >= e.targetSets
       ? `${exName(e)} — ${dn}/${e.targetSets} séries feitas ✓`
       : `${exName(e)} — agora a série ${dn+1}/${e.targetSets}`;
     if(db.settings.autoRest) startRest(e.restSec, lbl, e.id, cur.gymId);
+    /* simulação: o descanso roda normal, mas nada mais acontece por conta da série */
+    if(simMode){ render(); return; }
     /* a academia (e o treino) onde a série foi feita vira o foco do dia */
     setFocus(cur.gymId, gymRoutine);
+    /* Full body = 1 exercício por grupo muscular por treino. Ao FECHAR as séries de um
+       exercício, os outros do mesmo grupo neste treino que você nem começou viram
+       "hoje não" — dá para voltar no ↩. Só dentro de um treino (A/B/C): em "Todos" a
+       academia inteira tem vários do mesmo grupo de treinos diferentes. */
+    if(dn === e.targetSets && db.settings.oneGroup !== false && gymRoutine && grpOf(e)){
+      const rr = routineById(gymRoutine);
+      const irmaos = rr ? routineExercises(rr, cur.gymId).filter(x => x.id !== e.id && grpOf(x) === grpOf(e) && exStateToday(x, gymRoutine) === "todo") : [];
+      if(irmaos.length){
+        db.settings.skipToday = db.settings.skipToday || {};
+        irmaos.forEach(x => { db.settings.skipToday[skipKey(x, gymRoutine)] = todayStr(); });
+        save();
+        setTimeout(() => toast(`${grpOf(e)} feito — pulei ${irmaos.map(exName).join(", ")} (1 por grupo)`), 300);
+      }
+    }
     render();
     /* primeira série do dia: lembra de iniciar o treino no relógio */
     if(dn === 1 && setsLoggedToday() === 1 && shShouldRemind()){
@@ -3113,7 +3545,10 @@ document.addEventListener("click", ev => {
     const l = todayLog(el.dataset.ex);
     if(!l) return;
     l.sets.splice(+el.dataset.i, 1);
-    if(!l.sets.length) db.logs = db.logs.filter(x => x.id !== l.id);
+    if(!l.sets.length){
+      if(simMode) simLogs = simLogs.filter(x => x.id !== l.id);
+      else db.logs = db.logs.filter(x => x.id !== l.id);
+    }
     save(); render();
   }
   else if(a === "extra-set"){ pendingExtra++; render(); }
@@ -3160,7 +3595,7 @@ document.addEventListener("click", ev => {
 
   else if(a === "tg"){
     const k = el.dataset.k;
-    db.settings[k] = (k === "ignoreAuto" || k === "shRemind") ? (db.settings[k] === false) : !db.settings[k];
+    db.settings[k] = (k === "ignoreAuto" || k === "shRemind" || k === "oneGroup") ? (db.settings[k] === false) : !db.settings[k];
     if(k === "ignoreAuto") deriveAllActs();
     if(k === "mealNotif"){
       scheduleMealNotifs();
@@ -3627,8 +4062,8 @@ async function aiSuggest(auto){
     await ExDb.load();
     /* se a IA demorar demais, a busca local já está na tela e continua valendo */
     const r = await Promise.race([
-      aiExercise(q),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("A IA demorou demais — ficou o resultado da busca normal.")), 12000))
+      aiBest(q),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("A IA demorou demais — ficou o resultado da busca normal.")), 15000))
     ]);
     aiExCacheSet(q, r);
     aplicaAi(r);
@@ -3642,6 +4077,14 @@ async function aiSuggest(auto){
 }
 function aplicaAi(r){
   suggState.ai = r;
+  if(r.pick && r.pick.length){
+    const porNome = {}; (ExDb.list || []).forEach(x => { porNome[x.n] = x; });
+    const escolhidos = r.pick.map(nm => porNome[nm]).filter(Boolean);
+    const vistos = new Set(escolhidos.map(x => x.n));
+    const resto = ExDb.search(suggState.query).filter(x => !vistos.has(x.n));
+    suggState.results = escolhidos.concat(resto).slice(0, 12);
+    return;
+  }
   const achou = mergeSearch((r.en || []).concat([suggState.query]));
   if(achou.length) suggState.results = achou;
 }
@@ -4045,6 +4488,57 @@ async function aiExercise(q){
   if(!en.length) throw new Error(`A IA não reconheceu "${q}" como exercício.`);
   return {en, pt: d.portugues || "", mus: d.musculo || ""};
 }
+/* ---- a IA escolhe DIRETO do catálogo ----
+   Antes ela sugeria nomes em inglês "no ar" e o app tentava achá-los no catálogo — quando
+   o nome dela não existia lá, a busca local pegava o parecido e a FOTO vinha errada.
+   Agora ela recebe a lista inteira (876 exercícios, com o equipamento) e devolve os
+   números dos que servem: todo resultado é um exercício real, com a foto dele.
+   É uma pergunta maior (~7 mil tokens), por isso ela é feita enquanto você digita e fica
+   guardada; se falhar, cai no jeito antigo. */
+async function aiPickCatalog(q){
+  if(!geminiKey()) throw new Error("Sem chave da IA. Configure nos Ajustes.");
+  const list = await ExDb.load();
+  const model = db.settings.aiModel || (await aiConnect()).modelo;
+  const catalogo = list.map((x, i) => i + "|" + x.n + (x.e ? " (" + x.e + ")" : "")).join("\n");
+  const j = await geminiFetch("/models/" + encodeURIComponent(model) + ":generateContent", {
+    method:"POST",
+    body: JSON.stringify({
+      contents:[{parts:[{text:
+        `Uma pessoa procura um exercício de musculação e escreveu: "${q}".\n` +
+        `O texto pode misturar português e inglês, ter erro de digitação ou usar o nome que ` +
+        `as academias brasileiras usam (ex.: "voador" = pec deck, "cadeira extensora" = leg extension, ` +
+        `"puxada" = lat pulldown, "máquina" = machine/lever).\n` +
+        `Abaixo está o CATÁLOGO, um exercício por linha, no formato número|nome (equipamento).\n` +
+        `Em "indices", devolva até 6 números do catálogo que correspondem ao que a pessoa quer, ` +
+        `do mais provável para o menos. Se ela falou em máquina, prefira os de máquina. ` +
+        `Use SÓ números que existem na lista. Se nada servir, devolva a lista vazia.\n` +
+        `Em "portugues", o nome usual do exercício no Brasil.\n\nCATÁLOGO:\n` + catalogo}]}],
+      generationConfig:{
+        temperature: 0,
+        responseMimeType: "application/json",
+        responseSchema: { type:"OBJECT", properties:{
+          indices:{type:"ARRAY", items:{type:"INTEGER"}},
+          portugues:{type:"STRING"}
+        }, required:["indices","portugues"] }
+      }
+    })
+  });
+  const parts = (((j.candidates||[])[0]||{}).content||{}).parts;
+  const raw = parts && parts[0] && parts[0].text;
+  if(!raw) throw new Error("A IA não respondeu nada.");
+  let d; try{ d = JSON.parse(raw); }catch(e){ throw new Error("Resposta da IA veio ilegível."); }
+  /* guarda NOMES, não posições: se o catálogo for atualizado, a posição muda e o nome não */
+  const pick = [...new Set((d.indices || []).filter(i => Number.isInteger(i) && i >= 0 && i < list.length))]
+    .slice(0, 6).map(i => list[i].n);
+  if(!pick.length) throw new Error(`A IA não achou "${q}" no catálogo.`);
+  return {pick, pt: d.portugues || "", en: pick.slice(0, 3)};
+}
+/* melhor tentativa: escolher do catálogo; se der errado, o jeito antigo (traduzir o termo) */
+async function aiBest(q){
+  try{ return await aiPickCatalog(q); }
+  catch(e){ return await aiExercise(q); }
+}
+
 /* usa os termos da IA na busca local e junta tudo, sem repetir.
    Rodizio, nao um termo depois do outro: o melhor de cada termo primeiro, depois o
    segundo melhor de cada. Senao os 12 resultados do primeiro termo enterram os demais —
@@ -4470,7 +4964,7 @@ function aiPrefetch(q){
     const k = norm(q);
     if(k === aiPreUltimo || aiExCache()[k]) return;
     aiPreUltimo = k;
-    try{ const r = await aiExercise(q); aiExCacheSet(q, r); }catch(e){}
+    try{ const r = await aiBest(q); aiExCacheSet(q, r); }catch(e){}
   }, 800);
 }
 sheet.addEventListener("input", ev => {
@@ -4929,8 +5423,13 @@ function renderProgress(){
     <div class="seg" style="margin-bottom:12px">
       <button data-action="prog-view" data-v="corpo" class="${progView==="corpo"?"on":""}">⚖️ Peso e medidas</button>
       <button data-action="prog-view" data-v="atividade" class="${progView==="atividade"?"on":""}">🏃 Atividade</button>
+      <button data-action="prog-view" data-v="conquistas" class="${progView==="conquistas"?"on":""}">🏆 Medalhas</button>
     </div>`;
 
+  if(progView === "conquistas"){
+    view.innerHTML = head + achSection();
+    return;
+  }
   if(progView === "atividade"){
     view.innerHTML = head + activitySection();
     return;
@@ -5968,6 +6467,7 @@ native.init();
 normalizeOrders();
 migrateManualActs();
 migratePlan12();
+migrateGroups40();
 migrateNotes30();
 migrateWalk19();
 if(macrosOn()) loadTaco().then(render);
@@ -6037,11 +6537,17 @@ async function soundDiagForm(){
     return;
   }
 
-  add("Build instalado no celular", String(d.build), Number(d.build) === APP_VERSION);
-  add("Som ligado nos ajustes", db.settings.sound ? "sim" : "NÃO", !!db.settings.sound);
-  add("Fone conectado", (await native.headsetConnected()) ? "sim" : "não", true);
-  add("Tocar no alto-falante", db.settings.soundSpk ? "ligado" : "desligado", true);
-  add("→ O descanso vai tocar?", comSom ? "SIM" : "NÃO — vai só vibrar", comSom);
+  /* O app instalado pode ter o build nativo mais antigo que o conteúdo: a atualização
+     automática troca só o conteúdo. Isso é normal — antes eu marcava como erro. */
+  add("Parte nativa do app (APK)", "build " + d.build + (Number(d.build) < APP_VERSION ? " · o conteúdo v" + APP_NAME_VERSION + " veio pela atualização automática" : ""), Number(d.build) >= 37);
+  const fone = await native.headsetConnected();
+  /* Antes estas duas linhas ficavam SEMPRE verdes — e eram justamente elas que
+     explicavam o "só vibra". Agora ficam vermelhas quando são o motivo. */
+  const mudoPorFone = !!db.settings.sound && !db.settings.soundSpk && !fone;
+  add("Som ligado nos ajustes", db.settings.sound ? "sim" : "NÃO — está desligado", !!db.settings.sound);
+  add("Fone conectado", fone ? "sim" : "não detectado", !mudoPorFone);
+  add("Tocar no alto-falante", db.settings.soundSpk ? "ligado" : "desligado — sem fone, fica mudo", !mudoPorFone);
+  add("→ O descanso vai tocar?", comSom ? "SIM" : ("NÃO — vai só vibrar" + (mudoPorFone ? " (sem fone e alto-falante desligado)" : !db.settings.sound ? " (som desligado)" : "")), comSom);
   add("Notificações liberadas", d.notifLigada ? "sim" : "NÃO", !!d.notifLigada);
   const dnd = {1:"tudo passa", 2:"só prioridade", 3:"nada passa", 4:"só alarmes"}[d.filtroDnd] || d.filtroDnd;
   add("Não Perturbe", dnd, d.filtroDnd === 1);
@@ -6063,7 +6569,9 @@ async function soundDiagForm(){
         <div class="d" style="word-break:break-all; color:${l.ok?"var(--muted)":"var(--bad)"}">${esc(String(l.v))}</div></div>
         <span style="flex:none">${l.ok ? "✅" : "⚠️"}</span></div>`).join("")}
     </div>
-    <button class="btn" data-action="sound-test-now">🔊 Tocar o aviso agora</button>
+    ${(!comSom && db.settings.sound && !db.settings.soundSpk) ? `<button class="btn" data-action="diag-spk-on" style="margin-bottom:8px">🔊 Ligar o som no alto-falante</button>` : ""}
+    ${(!db.settings.sound) ? `<button class="btn" data-action="diag-sound-on" style="margin-bottom:8px">🔊 Ligar o som do descanso</button>` : ""}
+    <button class="btn${comSom ? "" : " ghost"}" data-action="sound-test-now">🔊 Tocar o aviso agora</button>
     <button class="btn ghost" data-action="sound-rebuild" style="margin-top:8px">🔁 Recriar os canais do zero</button>
     <button class="btn ghost" data-action="close-modal" style="margin-top:8px">Fechar</button>`);
 }
@@ -6072,8 +6580,8 @@ async function soundDiagForm(){
 async function soundTestNow(){
   const comSom = await native.shouldSound();
   await native.makeChannel(comSom);
-  await native.notifyNow("Teste — era para ter tocado agora", comSom);
-  toast(comSom ? "Mandei com som 🔊" : "Mandei sem som (fone desconectado?)");
+  await native.notifyNow("Teste — era para ter tocado agora", comSom, 7003);
+  toast(comSom ? "Mandei COM som 🔊" : "Mandei SEM som — veja a linha em vermelho no diagnóstico");
 }
 /* canal é imutável: para mudar o som é preciso apagar e criar de novo */
 async function soundRebuild(){

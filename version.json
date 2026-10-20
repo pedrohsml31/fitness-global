@@ -1,10 +1,10 @@
 {
-  "version": 39,
-  "name": "3.9",
+  "version": 40,
+  "name": "4.0",
   "minNative": 37,
   "files": [
     "index.html"
   ],
-  "notes": "Busca de exercicio: a IA comeca a pensar ENQUANTO voce digita o nome (0,8 s depois de parar), em vez de so ao tocar na lupa - quando voce toca, a resposta normalmente ja chegou. Uma chamada so por termo, nada de gastar cota a cada letra. Conserto de sincronizacao: a conta que decide \"este aparelho esta vazio, adoto a nuvem por cima\" esquecia os treinos A/B/C, o historico de treinos e as ideias - um aparelho que so tivesse isso era tratado como vazio e sobrescrito. Agora conta tudo.",
+  "notes": "SOM: o diagnostico pintava de verde justamente as linhas que explicavam o \"so vibra\" (sem fone e com o alto-falante desligado, o app fica mudo de proposito). Agora elas ficam vermelhas, com um botao para ligar o som no alto-falante. O cronometro da barra do celular voltou: o app apagava TODAS as notificacoes ao agendar o fim do descanso, inclusive ele. MEDALHAS: bronze/prata/ouro em Evolucao -> Medalhas, com aviso na hora. Metas de corpo absolutas que voce define. TREINO: grupo muscular no exercicio; ver o treino por grupo; \"1 exercicio por grupo\" (fechou um biceps, os outros biceps do treino saem do dia); exercicio global some das outras academias depois de comecado; faixa de reps em dois campos; ordem do treino visivel no topo; corrigir/apagar sessoes do historico; modo simulacao. BUSCA: a IA escolhe direto do catalogo, entao todo resultado vem com a foto certa. TREINO C com 24 series. SEGURANCA: medidor de forca do codigo de sincronizacao e troca por um codigo seguro.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
