@@ -1,10 +1,10 @@
 {
-  "version": 51,
-  "name": "5.1",
+  "version": 52,
+  "name": "5.2",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "NOVO VISUAL (etapa 1): fundo grafite com destaque verde-limao, fontes novas (numeros grandes), abas de baixo com icones desenhados: Treino, Biblioteca, Comida e Evolucao. A tela Treino agora abre com o treino de hoje e um botao Continuar para o proximo exercicio; academias e ultimos treinos abaixo. Nova aba Biblioteca com todos os exercicios por grupo, busca e a ultima carga de cada unidade. Melhorias e Ajustes ficam no menu de tres pontinhos da tela Treino. Nao precisa instalar APK.",
+  "notes": "NOVO VISUAL (etapa 2): tela do exercicio refeita. A meta de hoje aparece em numero grande, as unidades viram um seletor de uma toque, a serie atual fica destacada, e a barra de descanso ficou clara e com botoes maiores. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
