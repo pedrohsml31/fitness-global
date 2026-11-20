@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v5.3</title>
+<title>Fitness Global v5.4</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -463,8 +463,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "5.3";
-const APP_VERSION = 53;
+const APP_NAME_VERSION = "5.4";
+const APP_VERSION = 54;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1737,7 +1737,9 @@ function isSkipped(e, rid){
 function setsListToday(exId, rid){
   const l = todayLog(exId);
   if(!l) return [];
-  return rid ? l.sets.filter(s => (s.rt || "") === rid) : l.sets;
+  /* série sem treino marcado (feita na aba "Todos") vale em qualquer treino que tenha o
+     exercício; só a série carimbada com OUTRO treino fica de fora */
+  return rid ? l.sets.filter(s => !s.rt || s.rt === rid) : l.sets;
 }
 function setsToday(exId, rid){ return setsListToday(exId, rid).length; }
 function exStateToday(e, rid){

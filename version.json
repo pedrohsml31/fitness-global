@@ -1,10 +1,10 @@
 {
-  "version": 53,
-  "name": "5.3",
+  "version": 54,
+  "name": "5.4",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "CORRECAO: exercicios de antebraco (Reverse curl, Wrist curl, rosca inversa) tinham sido levados para Ombro pela regra automatica e sumiram do grupo Antebraco. A regra foi corrigida e o app os devolve sozinho para Antebraco ao abrir. Grupos que voce escolheu na mao nao sao mexidos. Nao precisa instalar APK.",
+  "notes": "CORRECAO: exercicios que voce marcou como feitos na aba Todos (ou na visao por grupo) nao aparecem mais desmarcados ao abrir um treino A/B/C. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
