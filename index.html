@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v4.2</title>
+<title>Fitness Global v4.3</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -410,8 +410,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "4.2";
-const APP_VERSION = 42;
+const APP_NAME_VERSION = "4.3";
+const APP_VERSION = 43;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1411,10 +1411,41 @@ const LS_ANTES = "fitglobal.antes-juntar";
 function exKeys(e){ return [e.name, e.namePt, e.nameEn].filter(Boolean).map(norm); }
 /* "Smart Fit Centro" dentro de "Smart Fit" -> "Centro" */
 function sugereUnidade(mainName, nome){
-  const a = norm(mainName).split(" "), b = nome.trim().split(/\s+/);
-  let i = 0;
-  while(i < b.length - 1 && i < a.length && norm(b[i]) === a[i]) i++;
-  return b.slice(i).join(" ") || nome;
+  const m = norm(mainName).replace(/\s/g, ""), b = nome.trim().split(/\s+/);
+  let acc = "", i = 0;
+  while(i < b.length - 1 && m.startsWith(acc + norm(b[i]).replace(/\s/g, "")) && acc.length < m.length){ acc += norm(b[i]).replace(/\s/g, ""); i++; }
+  return (acc === m ? b.slice(i).join(" ") : "") || nome;
+}
+/* Redes: academias cujo nome começa igual ("Smart Fit", "Smart Fit Centro", "Smartfit Shopping")
+   são juntas sozinhas, uma vez, ao abrir a v4.2. A cópia de antes fica guardada para desfazer. */
+function redesDeAcademias(){
+  const compacto = g => norm(g.name).replace(/\s/g, "");
+  const grupos = [];
+  db.gyms.forEach(g => {
+    const k = compacto(g);
+    const gr = grupos.find(x => x.some(o => { const c = compacto(o); const n = Math.min(c.length, k.length);
+      let i = 0; while(i < n && c[i] === k[i]) i++; return i >= 5 && (i === c.length || i === k.length); }));
+    if(gr) gr.push(g); else grupos.push([g]);
+  });
+  return grupos.filter(x => x.length > 1);
+}
+function migrateRedes42(){
+  if(db.settings.migRede42) return;
+  db.settings.migRede42 = true;
+  const redes = redesDeAcademias();
+  if(!redes.length){ save(false); return; }
+  let total = 0, nomes = [];
+  redes.forEach(gr => {
+    gr = gr.slice().sort((a, b) => norm(a.name).length - norm(b.name).length);
+    const main = gr[0];                                   // o nome mais curto é a rede ("Smart Fit")
+    const itens = gr.slice(1).map(g => ({id:g.id, nome:sugereUnidade(main.name, g.name)}));
+    const vistos = new Set();
+    itens.forEach((it, i) => { let n = it.nome, k = 2; while(vistos.has(norm(n))) n = it.nome + " " + k++; vistos.add(norm(n)); it.nome = n; });
+    mergeGyms(main.id, "Principal", itens);
+    total += itens.length; nomes.push(main.name);
+  });
+  save();
+  setTimeout(() => toast(`🔀 Juntei ${total} academia${total===1?"":"s"} em ${nomes.join(", ")} como unidades (desfazer: menu ⋮ da academia)`), 1200);
 }
 function mergeForm(mainId){
   const main = gymById(mainId); if(!main) return;
@@ -1440,11 +1471,12 @@ function mergeGyms(mainId, mainUnitName, itens){
   try{ localStorage.setItem(LS_ANTES, JSON.stringify(db)); }catch(e){}
   main.units = main.units || [];
   let uMain = main.units[0];
-  if(!main.units.length){ uMain = {id:uid(), name:mainUnitName || "Principal"}; main.units.push(uMain); }
+  const mainVazia = !db.exercises.some(e => e.gymId === mainId) && !db.logs.some(l => l.gymId === mainId);
+  if(!main.units.length && !mainVazia){ uMain = {id:uid(), name:mainUnitName || "Principal"}; main.units.push(uMain); }
   /* o que já foi feito na academia principal fica na unidade dela */
-  db.logs.forEach(l => { if(l.gymId === mainId && !l.u) l.u = uMain.id; });
+  if(uMain) db.logs.forEach(l => { if(l.gymId === mainId && !l.u) l.u = uMain.id; });
   db.settings.unitOf = db.settings.unitOf || {};
-  if(!db.settings.unitOf[mainId]) db.settings.unitOf[mainId] = uMain.id;
+  if(uMain && !db.settings.unitOf[mainId]) db.settings.unitOf[mainId] = uMain.id;
   const rtMap = {}, exMap = {};
   let juntos = 0, movidos = 0;
   itens.forEach(({id, nome}) => {
@@ -1779,6 +1811,7 @@ function renderEx(g, e){
       <h1>${esc(exName(e))}</h1>
       <button class="iconbtn" data-action="ex-menu" data-gym="${g.id}" data-id="${e.id}" aria-label="Editar / opções">⋮</button>
     </div>
+    ${temUnidades ? unitBarHtml(gymById(e.gymId || g.id) || g) + `<div class="pills" style="margin:-4px 0 8px"><button class="pill${e.perUnit?" on":""}" data-action="toggle-perunit" data-id="${e.id}" style="cursor:pointer" title="Ligado: a carga é separada por unidade (máquinas). Desligado: a mesma carga em todas (halteres, barra).">${e.perUnit?"✅ Carga separada por unidade":"⬜ Mesma carga em todas as unidades"}</button></div>` : ""}
     <div class="pills" style="margin-top:-4px">
       <span class="pill" style="${done.length>=e.targetSets?"color:var(--good);border-color:var(--good)":done.length?"color:var(--gold);border-color:var(--gold)":""}">${done.length}/${e.targetSets} séries hoje</span>
       ${e.bw?`<span class="pill" title="O kg já vem com o seu último peso corporal">🧍 peso do corpo</span>`:""}
@@ -3367,6 +3400,7 @@ document.addEventListener("click", ev => {
     openModal(`<h2>${esc(g.name)}</h2>
       <button class="menuitem" data-action="rename-gym" data-id="${g.id}"><span class="mi">✏️</span> Renomear</button>
       ${db.gyms.length > 1 ? `<button class="menuitem" data-action="merge-open" data-id="${g.id}"><span class="mi">🔀</span> Juntar outras academias aqui (viram unidades)</button>` : ""}
+      ${localStorage.getItem(LS_ANTES) ? `<button class="menuitem" data-action="merge-undo"><span class="mi">↩</span> Desfazer a junção de academias</button>` : ""}
       <button class="menuitem" data-action="auto-groups"><span class="mi">🧩</span> Preencher grupo muscular dos exercícios sem grupo</button>
       <button class="menuitem bad" data-action="delete-gym" data-id="${g.id}"><span class="mi">🗑</span> Excluir academia</button>`);
   }
@@ -3474,6 +3508,11 @@ document.addEventListener("click", ev => {
     gymRoutine = ""; save(); closeModal(); render(); toast("Treino excluído");
   }
   else if(a === "units-edit"){ unitsForm(el.dataset.gym); }
+  else if(a === "toggle-perunit"){
+    const e = exById(el.dataset.id); if(!e) return;
+    e.perUnit = e.perUnit ? undefined : true; save(); render();
+    toast(e.perUnit ? "📍 Carga separada por unidade" : "Mesma carga em todas as unidades");
+  }
   else if(a === "unit-sel"){
     db.settings.unitOf = db.settings.unitOf || {};
     db.settings.unitOf[el.dataset.gym] = el.dataset.u;
@@ -6641,6 +6680,7 @@ migrateManualActs();
 migratePlan12();
 migrateGroups40();
 migrateGroups42();
+migrateRedes42();
 migrateNotes30();
 migrateWalk19();
 if(macrosOn()) loadTaco().then(render);

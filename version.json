@@ -1,10 +1,10 @@
 {
-  "version": 42,
-  "name": "4.2",
+  "version": 43,
+  "name": "4.3",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "JUNTAR ACADEMIAS: no menu (tres pontinhos) da academia principal, 'Juntar outras academias aqui' transforma as academias antigas em unidades dela. Exercicios com o mesmo nome viram um so, cada unidade mantem o historico de carga, treinos iguais se unem; da para desfazer. GRUPO MUSCULAR: os exercicios cadastrados antes agora recebem o grupo sozinhos pelo nome (o que nao reconhecer fica sem grupo para voce escolher). NAO PERTURBE: o aviso saiu, porque o bipe do descanso toca mesmo assim. Nao precisa instalar APK.",
+  "notes": "REDE COM UNIDADES: ao abrir, o app junta sozinho as academias de mesmo nome (Smart Fit, Smart Fit Centro...) numa so, com cada filial como unidade; os exercicios repetidos viram um so e o historico de cada unidade e mantido. Dentro de cada exercicio ha agora a barra para escolher em qual unidade voce esta e o botao para dizer se a carga muda de unidade para unidade. Desfazer: menu da academia. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
