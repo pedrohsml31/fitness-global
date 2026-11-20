@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v4.7</title>
+<title>Fitness Global v4.8</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -13,7 +13,7 @@
 <style>
 :root{
   --bg:#141110; --surface:#1E1A18; --surface2:#292320; --border:#3A322C;
-  --ink:#F4EFEA; --muted:#A79B90; --faint:#6E645C;
+  --ink:#F4EFEA; --muted:#A79B90; --faint:#9A8F85;
   --accent:#FF7A3D; --accent-press:#E8662C; --on-accent:#221009;
   --line:#4A90E2; --good:#46C08A; --bad:#E5604C; --gold:#F2B84B;
   --radius:14px;
@@ -207,10 +207,17 @@ input[type=number]{font-variant-numeric:tabular-nums;}
   background:color-mix(in srgb, var(--surface) 96%, black); border-top:1px solid var(--border);
   padding-bottom:env(safe-area-inset-bottom);}
 #tabbar button{flex:1; padding:8px 2px 7px; display:flex; flex-direction:column; align-items:center; gap:2px;
-  color:var(--faint); font-size:.62rem; font-weight:700; line-height:1.1;}
+  color:var(--faint); font-size:.72rem; font-weight:700; line-height:1.1;}
 #tabbar button .ic{font-size:1.35rem; line-height:1;}
 #tabbar button.on{color:var(--accent);}
 #app{padding-bottom:150px;}
+body:has(#restbar.on) #app{padding-bottom:260px;}
+.exline{display:flex; flex-wrap:wrap; gap:2px 6px; align-items:center; margin:-2px 0 10px; font-size:.82rem; color:var(--muted);}
+.exline b{font-size:.9rem;}
+details.evo{margin-top:6px;}
+details.evo>summary{cursor:pointer; list-style:none; padding:12px 14px; border:1px solid var(--border); border-radius:14px; font-weight:700; color:var(--ink); background:var(--surface);}
+details.evo>summary::-webkit-details-marker{display:none;}
+details.evo[open]>summary{margin-bottom:8px;}
 
 /* ===== alimentação ===== */
 .daynav{display:flex; align-items:center; gap:8px; margin:2px 0 4px;}
@@ -410,8 +417,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "4.7";
-const APP_VERSION = 47;
+const APP_NAME_VERSION = "4.8";
+const APP_VERSION = 48;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1906,19 +1913,13 @@ function renderEx(g, e){
       <h1>${esc(exName(e))}</h1>
       <button class="iconbtn" data-action="ex-menu" data-gym="${g.id}" data-id="${e.id}" aria-label="Editar / opções">⋮</button>
     </div>
-    ${temUnidades ? unitBarHtml(gymById(e.gymId || g.id) || g) + `<div class="pills" style="margin:-4px 0 8px"><button class="pill${e.perUnit?" on":""}" data-action="toggle-perunit" data-id="${e.id}" style="cursor:pointer" title="Ligado: a carga é separada por unidade (máquinas). Desligado: a mesma carga em todas (halteres, barra).">${e.perUnit?"✅ Carga separada por unidade":"⬜ Mesma carga em todas as unidades"}</button></div>` : ""}
-    <div class="pills" style="margin-top:-4px">
-      <span class="pill" style="${done.length>=e.targetSets?"color:var(--good);border-color:var(--good)":done.length?"color:var(--gold);border-color:var(--gold)":""}">${done.length}/${e.targetSets} séries hoje</span>
-      ${e.bw?`<span class="pill" title="O kg já vem com o seu último peso corporal">🧍 peso do corpo</span>`:""}
-      ${exPerUnit(e)?`<span class="pill" style="color:var(--accent); border-color:var(--accent)" title="Carga contada só nesta unidade">📍 ${esc(unitName(e.gymId||g.id, unitNow(e.gymId||g.id)))}</span>`:""}
-      ${typeof e.step === "number" && e.step>0?`<span class="pill" title="Degrau de carga desta máquina">⬆ +${fmtW(e.step)} kg</span>`:""}
-      ${e.reps
-        ? `<span class="pill" style="color:var(--accent); border-color:var(--accent)" title="Faixa de repetições alvo — a carga sobe quando TODAS as séries fecham o topo">🎯 meta ${esc(e.reps)} reps</span>`
-        : `<button class="pill" data-action="edit-ex" data-gym="${g.id}" data-id="${e.id}" style="cursor:pointer; color:var(--gold); border-color:var(--gold)" title="Sem faixa de reps o app não consegue sugerir a progressão">⚠️ defina a faixa de reps</button>`}
-      <span class="pill">descanso ${e.restSec}s</span>
-      ${e.gymId === null ? '<span class="pill glob">🌐 em todas as academias</span>' : ""}
-      <button class="pill" data-action="edit-ex" data-gym="${g.id}" data-id="${e.id}" style="cursor:pointer">✏️ editar</button>
-      ${simMode ? "" : `<button class="pill" data-action="sim-on" style="cursor:pointer" title="Testar pesos sem que contem no treino">🧪 simular</button>`}
+    ${temUnidades ? unitBarHtml(gymById(e.gymId || g.id) || g) : ""}
+    <div class="exline">
+      <b style="${done.length>=e.targetSets?"color:var(--good)":done.length?"color:var(--gold)":""}">${done.length}/${e.targetSets} séries</b>
+      ${e.reps ? `<span>· meta ${esc(e.reps)} reps</span>` : ""}<span>· descanso ${e.restSec}s</span>
+      ${typeof e.step === "number" && e.step>0 ? `<span>· +${fmtW(e.step)} kg</span>` : ""}
+      ${e.bw ? `<span>· 🧍 peso do corpo</span>` : ""}${e.gymId === null ? `<span>· 🌐 todas as academias</span>` : ""}
+      ${e.reps ? "" : `<button class="pill" data-action="edit-ex" data-gym="${g.id}" data-id="${e.id}" style="cursor:pointer; color:var(--gold); border-color:var(--gold)" title="Sem faixa de reps o app não consegue sugerir a progressão">⚠️ defina a faixa de reps</button>`}
     </div>
 
     ${simBannerHtml()}
@@ -1926,7 +1927,7 @@ function renderEx(g, e){
     ${e.notes ? `<div class="card notecard">📝 ${esc(e.notes)}</div>` : ""}
 
     <div class="section"><h2>Treino de hoje · ${fmtDate(todayStr())}</h2>
-      ${targetHtml(e)}
+      ${(() => { const dpH0 = tlog ? dpState(e, tlog) : null; return dpH0 ? "" : targetHtml(e); })()}
       ${(() => { const dpH = tlog ? dpState(e, tlog) : null;
         if(!dpH) return "";
         return `<div class="card" style="padding:10px 12px; margin-bottom:10px">
@@ -1948,13 +1949,15 @@ function renderEx(g, e){
       </div>
     </div>
 
-    <div class="section"><h2>Estou evoluindo?</h2>
-      <div class="card" id="progcard"></div>
-    </div>
-
-    <div class="section"><h2>Histórico</h2>
-      <div class="card">${hist || '<div class="empty">Nenhuma sessão registrada ainda.</div>'}</div>
-    </div>`;
+    <details class="evo">
+      <summary>📊 Evolução e histórico</summary>
+      <div class="section"><h2>Estou evoluindo?</h2>
+        <div class="card" id="progcard"></div>
+      </div>
+      <div class="section"><h2>Histórico</h2>
+        <div class="card">${hist || '<div class="empty">Nenhuma sessão registrada ainda.</div>'}</div>
+      </div>
+    </details>`;
 
   renderProg(e, rec);
 }
@@ -3391,6 +3394,12 @@ document.addEventListener("click", ev => {
     if(isFinite(bf) && bf >= 2 && bf <= 60) db.settings.goals.bf = bf;
     save(); render(); toast("Metas salvas ✓");
   }
+  else if(a === "sim-on-close"){ closeModal(); setSim(true); render(); toast("🧪 Simulação ligada — nada fica salvo"); }
+  else if(a === "toggle-perunit-close"){
+    const e = exById(el.dataset.id); if(!e) return;
+    e.perUnit = e.perUnit ? undefined : true; save(); closeModal(); render();
+    toast(e.perUnit ? "📍 Carga separada por unidade" : "Mesma carga em todas as unidades");
+  }
   else if(a === "sim-on"){ setSim(true); render(); toast("🧪 Simulação ligada — nada fica salvo"); }
   else if(a === "sim-off"){ setSim(false); render(); toast("Simulação desligada"); }
   else if(a === "hist-edit"){ histEditForm(el.dataset.id); }
@@ -3794,6 +3803,8 @@ O histórico passa para "${exName(para)}" e "${exName(de)}" é removido.`)) retu
     const others = db.gyms.filter(g => g.id !== gymId);
     openModal(`<h2>${esc(exName(e))}</h2>
       <button class="menuitem" data-action="edit-ex" data-gym="${gymId}" data-id="${e.id}"><span class="mi">✏️</span> Editar (nome, séries, descanso, global)</button>
+      ${simMode ? "" : `<button class="menuitem" data-action="sim-on-close"><span class="mi">🧪</span> Simular cargas (não salva no treino)</button>`}
+      ${gymUnits(e.gymId || gymId).length > 1 ? `<button class="menuitem" data-action="toggle-perunit-close" data-id="${e.id}"><span class="mi">📍</span> ${e.perUnit ? "✅ Carga separada por unidade — desligar" : "Carga separada por unidade — ligar (máquinas)"}</button>` : ""}
       <button class="menuitem" data-action="ex-join" data-gym="${gymId}" data-id="${e.id}"><span class="mi">🔗</span> Unir a outro exercício (mesmo exercício, outro nome)…</button>
       ${others.length ? `<button class="menuitem" data-action="copy-ex" data-id="${e.id}"><span class="mi">📋</span> Copiar para outra academia…</button>` : ""}
       <button class="menuitem" data-action="toggle-global" data-gym="${gymId}" data-id="${e.id}"><span class="mi">🌐</span> ${e.gymId === null ? "Tornar exclusivo desta academia" : "Tornar global (todas as academias)"}</button>
@@ -3893,6 +3904,7 @@ O histórico passa para "${exName(para)}" e "${exName(de)}" é removido.`)) retu
   else if(a === "del-set"){
     const l = todayLog(el.dataset.ex);
     if(!l) return;
+    if(!confirm(`Apagar a série ${+el.dataset.i + 1}? (${fmtW(l.sets[+el.dataset.i].weight)} kg × ${l.sets[+el.dataset.i].reps})`)) return;
     l.sets.splice(+el.dataset.i, 1);
     if(!l.sets.length){
       if(simMode) simLogs = simLogs.filter(x => x.id !== l.id);
