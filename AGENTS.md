@@ -76,3 +76,7 @@ Neste projeto o script `recompilar-apk.ps1` escreve isso automaticamente em
   arquivo **inteiro** em silêncio: nenhuma função é definida e o console não mostra nada.
 - Nunca inventar dado de referência (nutrição, tabela, medida). Ou vem de fonte citável,
   ou o app mostra que não sabe e pede o valor.
+
+## Testes
+
+- `node tests/regras-grupo.js` confere as regras de grupo muscular (`GRP_REGRAS`) com ~110 nomes comuns de exercício. Rodar antes de publicar qualquer mudança nelas; ao achar um erro novo, acrescentar o nome na tabela do teste.

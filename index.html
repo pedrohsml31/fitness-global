@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v6.1</title>
+<title>Fitness Global v6.2</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -220,6 +220,10 @@ input[type=number]{font-variant-numeric:tabular-nums;}
 #app{padding-bottom:150px;}
 body:has(#restbar.on) #app{padding-bottom:260px;}
 .setrow.cur input{border:2px solid var(--accent);}
+.recsel{display:inline-flex; align-items:center; gap:4px; vertical-align:middle;}
+.trofeu{width:1em; height:1em;}
+.recbanner{display:flex; gap:8px; align-items:center; background:color-mix(in srgb, var(--accent) 14%, var(--surface)); border:1px solid color-mix(in srgb, var(--accent) 50%, var(--border)); border-radius:14px; padding:10px 12px; font-size:.88rem; margin:0 0 12px;}
+.recbanner .trofeu{width:1.4em; height:1.4em; color:var(--accent); flex:none;}
 .okmark{color:var(--good); width:1em; height:1em; vertical-align:-.12em; margin-right:4px;}
 .setrow.skipd .skiptxt{grid-column:span 2; text-align:center; color:var(--faint); font-weight:600; text-decoration:line-through; padding:14px 6px; border:1px dashed var(--border); border-radius:14px;}
 .linkbtn{color:var(--muted); text-decoration:underline; font-weight:600; font-size:inherit; padding:2px 0;}
@@ -473,8 +477,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "6.1";
-const APP_VERSION = 61;
+const APP_NAME_VERSION = "6.2";
+const APP_VERSION = 62;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -907,6 +911,16 @@ function setBySet(exId){
   return {cur, prev, rows, maisCur:cur.sets.length-n, maisPrev:prev.sets.length-n,
           media: vals.length ? vals.reduce((a,b) => a+b, 0)/vals.length : null,
           dias: daysBetween(prev.date, cur.date)};
+}
+/* selo de recorde: a maior carga de hoje passou a maior de todas as sessões anteriores
+   (nesta unidade, se o exercício separa carga por unidade) */
+function recordeCarga(e){
+  const hoje = todayLog(e.id);
+  if(!hoje || !hoje.sets.length) return null;
+  const w = Math.max(...hoje.sets.map(x => x.weight));
+  let antes = 0;
+  logsOf(e.id).forEach(l => { if(l.date !== todayStr()) l.sets.forEach(x => { if(x.weight > antes) antes = x.weight; }); });
+  return (antes > 0 && w > antes) ? {w, antes} : null;
 }
 function records(exId){
   const logs = logsOf(exId);
@@ -1544,16 +1558,16 @@ function unitsForm(gymId){
    o que não reconhecer fica "sem grupo" para você escolher. Nunca troca um grupo já definido. */
 const GRP_REGRAS = [
   ["Antebraço", /antebraco|punho|wrist|forearm|reverse curl|rosca inversa|rosca reversa|farmer/],
-  ["Ombro", /reverse|inverso|invertid|rear delt|ombro|deltoid|lateral|face pull|reverse fly|voador inverso|crucifixo inverso|desenvolvimento|shoulder|militar|arnold|elevacao frontal|front raise|upright|delt/],
+  ["Ombro", /reverse|inverso|invertid|rear delt|ombro|deltoid|\blateral|face pull|reverse fly|voador inverso|crucifixo inverso|desenvolvimento|shoulder|militar|arnold|elevacao frontal|front raise|upright|remada alta|delt/],
   ["Panturrilha", /panturrilha|calf|gemeos|soleo/],
-  ["Abdômen", /abdom|crunch|prancha|plank|sit up|situp|leg raise|infra|core|obliquo|oblique|ab wheel|roda abdominal/],
+  ["Abdômen", /abdom|crunch|prancha|plank|sit up|situp|leg raise|elevacao de perna|knee raise|infra|core|obliquo|oblique|ab wheel|roda abdominal/],
   ["Posterior", /flexora|leg curl|stiff|romanian|romeno|hamstring|good morning|bom dia/],
   ["Glúteo", /glute|gluteo|hip thrust|pelvica|coice|kickback|abdutora/],
   ["Tríceps", /triceps|pushdown|frances|skull|tricep|mergulho|\bdip\b/],
   ["Bíceps", /biceps|rosca|curl|martelo|hammer|scott/],
   ["Quadríceps", /extensora|leg press|hack|agachamento|squat|pendulum|afundo|lunge|passada|sissy|quadriceps|leg extension|knee extension|cadeira extensora|step up|smith squat/],
   ["Costas", /puxada|pulldown|pull down|remada|\brow\b|barra fixa|pull up|pullup|chin up|serrote|costas|\blat\b/],
-  ["Peito", /supino|bench|chest|peito|crucifixo|\bfly\b|pec deck|peck|flexao|push up|pushup|cross ?over|voador/]
+  ["Peito", /supino|bench|chest|peito|crucifixo|\bfly\b|pec deck|peck|flexao|push up|pushup|cross ?over|voador|incline|decline/]
 ];
 function inferGrp(e){
   const t = [e.name, e.namePt, e.nameEn].filter(Boolean).map(norm).join(" | ");
@@ -1562,7 +1576,7 @@ function inferGrp(e){
 }
 /* Versão das regras. Exercícios cujo grupo foi DEDUZIDO pelo app (e.grpAuto) são reavaliados
    sozinhos quando as regras melhoram; o que você escolheu na mão nunca é tocado. */
-const GRP_REGRAS_V = 3;
+const GRP_REGRAS_V = 4;
 function autoGroups(){
   let n = 0;
   db.exercises.forEach(e => {
@@ -1999,6 +2013,56 @@ function buscaCaixa(q, quantos){
     : `<div class="sub" style="margin:4px 0 10px">Nada achado. Para a busca com IA, ponha a chave do Gemini em Ajustes.</div>`;
 }
 
+/* ===================== exercícios parecidos =====================
+   Acha pares que quase certamente são o MESMO exercício com dois nomes (voador = peck deck,
+   "Supino inclinado máquina" = "Supino inclinado na máquina"). Compara as palavras já
+   normalizadas, com sinônimos; equipamento diferente (halter x barra) NÃO conta como igual.
+   Nada é unido sozinho: você confirma cada par e dá para desfazer. */
+const PALAVRAS_NEUTRAS = new Set(["na","no","nas","nos","de","da","do","das","dos","em","a","o","as","os","com","para","e","com","maquina","livre","sentado","em","pe"]);
+function chaveParecido(e){
+  const bruto = norm([e.name, e.namePt, e.nameEn].filter(Boolean)[0] || "");
+  let t = " " + bruto + " ";
+  SIN_BUSCA.forEach(g => {
+    if(["halter","dumbbell","halteres","barra","barbell","polia","cabo","cable","crossover","pulley","maquina","machine"].includes(g[0])) return;
+    if(g[0] === "perna" || g[0] === "braco" || g[0] === "empurrar" || g[0] === "puxar" || g[0] === "superior") return;
+    [...g].sort((x, y) => y.length - x.length).forEach(x => { t = t.split(" " + x + " ").join(" " + g[0] + " "); });
+  });
+  return new Set(t.split(" ").filter(w => w && !PALAVRAS_NEUTRAS.has(w)));
+}
+function achaParecidos(gymId){
+  const ign = db.settings.dupIgnore || {};
+  const lista = gymExercises(gymId);
+  const chaves = lista.map(chaveParecido);
+  const pares = [];
+  for(let i = 0; i < lista.length; i++) for(let j = i + 1; j < lista.length; j++){
+    const a = lista[i], b = lista[j];
+    if(ign[[a.id, b.id].sort().join("|")]) continue;
+    if(a.grp && b.grp && a.grp !== b.grp) continue;
+    const A = chaves[i], B = chaves[j]; if(!A.size || !B.size) continue;
+    const inter = [...A].filter(x => B.has(x)).length, uni = new Set([...A, ...B]).size;
+    const jac = inter / uni;
+    const igual = jac === 1 || (jac >= 0.75 && inter >= 2);
+    if(igual) pares.push({a, b, jac});
+  }
+  return pares;
+}
+function parecidosForm(gymId){
+  const pares = achaParecidos(gymId);
+  const nLogs = e => db.logs.filter(l => l.exerciseId === e.id).length;
+  openModal(`<h2>Exercícios parecidos</h2>
+    <p class="sub" style="margin-bottom:10px">Pares que parecem ser o <b>mesmo exercício</b> com nomes diferentes. Unir junta o histórico dos dois em um só.</p>
+    ${pares.length ? pares.map(({a, b}) => {
+      const [fica, sai] = nLogs(a) >= nLogs(b) ? [a, b] : [b, a];
+      return `<div class="card" style="margin-bottom:10px">
+        <div><b>${esc(exName(fica))}</b> <span class="sub">· ${nLogs(fica)} sessões</span></div>
+        <div><b>${esc(exName(sai))}</b> <span class="sub">· ${nLogs(sai)} sessões</span></div>
+        <div class="btnrow" style="margin-top:8px">
+          <button class="btn sm" data-action="dup-join" data-from="${sai.id}" data-to="${fica.id}" data-gym="${gymId}">Unir em “${esc(exName(fica))}”</button>
+          <button class="btn ghost sm" data-action="dup-no" data-a="${a.id}" data-b="${b.id}" data-gym="${gymId}">São diferentes</button>
+        </div></div>`;
+    }).join("") : `<div class="empty">Nenhum par parecido encontrado ✓</div>`}
+    <button class="btn ghost" data-action="close-modal" style="margin-top:8px">Fechar</button>`);
+}
 let gymQuery = "";
 /* busca por nome: só esconde/mostra os cartões já na tela (não redesenha, para o teclado não fechar) */
 function filterGymList(){
@@ -2044,10 +2108,11 @@ function renderGym(g){
     const mini = t ? `<span class="trendmini" title="${TREND[t.dir].t}">${TREND[t.dir].em}</span>` : "";
     const st = exStateToday(e, rid);
     const dn = setsToday(e.id, rid);
+    const rec = recordeCarga(e);
     const sc = `<span class="setcount ${st==="done" ? "full" : dn > 0 ? "part" : ""}" title="Séries feitas hoje${rid?" neste treino":""}">${dn}/${e.targetSets}</span>`;
     return `<div class="card tap row ex-${st}" data-action="open-ex" data-gym="${g.id}" data-id="${e.id}">
       ${e.photo ? `<img class="exthumb" src="${esc(e.photo)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ""}
-      <div class="grow"><h3>${st==="done"?`<svg class="ico okmark" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>`:st==="skip"?"✕ ":""}${esc(exName(e))}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}${e.notes ? " 📝" : ""}</h3>${
+      <div class="grow"><h3>${st==="done"?`<svg class="ico okmark" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>`:st==="skip"?"✕ ":""}${esc(exName(e))}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}${e.notes ? " 📝" : ""}${rec ? ` <span class="pill pr recsel" title="Recorde de carga: ${fmtW(rec.w)} kg (antes ${fmtW(rec.antes)})"><svg class="ico trofeu" viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 01-8 0zM8 6H4v2a3 3 0 003 3M16 6h4v2a3 3 0 01-3 3M12 13v4M8 20h8M10 17h4"/></svg> recorde</span>` : ""}</h3>${
         exNameAlt(e) ? `<div class="sub" style="font-size:.68rem; color:var(--faint)">${esc(exNameAlt(e))}</div>` : ""}
       <div class="sub">${st==="skip" ? "Hoje não vou fazer" : `${e.targetSets} séries${e.reps?` × ${esc(e.reps)}`:""} · descanso ${e.restSec}s · ${summaryLine(e.id)}`}</div></div>
       <button class="xbtn skipbtn${st==="skip"?" on":""}" data-action="skip-ex" data-id="${e.id}" data-rt="${rid}"
@@ -2250,6 +2315,7 @@ function renderEx(g, e){
     </div>
 
     ${simBannerHtml()}
+    ${(() => { const r = recordeCarga(e); return r ? `<div class="recbanner" role="status"><svg class="ico trofeu" viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 01-8 0zM8 6H4v2a3 3 0 003 3M16 6h4v2a3 3 0 01-3 3M12 13v4M8 20h8M10 17h4"/></svg> <b>Recorde de carga!</b> ${fmtW(r.w)} kg hoje; a sua melhor marca antes era ${fmtW(r.antes)} kg.</div>` : ""; })()}
     ${e.photo ? `<img class="exphoto" src="${esc(e.photo)}" alt="Foto do exercício ${esc(exName(e))}" loading="lazy" onerror="this.style.display='none'">` : ""}
     ${e.notes ? `<div class="card notecard">📝 ${esc(e.notes)}</div>` : ""}
 
@@ -3896,6 +3962,7 @@ document.addEventListener("click", ev => {
       <button class="menuitem" data-action="group-view" data-close-first="1"><span class="mi">🧩</span> ${db.settings.groupView ? "✅ Mostrando por grupo muscular — desligar" : "Mostrar por grupo muscular"}</button>
       <button class="menuitem" data-action="ex-lang" data-close-first="1"><span class="mi">🌐</span> Nomes em ${exLang() === "en" ? "português" : "inglês"}</button>
       <div class="sub" style="margin:8px 0 2px; font-weight:800; font-size:.7rem; letter-spacing:.05em">ACADEMIA</div>
+      <button class="menuitem" data-action="parecidos-open" data-gym="${g.id}"><span class="mi">🔗</span> Exercícios parecidos (juntar)${achaParecidos(g.id).length ? ` · ${achaParecidos(g.id).length}` : ""}</button>
       ${db.gyms.length > 1 ? `<button class="menuitem" data-action="merge-open" data-id="${g.id}"><span class="mi">🔀</span> Juntar outras academias aqui (viram unidades)</button>` : ""}
       ${localStorage.getItem(LS_ANTES) ? `<button class="menuitem" data-action="merge-undo"><span class="mi">↩</span> Desfazer a junção de academias</button>` : ""}
       <button class="menuitem" data-action="auto-groups"><span class="mi">🧩</span> Preencher grupo muscular dos exercícios sem grupo</button>
@@ -3915,6 +3982,25 @@ document.addEventListener("click", ev => {
       <p class="sub" style="margin-bottom:10px">Para quando é o <b>mesmo exercício</b> cadastrado com dois nomes. O histórico deste passa para o que você escolher, e este deixa de existir.</p>
       ${alvos.map(x => `<button class="menuitem" data-action="ex-join-do" data-from="${e.id}" data-to="${x.id}"><span class="mi">→</span> ${esc(exName(x))}</button>`).join("") || '<div class="empty">Não há outro exercício.</div>'}
       <button class="btn ghost" data-action="close-modal" style="margin-top:8px">Cancelar</button>`);
+  }
+  else if(a === "parecidos-open"){ parecidosForm(el.dataset.gym); }
+  else if(a === "dup-no"){
+    db.settings.dupIgnore = db.settings.dupIgnore || {};
+    db.settings.dupIgnore[[el.dataset.a, el.dataset.b].sort().join("|")] = 1;
+    save(); parecidosForm(el.dataset.gym);
+  }
+  else if(a === "dup-join"){
+    const de = exById(el.dataset.from), para = exById(el.dataset.to); if(!de || !para) return;
+    try{ localStorage.setItem(LS_ANTES, JSON.stringify(db)); }catch(x){}
+    db.logs.forEach(l => { if(l.exerciseId === de.id) l.exerciseId = para.id; });
+    ["grp","photo","step","reps","notes","namePt","nameEn"].forEach(k => { if(!para[k] && de[k]) para[k] = de[k]; });
+    if(de.perUnit) para.perUnit = true;
+    (db.routines || []).forEach(r => { r.exIds = (r.exIds || []).map(x => x === de.id ? para.id : x).filter((x, i, a2) => a2.indexOf(x) === i); });
+    db.exercises = db.exercises.filter(x => x.id !== de.id);
+    save(); render(); parecidosForm(el.dataset.gym);
+    toastUndo(`Unidos em “${exName(para)}”`, () => {
+      try{ const bak = JSON.parse(localStorage.getItem(LS_ANTES)); if(bak){ Object.keys(bak).forEach(k => { db[k] = bak[k]; }); save(); closeModal(); render(); } }catch(x){}
+    }, 10000);
   }
   else if(a === "ex-join-do"){
     const de = exById(el.dataset.from), para = exById(el.dataset.to); if(!de || !para) return;
