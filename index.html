@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v4.8</title>
+<title>Fitness Global v4.9</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -417,8 +417,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "4.8";
-const APP_VERSION = 48;
+const APP_NAME_VERSION = "4.9";
+const APP_VERSION = 49;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -940,7 +940,6 @@ function renderHome(){
   view.innerHTML = `
     <div class="topbar">
       <h1><span class="brand">▮</span> Fitness Global <span class="vtag">v${APP_NAME_VERSION}</span></h1>
-      <span class="pill" title="Versão do app (build ${APP_VERSION})">v${APP_NAME_VERSION}</span>
       <button class="iconbtn" data-action="go" data-h="#/settings" aria-label="Ajustes">⚙️</button>
     </div>
     ${dietWarnHtml()}
@@ -951,7 +950,7 @@ function renderHome(){
     </div>
     ${sessionsHtml()}
     ${glob ? `<p class="sub" style="margin-top:12px">🌐 Você tem ${glob} ${glob===1?"exercício global":"exercícios globais"} — ${glob===1?"aparece":"aparecem"} em todas as academias.</p>` : ""}
-    ${db.gyms.length||db.exercises.length ? `<button class="btn danger sm" data-action="reset-treino" style="margin-top:14px">🗑 Zerar treino (academias, exercícios e séries)</button>` : ""}`;
+`;
 }
 
 /* faixa "treino de hoje" dentro da academia: so aparece quando o foco do dia e aqui */
@@ -1062,7 +1061,6 @@ function renderIdeas(){
       <div class="btnrow" style="margin-top:10px">
         ${feitas.length ? `<button class="btn ghost sm" data-action="idea-toggle-feitas" style="width:auto">${
           ideasVerFeitas ? `🙈 Esconder as feitas (${feitas.length})` : `👁 Ver as feitas (${feitas.length})`}</button>` : ""}
-        ${abertas.length ? `<button class="btn ghost sm" data-action="idea-copy" style="width:auto">📋 Copiar as em aberto</button>` : ""}
       </div>
       ${feitas.length ? `<button class="btn danger sm" data-action="idea-clear-done" style="margin-top:10px">🗑 Apagar as ${feitas.length} já feitas</button>` : ""}
     </div>`;
@@ -1773,7 +1771,7 @@ function renderGym(g){
       <div class="sub">${st==="skip" ? "Hoje não vou fazer" : `${e.targetSets} séries${e.reps?` × ${esc(e.reps)}`:""} · descanso ${e.restSec}s · ${summaryLine(e.id)}`}</div></div>
       <button class="xbtn skipbtn${st==="skip"?" on":""}" data-action="skip-ex" data-id="${e.id}" data-rt="${rid}"
         title="${st==="skip"?"Voltar para a lista de hoje":"Hoje eu não vou fazer esse"}">${st==="skip"?"↩":"✕"}</button>
-      ${sc}${mini}<span class="chev">›</span></div>`;
+      ${sc}<span class="chev">›</span></div>`;
   });
   /* visão por grupo muscular: mesmos cartões, com um título por grupo. Dentro de cada
      grupo continua a ordem do dia (em andamento, a fazer, feito, pulado). */
@@ -1798,10 +1796,6 @@ function renderGym(g){
     ${reorderMode ? "" : `<div class="pills" style="margin:-2px 0 10px">
       <button class="pill${gymRoutine?"":" on"}" data-action="rt-sel" data-v="" style="cursor:pointer">Todos (${gymExercises(g.id).length})</button>
       ${rts.map(r=>`<button class="pill${gymRoutine===r.id?" on":""}" data-action="rt-sel" data-v="${r.id}" style="cursor:pointer">${esc(r.name)} (${routineExercises(r,g.id).length})</button>`).join("")}
-      <button class="pill" data-action="rt-new" data-gym="${g.id}" style="cursor:pointer; color:var(--accent)">＋ treino</button>
-      <button class="pill" data-action="tpl-open" data-gym="${g.id}" style="cursor:pointer">🤖 pronto</button>
-      ${exLangPill()}
-      <button class="pill${db.settings.groupView?" on":""}" data-action="group-view" style="cursor:pointer" title="Mostrar os exercícios separados por grupo muscular">🧩 por grupo</button>
     </div>`}
     ${reorderMode ? "" : `<div class="field" style="margin:0 0 10px"><input id="gq" type="search" inputmode="search" placeholder="🔍 Buscar exercício pelo nome ou grupo…" value="${esc(gymQuery)}" autocomplete="off" aria-label="Buscar exercício"></div>`}
     ${reorderMode ? "" : focusBarHtml(g, rid)}
@@ -1814,7 +1808,7 @@ function renderGym(g){
         🏁 Encerrar o treino — não vou fazer os ${falta} que faltam</button>`;
     })()}
     ${(!reorderMode && exs.some(e=>e.photo && e.photo.slice(0,5) !== "data:")) ? `<button class="btn ghost sm" data-action="dl-photos" data-gym="${g.id}" data-rt="${rid}" style="margin-bottom:10px">📥 Salvar as fotos no app (funcionar sem internet)</button>` : ""}
-    <div class="section"><h2>${(!reorderMode && canReorder) ? `<button class="xbtn" data-action="reorder-on" title="Mudar a ordem dos exercícios${rAtiva?" deste treino":""}" style="float:right; color:var(--accent)">⇅ ordem</button>` : ""}${rAtiva ? esc(rAtiva.name) : "Exercícios"}${rAtiva&&rAtiva.src?` <span class="pill">por ${esc(rAtiva.src)}</span>`:""}${rAtiva?` <button class="xbtn" data-action="rt-menu" data-id="${rAtiva.id}" aria-label="Opções do treino" style="vertical-align:middle">⋮</button>`:""}</h2>
+    <div class="section"><h2>${rAtiva ? esc(rAtiva.name) : "Exercícios"}${rAtiva&&rAtiva.src?` <span class="pill">por ${esc(rAtiva.src)}</span>`:""}${rAtiva?` <button class="xbtn" data-action="rt-menu" data-id="${rAtiva.id}" aria-label="Opções do treino" style="vertical-align:middle">⋮</button>`:""}</h2>
       <div id="gq-vazio" class="empty" style="display:none">Nenhum exercício com esse nome.</div>
       ${itemsHtml || `<div class="empty">${rAtiva
         ? "Este treino ainda não tem exercício.<br>Toque em <b>Escolher exercícios</b> abaixo."
@@ -3371,6 +3365,7 @@ document.addEventListener("click", ev => {
   const el = ev.target.closest("[data-action]");
   if(!el) return;
   const a = el.dataset.action;
+  if(el.dataset.closeFirst) closeModal();
 
   if(a === "go"){ location.hash = el.dataset.h; }
   else if(a === "open-gym"){
@@ -3514,7 +3509,14 @@ document.addEventListener("click", ev => {
   else if(a === "gym-menu"){
     const g = gymById(el.dataset.id);
     openModal(`<h2>${esc(g.name)}</h2>
+      <button class="menuitem" data-action="units-edit" data-gym="${g.id}" data-close-first="1"><span class="mi">📍</span> Unidades (filiais)</button>
       <button class="menuitem" data-action="rename-gym" data-id="${g.id}"><span class="mi">✏️</span> Renomear</button>
+      <div class="sub" style="margin:8px 0 2px; font-weight:800; font-size:.7rem; letter-spacing:.05em">TREINOS E EXIBIÇÃO</div>
+      <button class="menuitem" data-action="rt-new" data-gym="${g.id}" data-close-first="1"><span class="mi">＋</span> Novo treino (A, B, C…)</button>
+      <button class="menuitem" data-action="tpl-open" data-gym="${g.id}" data-close-first="1"><span class="mi">🤖</span> Treino pronto</button>
+      <button class="menuitem" data-action="group-view" data-close-first="1"><span class="mi">🧩</span> ${db.settings.groupView ? "✅ Mostrando por grupo muscular — desligar" : "Mostrar por grupo muscular"}</button>
+      <button class="menuitem" data-action="ex-lang" data-close-first="1"><span class="mi">🌐</span> Nomes em ${exLang() === "en" ? "português" : "inglês"}</button>
+      <div class="sub" style="margin:8px 0 2px; font-weight:800; font-size:.7rem; letter-spacing:.05em">ACADEMIA</div>
       ${db.gyms.length > 1 ? `<button class="menuitem" data-action="merge-open" data-id="${g.id}"><span class="mi">🔀</span> Juntar outras academias aqui (viram unidades)</button>` : ""}
       ${localStorage.getItem(LS_ANTES) ? `<button class="menuitem" data-action="merge-undo"><span class="mi">↩</span> Desfazer a junção de academias</button>` : ""}
       <button class="menuitem" data-action="auto-groups"><span class="mi">🧩</span> Preencher grupo muscular dos exercícios sem grupo</button>
@@ -5049,7 +5051,7 @@ function renderFood(){
         </div>
         ${urgesToday.length?`<div class="pills" style="margin-top:12px">${urgesToday.map(u=>`<span class="pill" style="cursor:pointer${u.gaveIn?';color:var(--bad);border-color:var(--bad)':''}" data-action="del-urge" data-id="${u.id}" title="Toque para remover">${fmtTime(u.ts)} · intens. ${u.intensity}${u.gaveIn?" · cedi 🔴":""} ✕</span>`).join("")}</div>`:""}
       </div>
-      <button class="btn danger sm" data-action="reset-food" style="margin-top:10px">🗑 Zerar alimentação (plano, alimentos e urges)</button>
+
     </div>`;
 }
 function plannedMealHtml(m,day){
@@ -5876,7 +5878,7 @@ function renderProgress(){
           <span class="wdelta" style="color:var(--muted)">${typeof b.bf==="number"?"BF "+fmtW(b.bf)+"%":""} ✎</span></div>`).join("")
         : `<div class="empty">Sem registros ainda.</div>`}
     </div></div>
-    <button class="btn danger sm" data-action="reset-body" style="margin-top:4px">🗑 Zerar peso, BF e medidas</button>`;
+`;
   if(latest) drawWeightChart(series);
 }
 function measDelta(k,cur){

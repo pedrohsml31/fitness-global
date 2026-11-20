@@ -1,10 +1,10 @@
 {
-  "version": 48,
-  "name": "4.8",
+  "version": 49,
+  "name": "4.9",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "TELA DO EXERCICIO MAIS LIMPA: cabecalho em uma linha, um cartao de meta so, series logo no topo, evolucao e historico recolhidos, apagar serie pede confirmacao, simular e carga por unidade foram para o menu, barra de descanso nao cobre mais os botoes, legendas das abas maiores. Nao precisa instalar APK.",
+  "notes": "TELA DA ACADEMIA MAIS LIMPA: so os treinos e a busca ficam na tela; novo treino, treino pronto, por grupo, idioma dos nomes e unidades foram para o menu (tres pontinhos), organizado em blocos. Saiu o botao de ordem duplicado, o grafico pequeno de cada linha, a versao repetida no Inicio, os botoes Zerar das telas (continuam em Ajustes) e um dos botoes Copiar de Melhorias. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
