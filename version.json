@@ -1,10 +1,10 @@
 {
-  "version": 59,
-  "name": "5.9",
+  "version": 60,
+  "name": "6.0",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "AGRUPAMENTOS na Biblioteca: escolha varios grupos musculares ao mesmo tempo, use os atalhos prontos (Empurrar, Puxar, Pernas, Superior) e crie/edite os seus (botao Editar). Nao precisa instalar APK.",
+  "notes": "TELA DA ACADEMIA (etapa 3 do visual): cada exercicio mostra a carga da unidade onde voce esta, os menus ganharam icones desenhados no lugar dos emojis e a busca ficou igual a da Biblioteca. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

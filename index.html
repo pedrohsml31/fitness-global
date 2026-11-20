@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v5.9</title>
+<title>Fitness Global v6.0</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -220,6 +220,7 @@ input[type=number]{font-variant-numeric:tabular-nums;}
 #app{padding-bottom:150px;}
 body:has(#restbar.on) #app{padding-bottom:260px;}
 .setrow.cur input{border:2px solid var(--accent);}
+.okmark{color:var(--good); width:1em; height:1em; vertical-align:-.12em; margin-right:4px;}
 .setrow.skipd .skiptxt{grid-column:span 2; text-align:center; color:var(--faint); font-weight:600; text-decoration:line-through; padding:14px 6px; border:1px dashed var(--border); border-radius:14px;}
 .linkbtn{color:var(--muted); text-decoration:underline; font-weight:600; font-size:inherit; padding:2px 0;}
 .firstun{background:color-mix(in srgb, var(--gold) 14%, var(--surface)); border:1px solid color-mix(in srgb, var(--gold) 45%, var(--border)); border-radius:14px; padding:10px 12px; font-size:.86rem; margin:0 0 12px; line-height:1.4;}
@@ -472,8 +473,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "5.9";
-const APP_VERSION = 59;
+const APP_NAME_VERSION = "6.0";
+const APP_VERSION = 60;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1219,10 +1220,12 @@ function renderIdeas(){
 
 function summaryLine(exId){
   const logs = logsOf(exId);
-  if(!logs.length) return "Sem registros ainda";
+  const e = exById(exId), gid = e && (e.gymId || (route() || {}).gymId);
+  const un = (e && exPerUnit(e) && gid) ? unitName(gid, unitNow(gid)) : "";
+  if(!logs.length) return un ? `${esc(un)}: sem registros ainda` : "Sem registros ainda";
   const l = logs[logs.length-1];
   const best = l.sets.reduce((a,s) => s.weight > a.weight ? s : a, l.sets[0]);
-  return `${fmtDate(l.date)} · ${fmtW(best.weight)} kg × ${best.reps}`;
+  return `${un ? `<b>${esc(un)}</b> · ` : ""}${fmtDate(l.date)} · ${fmtW(best.weight)} kg × ${best.reps}`;
 }
 
 /* ===================== TREINOS PRONTOS =====================
@@ -2044,7 +2047,7 @@ function renderGym(g){
     const sc = `<span class="setcount ${st==="done" ? "full" : dn > 0 ? "part" : ""}" title="Séries feitas hoje${rid?" neste treino":""}">${dn}/${e.targetSets}</span>`;
     return `<div class="card tap row ex-${st}" data-action="open-ex" data-gym="${g.id}" data-id="${e.id}">
       ${e.photo ? `<img class="exthumb" src="${esc(e.photo)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ""}
-      <div class="grow"><h3>${st==="done"?"✅ ":st==="skip"?"✕ ":""}${esc(exName(e))}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}${e.notes ? " 📝" : ""}</h3>${
+      <div class="grow"><h3>${st==="done"?`<svg class="ico okmark" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>`:st==="skip"?"✕ ":""}${esc(exName(e))}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}${e.notes ? " 📝" : ""}</h3>${
         exNameAlt(e) ? `<div class="sub" style="font-size:.68rem; color:var(--faint)">${esc(exNameAlt(e))}</div>` : ""}
       <div class="sub">${st==="skip" ? "Hoje não vou fazer" : `${e.targetSets} séries${e.reps?` × ${esc(e.reps)}`:""} · descanso ${e.restSec}s · ${summaryLine(e.id)}`}</div></div>
       <button class="xbtn skipbtn${st==="skip"?" on":""}" data-action="skip-ex" data-id="${e.id}" data-rt="${rid}"
@@ -2063,7 +2066,7 @@ function renderGym(g){
   const canReorder = exs.length > 1;
   view.innerHTML = `
     <div class="topbar">
-      <button class="iconbtn" data-action="${reorderMode?"reorder-done":"go"}" data-h="#/" aria-label="${reorderMode?"Concluir":"Voltar"}">${reorderMode?"✓":"‹"}</button>
+      <button class="iconbtn" data-action="${reorderMode?"reorder-done":"go"}" data-h="#/" aria-label="${reorderMode?"Concluir":"Voltar"}">${reorderMode?"✓":`<svg class="ico" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>`}</button>
       <h1>${esc(g.name)}${reorderMode?" · ordem":""}</h1>
       ${reorderMode
         ? `<button class="iconbtn" data-action="reorder-done" aria-label="Concluir">✓</button>`
@@ -2075,7 +2078,7 @@ function renderGym(g){
       <button class="pill${gymRoutine?"":" on"}" data-action="rt-sel" data-v="" style="cursor:pointer">Todos (${gymExercises(g.id).length})</button>
       ${rts.map(r=>`<button class="pill${gymRoutine===r.id?" on":""}" data-action="rt-sel" data-v="${r.id}" style="cursor:pointer">${esc(r.name)} (${routineExercises(r,g.id).length})</button>`).join("")}
     </div>`}
-    ${reorderMode ? "" : `<div class="field" style="margin:0 0 10px"><input id="gq" type="search" inputmode="search" placeholder="🔍 Buscar: nome, grupo, “perna”, “peck deck”…" value="${esc(gymQuery)}" autocomplete="off" aria-label="Buscar exercício"></div><div id="ai-busca"></div>`}
+    ${reorderMode ? "" : `<div class="sbox" style="margin-bottom:10px"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg><input id="gq" type="search" inputmode="search" placeholder="Buscar: nome, grupo, “perna”, “peck deck”…" value="${esc(gymQuery)}" autocomplete="off" aria-label="Buscar exercício"></div><div id="ai-busca"></div>`}
     ${reorderMode ? "" : focusBarHtml(g, rid)}
     ${(() => { if(reorderMode) return "";
       /* quantos ainda estão em aberto: é o que o botão de encerrar vai riscar de uma vez */
@@ -2861,7 +2864,31 @@ function achSection(){
 
 /* ===================== modal ===================== */
 const modal = document.getElementById("modal"), sheet = document.getElementById("sheet");
-function openModal(html){ sheet.innerHTML = html; modal.classList.add("on"); }
+const ICO_MENU = {
+  "📍":"M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z",
+  "✏️":"M4 20h4L19 9l-4-4L4 16zM14 6l4 4",
+  "＋":"M12 5v14M5 12h14",
+  "🤖":"M12 3v3M6 8h12v10H6zM9.5 13h.01M14.5 13h.01M9 21h6",
+  "🧩":"M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM17 13v7M13.5 16.5h7",
+  "🌐":"M12 21a9 9 0 100-18 9 9 0 000 18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18",
+  "🔀":"M4 7h4l8 10h4M4 17h4l3-4M13 11l3-4h4M18 5l2 2-2 2M18 15l2 2-2 2",
+  "↩":"M9 7L4 12l5 5M4 12h11a5 5 0 010 10h-3",
+  "🗑":"M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6",
+  "→":"M5 12h14M13 6l6 6-6 6",
+  "🧪":"M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3",
+  "🔗":"M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1",
+  "📋":"M9 4h6v3H9zM7 5H5v16h14V5h-2M9 12h6M9 16h6",
+  "🏋️":"M3 9v6M6 7v10M18 7v10M21 9v6M6 12h12",
+  "💡":"M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0012 3z",
+  "⚙️":"M12 15a3 3 0 100-6 3 3 0 000 6zM19 12l2-1-1-3-2 .5-1.5-1.5.5-2-3-1-1 2h-2l-1-2-3 1 .5 2L6 8.5 4 8l-1 3 2 1v2l-2 1 1 3 2-.5L7.5 19l-.5 2 3 1 1-2h2l1 2 3-1-.5-2 1.5-1.5 2 .5 1-3-2-1z"
+};
+function icoMenu(root){
+  root.querySelectorAll(".mi").forEach(m => {
+    const t = m.textContent.trim(), d = ICO_MENU[t];
+    if(d) m.innerHTML = `<svg class="ico" viewBox="0 0 24 24"><path d="${d}"/></svg>`;
+  });
+}
+function openModal(html){ sheet.innerHTML = html; icoMenu(sheet); modal.classList.add("on"); }
 function closeModal(){ modal.classList.remove("on"); sheet.innerHTML = ""; }
 modal.addEventListener("click", ev => { if(ev.target === modal) closeModal(); });
 
