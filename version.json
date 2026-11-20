@@ -1,10 +1,10 @@
 {
-  "version": 55,
-  "name": "5.5",
+  "version": 56,
+  "name": "5.6",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "SERIE FEITA sem confusao: a serie registrada mostra um visto verde no lugar do numero, e para apagar ha um botao de lixeira separado. Apagar nao pergunta mais: aparece Desfazer por 7 segundos. Nao precisa instalar APK.",
+  "notes": "NOVO: pular uma serie (link na serie atual, com voltar atras); aviso quando e a primeira vez do exercicio numa unidade, com Desfazer ao registrar; historico separado por unidade (a sua aberta, as outras recolhidas); foto da fachada de cada unidade (Unidades > camera) e atalho para o Google Maps. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

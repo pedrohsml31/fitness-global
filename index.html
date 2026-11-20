@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v5.5</title>
+<title>Fitness Global v5.6</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -220,6 +220,12 @@ input[type=number]{font-variant-numeric:tabular-nums;}
 #app{padding-bottom:150px;}
 body:has(#restbar.on) #app{padding-bottom:260px;}
 .setrow.cur input{border:2px solid var(--accent);}
+.setrow.skipd .skiptxt{grid-column:span 2; text-align:center; color:var(--faint); font-weight:600; text-decoration:line-through; padding:14px 6px; border:1px dashed var(--border); border-radius:14px;}
+.linkbtn{color:var(--muted); text-decoration:underline; font-weight:600; font-size:inherit; padding:2px 0;}
+.firstun{background:color-mix(in srgb, var(--gold) 14%, var(--surface)); border:1px solid color-mix(in srgb, var(--gold) 45%, var(--border)); border-radius:14px; padding:10px 12px; font-size:.86rem; margin:0 0 12px; line-height:1.4;}
+.ustrip{display:flex; gap:12px; align-items:center; margin:0 0 12px;}
+.ustrip img{width:56px; height:56px; border-radius:14px; object-fit:cover; flex:none;}
+details.hunit{margin:0 0 8px;}
 .setrow.cur .ok{background:var(--accent); border-color:var(--accent); color:var(--on-accent);}
 .goalx{margin:4px 0 16px;}
 .goalx .gk{font-size:.82rem; font-weight:600; color:var(--muted);}
@@ -464,8 +470,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "5.5";
-const APP_VERSION = 55;
+const APP_NAME_VERSION = "5.6";
+const APP_VERSION = 56;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1474,6 +1480,12 @@ function unitBarHtml(g){
   return `<div class="seg" role="tablist" aria-label="Unidade onde você está treinando">
     ${us.map(u => `<button class="${u.id===atual?"on":""}" role="tab" aria-selected="${u.id===atual}" data-action="unit-sel" data-gym="${g.id}" data-u="${u.id}">${esc(u.name)}</button>`).join("")}</div>`;
 }
+/* faixa com a foto da fachada da unidade onde você está (se você puser uma foto) */
+function unitStripHtml(gymId){
+  const g = gymById(gymId); const u = (g && g.units || []).find(x => x.id === unitNow(gymId));
+  if(!u || !u.photo) return "";
+  return `<div class="ustrip"><img src="${esc(u.photo)}" alt="Fachada de ${esc(u.name)}" loading="lazy"><div><b>${esc(g.name)} · ${esc(u.name)}</b><div class="sub">Você está treinando aqui</div></div></div>`;
+}
 /* cadastro das unidades */
 function unitsForm(gymId){
   const g = gymById(gymId); if(!g) return;
@@ -1483,12 +1495,16 @@ function unitsForm(gymId){
       Os exercícios continuam sendo os mesmos — só a <b>carga</b> passa a ser contada por unidade,
       e só nos exercícios que você marcar como "a carga muda de unidade para unidade".</p>
     ${us.length ? us.map(u => `<div class="wkrow">
+      ${u.photo ? `<img src="${esc(u.photo)}" alt="" style="width:40px; height:40px; border-radius:10px; object-fit:cover; flex:none">` : ""}
       <span class="wd">${esc(u.name)}</span>
+      <button class="xbtn" data-action="unit-photo" data-gym="${gymId}" data-u="${u.id}" aria-label="${u.photo ? "Trocar" : "Adicionar"} foto da fachada" title="Foto da fachada" style="color:var(--muted)"><svg class="ico" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 100-8 4 4 0 000 8z"/></svg></button>
+      <a class="xbtn" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(g.name + " " + u.name)}" target="_blank" rel="noopener" aria-label="Ver no Google Maps" title="Ver no Google Maps (para tirar um print da fachada)" style="color:var(--muted); display:grid; place-items:center"><svg class="ico" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 10-14 0c0 4.8 7 11 7 11zM12 12a2.5 2.5 0 100-5 2.5 2.5 0 000 5z"/></svg></a>
       <button class="xbtn" data-action="unit-ren" data-gym="${gymId}" data-u="${u.id}" aria-label="Renomear" style="color:var(--muted)">✎</button>
       <button class="xbtn" data-action="unit-del" data-gym="${gymId}" data-u="${u.id}" aria-label="Excluir">✕</button>
     </div>`).join("") : `<div class="empty">Nenhuma unidade ainda.</div>`}
     <div class="field" style="margin-top:12px"><label for="u-new">Nova unidade</label>
       <input id="u-new" placeholder="Ex.: Centro, Shopping, Av. Brasil" maxlength="40"></div>
+    <input type="file" id="u-file" accept="image/*" style="display:none">
     <button class="btn" data-action="unit-add" data-gym="${gymId}">＋ Adicionar unidade</button>
     <button class="btn ghost" data-action="close-modal" style="margin-top:8px">Fechar</button>`);
   setTimeout(()=>{ const i=document.getElementById("u-new"); if(i) i.focus(); }, 60);
@@ -1743,11 +1759,27 @@ function setsListToday(exId, rid){
   return rid ? l.sets.filter(s => !s.rt || s.rt === rid) : l.sets;
 }
 function setsToday(exId, rid){ return setsListToday(exId, rid).length; }
+/* séries que você marcou "essa eu não vou fazer" hoje. Guardado com a data junto: vira o dia e some.
+   Não entram no histórico, no volume nem na progressão; só fecham o exercício do dia. */
+function skipSetsN(exId){
+  const s = (db.settings.skipSet || {})[exId];
+  return (s && s.d === todayStr()) ? s.n : 0;
+}
 function exStateToday(e, rid){
   if(isSkipped(e, rid)) return "skip";
-  const n = setsToday(e.id, rid);
+  const n = setsToday(e.id, rid), sk = skipSetsN(e.id);
   if(n >= e.targetSets) return "done";
+  if(sk && n + sk >= e.targetSets) return n > 0 ? "done" : "skip";
   return n > 0 ? "doing" : "todo";
+}
+/* primeira vez deste exercício NESTA unidade (e já existe registro em outra): vira aviso */
+function primeiraNaUnidade(e, gymId){
+  if(!exPerUnit(e)) return null;
+  const u = unitNow(gymId);
+  const todos = exLogs(e.id);
+  if(!todos.length || todos.some(l => l.u === u)) return null;
+  const ult = todos[todos.length - 1];
+  return {u, ult};
 }
 
 /* ===================== academia em foco =====================
@@ -1975,8 +2007,11 @@ function renderEx(g, e){
   const tlog = todayLog(e.id);
   const done = tlog ? tlog.sets : [];
   const prev = exLogs(e.id).filter(l => l.date !== todayStr()).pop();
-  const totalRows = Math.max(e.targetSets, done.length) + pendingExtra;
+  const puladas = skipSetsN(e.id);
+  const totalRows = Math.max(e.targetSets, done.length + puladas) + pendingExtra;
   const alvoHoje = nextTarget(e);
+  const gAtual = e.gymId || g.id;
+  const prim = primeiraNaUnidade(e, gAtual);
 
   let rows = "";
   for(let i = 0; i < totalRows; i++){
@@ -1987,6 +2022,12 @@ function renderEx(g, e){
         <input class="val" type="number" inputmode="decimal" step="any" min="0" value="${s.weight}" data-edit="w" data-ex="${e.id}" data-i="${i}" aria-label="Editar peso da série ${i+1}">
         <input class="val" type="number" inputmode="numeric" step="1" min="1" value="${s.reps}" data-edit="r" data-ex="${e.id}" data-i="${i}" aria-label="Editar repetições da série ${i+1}">
         <button class="ok del" data-action="del-set" data-ex="${e.id}" data-i="${i}" aria-label="Apagar série ${i+1}" title="Apagar esta série"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
+      </div>`;
+    } else if(i < done.length + puladas){
+      rows += `<div class="setrow skipd">
+        <div class="num">${i+1}</div>
+        <div class="skiptxt">Série pulada</div>
+        <button class="ok" data-action="unskip-set" data-ex="${e.id}" aria-label="Voltar a fazer esta série" title="Voltar a fazer esta série"><svg class="ico" viewBox="0 0 24 24"><path d="M9 7L4 12l5 5M4 12h11a5 5 0 010 10h-3"/></svg></button>
       </div>`;
     } else {
       /* A série pendente vem com o que você FEZ da última vez NESTA MESMA POSIÇÃO — é a
@@ -2024,12 +2065,13 @@ function renderEx(g, e){
       /* peso do corpo: o kg vem do seu último peso registrado (dá para escrever por cima) */
       if(e.bw && !done.length){ const b = lastBodyWeight(); if(b) pw = String(b.kg); }
       else if(e.bw && done.length) pw = String(done[done.length-1].weight);
-      rows += `<div class="setrow${i === done.length ? " cur" : ""}">
+      const eAtual = i === done.length + puladas;
+      rows += `<div class="setrow${eAtual ? " cur" : ""}">
         <div class="num">${i+1}</div>
         <input type="number" inputmode="decimal" step="any" min="0" id="w${i}" value="${pw}" placeholder="kg" aria-label="Peso da série ${i+1}">
         <input type="number" inputmode="numeric" step="1" min="1" id="r${i}" value="${pr}" placeholder="reps" aria-label="Repetições da série ${i+1}">
         <button class="ok" data-action="log-set" data-ex="${e.id}" data-i="${i}" aria-label="Confirmar série ${i+1}"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></button>
-      </div>${dica ? `<div class="setlast">${dica}</div>` : ""}`;
+      </div>${(dica || eAtual) ? `<div class="setlast">${dica}${eAtual ? `${dica ? " · " : ""}<button type="button" class="linkbtn" data-action="skip-set" data-ex="${e.id}">pular esta série</button>` : ""}</div>` : ""}`;
     }
   }
 
@@ -2040,11 +2082,22 @@ function renderEx(g, e){
   if(logs.length){ let m = 0; logs.forEach(l => { const v = bestE1rmOfSets(l.sets); if(v > m * 1.01){ m = Math.max(m, v); prDates.add(l.date); } else if(v > m) m = v; }); }
 
   const temUnidades = gymUnits(e.gymId || g.id).length > 1;
-  const hist = logs.slice(-40).reverse().map(l => `
-    <div class="hist" data-action="hist-edit" data-id="${l.id}" style="cursor:pointer" title="Toque para corrigir ou apagar"><div class="d">${fmtDate(l.date)}${
-      temUnidades && l.u ? ` <span class="pill" style="font-weight:600">📍 ${esc(unitName(e.gymId || g.id, l.u))}</span>` : ""}${
+  const histLinha = (l, pill) => `
+    <div class="hist" data-action="hist-edit" data-id="${l.id}" style="cursor:pointer" title="Toque para corrigir ou apagar"><div class="d">${fmtDate(l.date)}${pill || ""}${
       prDates.has(l.date) ? ' <span class="pill pr">🏆 recorde</span>' : ""}</div>
-    <div class="s">${l.sets.map(s => `${fmtW(s.weight)} kg × ${s.reps}`).join("&ensp;·&ensp;")}</div></div>`).join("");
+    <div class="s">${l.sets.map(s => `${fmtW(s.weight)} kg × ${s.reps}`).join("&ensp;·&ensp;")}</div></div>`;
+  let hist;
+  if(temUnidades && exPerUnit(e)){
+    /* a unidade onde você está vem primeiro e aberta; as outras ficam recolhidas e com o nome */
+    const uAt = unitNow(gAtual);
+    const dessa = logs.filter(l => l.u === uAt), semU = logs.filter(l => !l.u);
+    const blocoUn = (titulo, lista, aberto) => lista.length ? `<details class="evo hunit"${aberto ? " open" : ""}><summary>${titulo} · ${lista.length} sessão${lista.length>1?"ões":""}</summary>${lista.slice(-40).reverse().map(histLinha).join("")}</details>` : "";
+    const outras = gymUnits(gAtual).filter(u => u.id !== uAt).map(u => blocoUn("📍 " + esc(u.name), logs.filter(l => l.u === u.id), false)).join("");
+    hist = (dessa.length ? blocoUn("📍 " + esc(unitName(gAtual, uAt)) + " (aqui)", dessa, true) : `<div class="empty">Nenhuma sessão em ${esc(unitName(gAtual, uAt))} ainda.</div>`)
+      + outras + blocoUn("Sem unidade registrada", semU, false);
+  } else {
+    hist = logs.slice(-40).reverse().map(l => histLinha(l, temUnidades && l.u ? ` <span class="pill" style="font-weight:600">📍 ${esc(unitName(gAtual, l.u))}</span>` : "")).join("");
+  }
 
   view.innerHTML = `
     <div class="topbar">
@@ -2053,8 +2106,12 @@ function renderEx(g, e){
       <button class="iconbtn" data-action="ex-menu" data-gym="${g.id}" data-id="${e.id}" aria-label="Editar / opções"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
     </div>
     ${temUnidades ? unitBarHtml(gymById(e.gymId || g.id) || g) : ""}
+    ${temUnidades ? unitStripHtml(gAtual) : ""}
+    ${prim ? `<div class="firstun" role="status"><b>Primeira vez em ${esc(unitName(gAtual, prim.u))}.</b>
+      ${prim.ult.u ? `Em ${esc(unitName(gAtual, prim.ult.u))} você` : "Antes você"} fez ${prim.ult.sets.map(x => fmtW(x.weight) + " kg × " + x.reps).join(" · ")}.
+      Confira se a unidade está certa antes de registrar.</div>` : ""}
     <div class="exline">
-      <b style="${done.length>=e.targetSets?"color:var(--good)":done.length?"color:var(--gold)":""}">${done.length}/${e.targetSets} séries</b>
+      <b style="${done.length>=e.targetSets?"color:var(--good)":done.length?"color:var(--gold)":""}">${done.length}/${e.targetSets} séries</b>${puladas ? `<span>· ${puladas} pulada${puladas>1?"s":""}</span>` : ""}
       ${e.reps ? `<span>· meta ${esc(e.reps)} reps</span>` : ""}<span>· descanso ${e.restSec}s</span>
       ${typeof e.step === "number" && e.step>0 ? `<span>· +${fmtW(e.step)} kg</span>` : ""}
       ${e.bw ? `<span>· 🧍 peso do corpo</span>` : ""}${e.gymId === null ? `<span>· 🌐 todas as academias</span>` : ""}
@@ -3830,6 +3887,24 @@ O histórico passa para "${exName(para)}" e "${exName(de)}" é removido.`)) retu
     save(); render();
     toast("📍 " + unitName(el.dataset.gym, el.dataset.u));
   }
+  else if(a === "unit-photo"){
+    unitPhotoCtx = {gym: el.dataset.gym, u: el.dataset.u};
+    const f = document.getElementById("u-file"); if(f){ f.value = ""; f.click(); }
+  }
+  else if(a === "skip-set"){
+    const e = exById(el.dataset.ex); if(!e) return;
+    db.settings.skipSet = db.settings.skipSet || {};
+    db.settings.skipSet[e.id] = {d: todayStr(), n: skipSetsN(e.id) + 1};
+    save(); render(); toast("Série pulada — não conta no treino");
+    checkWorkoutDone();
+  }
+  else if(a === "unskip-set"){
+    const e = exById(el.dataset.ex); if(!e) return;
+    const n = skipSetsN(e.id) - 1;
+    db.settings.skipSet = db.settings.skipSet || {};
+    if(n > 0) db.settings.skipSet[e.id] = {d: todayStr(), n}; else delete db.settings.skipSet[e.id];
+    save(); render();
+  }
   else if(a === "unit-add"){
     const g = gymById(el.dataset.gym); if(!g) return;
     const v = (document.getElementById("u-new").value || "").trim();
@@ -4015,6 +4090,7 @@ O histórico passa para "${exName(para)}" e "${exName(de)}" é removido.`)) retu
     const e = exById(exId), cur = route();
     const pr = detectPR(exId, w, r);
     const melhorAntes = bestSession(exId, todayStr());
+    const primeiraAqui = !simMode && primeiraNaUnidade(e, e.gymId || cur.gymId);
     let l = todayLog(exId);
     if(!l){ l = {id:uid(), exerciseId:exId, gymId:cur.gymId, date:todayStr(), sets:[]};
       const uAtual = unitNow(cur.gymId);
@@ -4025,6 +4101,14 @@ O histórico passa para "${exName(para)}" e "${exName(de)}" é removido.`)) retu
     l.sets.push(gymRoutine ? {weight:w, reps:r, rt:gymRoutine} : {weight:w, reps:r});
     if(pendingExtra > 0 && l.sets.length > e.targetSets) pendingExtra--;
     save();
+    if(primeiraAqui){
+      const gId = e.gymId || cur.gymId;
+      toastUndo(`Registrado em ${unitName(gId, primeiraAqui.u)} (1ª vez aqui)`, () => {
+        l.sets.pop();
+        if(!l.sets.length) db.logs = db.logs.filter(x => x.id !== l.id);
+        save(); render();
+      });
+    }
     /* Recorde de FORÇA agora é da sessão inteira, não de uma série solta: só festeja
        quando a média das séries de trabalho de hoje passa a da melhor sessão anterior.
        Confere ao fechar a última série planejada, então dispara uma vez só. */
@@ -4225,7 +4309,7 @@ O histórico passa para "${exName(para)}" e "${exName(de)}" é removido.`)) retu
   else if(a === "reset-treino"){
     if(!confirm("Zerar o TREINO?\n\nApaga academias, exercícios e todas as séries.\nAlimentação, peso e medidas continuam.")) return;
     db.gyms = []; db.exercises = []; db.logs = []; db.sessions = [];
-    db.settings.focus = null; db.settings.doneDay = {}; db.settings.skipToday = {};
+    db.settings.focus = null; db.settings.doneDay = {}; db.settings.skipToday = {}; db.settings.skipSet = {};
     save(); location.hash = ""; render(); toast("Treino zerado");
   }
   else if(a === "reset-food"){
@@ -4267,6 +4351,20 @@ O histórico passa para "${exName(para)}" e "${exName(de)}" é removido.`)) retu
     db.settings.actFrom = v || null; save(); render();
     toast(v ? "Contando atividade de " + fmtDate(v) + " em diante" : "Contando todos os dias de atividade");
   }
+});
+
+/* foto da fachada de uma unidade */
+let unitPhotoCtx = null;
+document.addEventListener("change", ev => {
+  if(!ev.target || ev.target.id !== "u-file" || !unitPhotoCtx) return;
+  const file = ev.target.files && ev.target.files[0]; if(!file) return;
+  const ctx = unitPhotoCtx;
+  photoFromFile(file, 480).then(url => {
+    const g = gymById(ctx.gym), u = g && (g.units || []).find(x => x.id === ctx.u);
+    if(!u) return;
+    u.photo = url; save(); unitsForm(g.id); render();
+    toast(`Foto de ${u.name} salva ✓`);
+  }).catch(e => toast((e && e.message) || "Não deu para usar essa foto."));
 });
 
 /* foto escolhida no seletor de arquivo do celular */
