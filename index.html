@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v5.6</title>
+<title>Fitness Global v5.7</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -470,8 +470,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "5.6";
-const APP_VERSION = 56;
+const APP_NAME_VERSION = "5.7";
+const APP_VERSION = 57;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1092,7 +1092,8 @@ function focusBarHtml(g, rid){
           st.pulados ? ` · ${st.pulados} pulado${st.pulados === 1 ? "" : "s"}` : ""}${
           st.faltam ? ` · faltam ${st.faltam}` : ""} · ${st.series} série${st.series === 1 ? "" : "s"}</div></div>
       ${pronto ? `<button class="btn ghost sm" data-action="wk-resumo" style="width:auto; flex:none">Ver resumo</button>` : ""}
-    </div></div>`;
+    </div>
+    <button type="button" class="linkbtn" data-action="wk-cancel" style="margin-top:8px; color:var(--bad)">Cancelar este treino</button></div>`;
 }
 
 /* ---- histórico de treinos concluídos ---- */
@@ -3536,7 +3537,7 @@ const Sync = {
 /* ===================== toast ===================== */
 let toastT = null;
 /* aviso com botão Desfazer: apagar não pede mais confirmação, só dá 7 s para voltar atrás */
-function toastUndo(msg, undo){
+function toastUndo(msg, undo, ms){
   const t = document.getElementById("toast");
   t.innerHTML = `<span></span> <button type="button" style="margin-left:10px; font-weight:800; color:var(--accent); text-decoration:underline">Desfazer</button>`;
   t.firstChild.textContent = msg;
@@ -3544,7 +3545,7 @@ function toastUndo(msg, undo){
   t.querySelector("button").onclick = () => { clearTimeout(toastT); t.classList.remove("on"); t.style.pointerEvents = ""; undo(); };
   t.classList.add("on");
   clearTimeout(toastT);
-  toastT = setTimeout(() => { t.classList.remove("on"); t.style.pointerEvents = ""; }, 7000);
+  toastT = setTimeout(() => { t.classList.remove("on"); t.style.pointerEvents = ""; }, ms || 7000);
 }
 function toast(msg){
   const t = document.getElementById("toast");
@@ -3890,6 +3891,47 @@ O histórico passa para "${exName(para)}" e "${exName(de)}" é removido.`)) retu
   else if(a === "unit-photo"){
     unitPhotoCtx = {gym: el.dataset.gym, u: el.dataset.u};
     const f = document.getElementById("u-file"); if(f){ f.value = ""; f.click(); }
+  }
+  else if(a === "wk-cancel"){
+    const f = focusToday(); if(!f) return;
+    const L = focusList(f); if(!L) return;
+    const rid = f.rt || "";
+    if(!confirm(`Cancelar o treino de hoje${L.r ? " (" + L.r.name + ")" : ""}?
+
+As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá para voltar atrás por alguns segundos.`)) return;
+    const snap = {logs: [], skipToday: {}, skipSet: {}, focus: db.settings.focus, doneDay: Object.assign({}, db.settings.doneDay || {}), sessions: []};
+    L.exs.forEach(e => {
+      const l = todayLog(e.id);
+      if(l){
+        const antes = JSON.parse(JSON.stringify(l.sets));
+        const resto = l.sets.filter(x => rid && x.rt && x.rt !== rid);      // série de OUTRO treino fica
+        const tirou = l.sets.length - resto.length;
+        if(tirou){
+          snap.logs.push({l, antes, removido: !resto.length});
+          l.sets = resto;
+          if(!resto.length){ if(simMode) simLogs = simLogs.filter(x => x.id !== l.id); else db.logs = db.logs.filter(x => x.id !== l.id); }
+        }
+      }
+      const k = skipKey(e, rid), sk = db.settings.skipToday || {};
+      if(sk[k] !== undefined){ snap.skipToday[k] = sk[k]; delete sk[k]; }
+      const ss = (db.settings.skipSet || {})[e.id];
+      if(ss){ snap.skipSet[e.id] = ss; delete db.settings.skipSet[e.id]; }
+    });
+    const kd = f.gym + "|" + rid;
+    if((db.settings.doneDay || {})[kd]) delete db.settings.doneDay[kd];
+    db.sessions = db.sessions || [];
+    snap.sessions = db.sessions.filter(x => x.date === todayStr() && x.gym === f.gym && (x.rt || "") === rid);
+    db.sessions = db.sessions.filter(x => !snap.sessions.includes(x));
+    db.settings.focus = null;
+    save(); render();
+    toastUndo("Treino cancelado", () => {
+      snap.logs.forEach(x => { x.l.sets = x.antes; if(x.removido){ if(simMode) simLogs.push(x.l); else db.logs.push(x.l); } });
+      db.settings.skipToday = Object.assign(db.settings.skipToday || {}, snap.skipToday);
+      db.settings.skipSet = Object.assign(db.settings.skipSet || {}, snap.skipSet);
+      db.settings.focus = snap.focus; db.settings.doneDay = snap.doneDay;
+      db.sessions = (db.sessions || []).concat(snap.sessions);
+      save(); render();
+    }, 12000);
   }
   else if(a === "skip-set"){
     const e = exById(el.dataset.ex); if(!e) return;

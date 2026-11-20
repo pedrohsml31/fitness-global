@@ -1,10 +1,10 @@
 {
-  "version": 56,
-  "name": "5.6",
+  "version": 57,
+  "name": "5.7",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "NOVO: pular uma serie (link na serie atual, com voltar atras); aviso quando e a primeira vez do exercicio numa unidade, com Desfazer ao registrar; historico separado por unidade (a sua aberta, as outras recolhidas); foto da fachada de cada unidade (Unidades > camera) e atalho para o Google Maps. Nao precisa instalar APK.",
+  "notes": "NOVO: Cancelar este treino (faixa do treino de hoje na tela da academia): desfaz as series e marcas de hoje daquele treino, com Desfazer por 12 segundos. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
