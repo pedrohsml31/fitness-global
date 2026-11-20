@@ -3,6 +3,7 @@
 - Objetivo: Fitness instalável e com backup. Feito: backup copia os `fitness-global-*.json` exportados; código no GitHub (Pages).
 - Próximo passo: decidir a assinatura do APK (o APK atual usa outra chave que não a `pedro.keystore`) e publicar em `pedrohsml31/apks`.
 ## Pendências
+- (20/11, pedido) Busca de exercício inteligente (academia e Biblioteca): local tolerante + IA (Gemini) como reforço quando não achar.
 - (20/11, pedido) Marcar que NÃO vou fazer uma série de um exercício (por série, não o exercício inteiro).
 - (20/11, pedido) Cancelar o treino em curso (descartar o que foi marcado hoje naquele treino).
 - (20/11, pedido) Histórico do exercício separado por unidade: na filial atual em destaque, outras unidades em bloco à parte e rotulado; foto da fachada de cada filial (decidir como obter a foto).
