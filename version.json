@@ -1,10 +1,10 @@
 {
-  "version": 54,
-  "name": "5.4",
+  "version": 55,
+  "name": "5.5",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "CORRECAO: exercicios que voce marcou como feitos na aba Todos (ou na visao por grupo) nao aparecem mais desmarcados ao abrir um treino A/B/C. Nao precisa instalar APK.",
+  "notes": "SERIE FEITA sem confusao: a serie registrada mostra um visto verde no lugar do numero, e para apagar ha um botao de lixeira separado. Apagar nao pergunta mais: aparece Desfazer por 7 segundos. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
