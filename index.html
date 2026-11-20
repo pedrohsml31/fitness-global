@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v4.4</title>
+<title>Fitness Global v4.5</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -410,8 +410,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "4.4";
-const APP_VERSION = 44;
+const APP_NAME_VERSION = "4.5";
+const APP_VERSION = 45;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -939,6 +939,7 @@ function renderHome(){
     <div class="section"><h2>Minhas academias ${Sync.badge()}</h2>
       ${cards || `<div class="empty">Nenhuma academia ainda.<br>Registre a primeira para começar a treinar.</div>`}
       <button class="btn" data-action="add-gym">＋ Registrar academia</button>
+      ${db.gyms.length > 1 ? `<button class="btn ghost" data-action="merge-home" style="margin-top:8px">🔀 Unir academias numa só (unidades)</button>` : ""}
     </div>
     ${sessionsHtml()}
     ${glob ? `<p class="sub" style="margin-top:12px">🌐 Você tem ${glob} ${glob===1?"exercício global":"exercícios globais"} — ${glob===1?"aparece":"aparecem"} em todas as academias.</p>` : ""}
@@ -1408,7 +1409,10 @@ function migrateGroups42(){
    com a unidade), treinos com o mesmo nome se unem. Nada é apagado; antes de mexer o app
    guarda uma cópia e dá para desfazer. */
 const LS_ANTES = "fitglobal.antes-juntar";
-function exKeys(e){ return [e.name, e.namePt, e.nameEn].filter(Boolean).map(norm); }
+const PALAVRAS_VAZIAS = new Set(["na","no","nas","nos","de","da","do","das","dos","em","a","o","as","os","com","para","e"]);
+function exKeys(e){
+  return [e.name, e.namePt, e.nameEn].filter(Boolean).map(n => norm(n).split(" ").filter(w => w && !PALAVRAS_VAZIAS.has(w)).join(" "));
+}
 /* "Smart Fit Centro" dentro de "Smart Fit" -> "Centro" */
 function sugereUnidade(mainName, nome){
   const m = norm(mainName).replace(/\s/g, ""), b = nome.trim().split(/\s+/);
@@ -3430,6 +3434,32 @@ document.addEventListener("click", ev => {
   }
   else if(a === "rename-gym") gymForm(gymById(el.dataset.id));
   else if(a === "merge-open") mergeForm(el.dataset.id);
+  else if(a === "merge-home"){
+    const main = db.gyms.slice().sort((x, y) => (gymUnits(y.id).length - gymUnits(x.id).length) || (gymExercises(y.id).length - gymExercises(x.id).length))[0];
+    mergeForm(main.id);
+  }
+  else if(a === "ex-join"){
+    const e = exById(el.dataset.id); if(!e) return;
+    const gymId = el.dataset.gym;
+    const alvos = gymExercises(gymId).filter(x => x.id !== e.id);
+    openModal(`<h2>🔗 Unir "${esc(exName(e))}" a outro exercício</h2>
+      <p class="sub" style="margin-bottom:10px">Para quando é o <b>mesmo exercício</b> cadastrado com dois nomes. O histórico deste passa para o que você escolher, e este deixa de existir.</p>
+      ${alvos.map(x => `<button class="menuitem" data-action="ex-join-do" data-from="${e.id}" data-to="${x.id}"><span class="mi">→</span> ${esc(exName(x))}</button>`).join("") || '<div class="empty">Não há outro exercício.</div>'}
+      <button class="btn ghost" data-action="close-modal" style="margin-top:8px">Cancelar</button>`);
+  }
+  else if(a === "ex-join-do"){
+    const de = exById(el.dataset.from), para = exById(el.dataset.to); if(!de || !para) return;
+    if(!confirm(`Unir "${exName(de)}" em "${exName(para)}"?
+
+O histórico passa para "${exName(para)}" e "${exName(de)}" é removido.`)) return;
+    try{ localStorage.setItem(LS_ANTES, JSON.stringify(db)); }catch(x){}
+    db.logs.forEach(l => { if(l.exerciseId === de.id) l.exerciseId = para.id; });
+    ["grp","photo","step","reps","notes","namePt","nameEn"].forEach(k => { if(!para[k] && de[k]) para[k] = de[k]; });
+    para.perUnit = true;
+    (db.routines || []).forEach(r => { r.exIds = (r.exIds || []).map(x => x === de.id ? para.id : x).filter((x, i, a2) => a2.indexOf(x) === i); });
+    db.exercises = db.exercises.filter(x => x.id !== de.id);
+    save(); closeModal(); render(); toast("🔗 Exercícios unidos");
+  }
   else if(a === "auto-groups"){
     const n = autoGroups(); const sem = db.exercises.filter(e => !e.grp).length;
     closeModal(); render();
@@ -3681,6 +3711,7 @@ document.addEventListener("click", ev => {
     const others = db.gyms.filter(g => g.id !== gymId);
     openModal(`<h2>${esc(exName(e))}</h2>
       <button class="menuitem" data-action="edit-ex" data-gym="${gymId}" data-id="${e.id}"><span class="mi">✏️</span> Editar (nome, séries, descanso, global)</button>
+      <button class="menuitem" data-action="ex-join" data-gym="${gymId}" data-id="${e.id}"><span class="mi">🔗</span> Unir a outro exercício (mesmo exercício, outro nome)…</button>
       ${others.length ? `<button class="menuitem" data-action="copy-ex" data-id="${e.id}"><span class="mi">📋</span> Copiar para outra academia…</button>` : ""}
       <button class="menuitem" data-action="toggle-global" data-gym="${gymId}" data-id="${e.id}"><span class="mi">🌐</span> ${e.gymId === null ? "Tornar exclusivo desta academia" : "Tornar global (todas as academias)"}</button>
       <button class="menuitem bad" data-action="delete-ex" data-gym="${gymId}" data-id="${e.id}"><span class="mi">🗑</span> Excluir exercício</button>`);
