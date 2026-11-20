@@ -1,10 +1,10 @@
 {
-  "version": 60,
-  "name": "6.0",
+  "version": 61,
+  "name": "6.1",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "TELA DA ACADEMIA (etapa 3 do visual): cada exercicio mostra a carga da unidade onde voce esta, os menus ganharam icones desenhados no lugar dos emojis e a busca ficou igual a da Biblioteca. Nao precisa instalar APK.",
+  "notes": "VISUAL (etapa 4): Comida e Evolucao no mesmo estilo (titulos grandes, icones desenhados no lugar de emojis nos botoes e abas). Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

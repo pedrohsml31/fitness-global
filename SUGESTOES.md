@@ -1,5 +1,6 @@
 - 20/11, Claude Code: botão para juntar todas as academias de uma vez e escolher, exercício a exercício, em quais unidades ele existe.
 - 20/11, Claude Code: ao criar exercício novo, sugerir o grupo muscular pelo nome já no formulário.
-- 20/11, Claude Code: trocar emojis restantes dos menus por ícones desenhados (aprovada).
 - 20/11, Claude Code: recolorir o ícone do app para grafite + verde-limão (aprovada; precisa APK).
-- 20/11, Claude Code: mostrar na tela da academia a carga da unidade atual de cada exercício (aprovada).
+- 20/11, Claude Code: mostrar na lista da academia o progresso do treino de hoje (séries/meta) em cada linha.
+- 20/11, Claude Code: selo de recorde no exercício quando bater a maior carga já registrada.
+- 20/11, Claude Code: teste automático de regras de grupo muscular com os nomes mais comuns.
