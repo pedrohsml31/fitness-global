@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v5.2</title>
+<title>Fitness Global v5.3</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -463,8 +463,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "5.2";
-const APP_VERSION = 52;
+const APP_NAME_VERSION = "5.3";
+const APP_VERSION = 53;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1498,9 +1498,9 @@ function unitsForm(gymId){
    por grupo. Aqui o app deduz pelo NOME (português ou inglês) só quando bate sem dúvida;
    o que não reconhecer fica "sem grupo" para você escolher. Nunca troca um grupo já definido. */
 const GRP_REGRAS = [
+  ["Antebraço", /antebraco|punho|wrist|forearm|reverse curl|rosca inversa|rosca reversa|farmer/],
   ["Ombro", /reverse|inverso|invertid|rear delt|ombro|deltoid|lateral|face pull|reverse fly|voador inverso|crucifixo inverso|desenvolvimento|shoulder|militar|arnold|elevacao frontal|front raise|upright|delt/],
   ["Panturrilha", /panturrilha|calf|gemeos|soleo/],
-  ["Antebraço", /antebraco|punho|wrist|forearm|reverse curl|rosca inversa/],
   ["Abdômen", /abdom|crunch|prancha|plank|sit up|situp|leg raise|infra|core|obliquo|oblique|ab wheel|roda abdominal/],
   ["Posterior", /flexora|leg curl|stiff|romanian|romeno|hamstring|good morning|bom dia/],
   ["Glúteo", /glute|gluteo|hip thrust|pelvica|coice|kickback|abdutora/],
@@ -1517,7 +1517,7 @@ function inferGrp(e){
 }
 /* Versão das regras. Exercícios cujo grupo foi DEDUZIDO pelo app (e.grpAuto) são reavaliados
    sozinhos quando as regras melhoram; o que você escolheu na mão nunca é tocado. */
-const GRP_REGRAS_V = 2;
+const GRP_REGRAS_V = 3;
 function autoGroups(){
   let n = 0;
   db.exercises.forEach(e => {
