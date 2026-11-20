@@ -1,10 +1,10 @@
 {
-  "version": 50,
-  "name": "5.0",
+  "version": 51,
+  "name": "5.1",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "AJUSTES E FORMULARIO MAIS ENXUTOS: Ajustes agora tem cada secao recolhida (toque para abrir, e ela continua aberta enquanto voce mexe); o formulario de exercicio mostra so Nome, Series, Reps e Descanso, com Foto e Avancado (grupo, degrau, observacoes, peso do corpo, global) recolhidos. Nao precisa instalar APK.",
+  "notes": "NOVO VISUAL (etapa 1): fundo grafite com destaque verde-limao, fontes novas (numeros grandes), abas de baixo com icones desenhados: Treino, Biblioteca, Comida e Evolucao. A tela Treino agora abre com o treino de hoje e um botao Continuar para o proximo exercicio; academias e ultimos treinos abaixo. Nova aba Biblioteca com todos os exercicios por grupo, busca e a ultima carga de cada unidade. Melhorias e Ajustes ficam no menu de tres pontinhos da tela Treino. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
