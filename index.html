@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v4.5</title>
+<title>Fitness Global v4.6</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -410,8 +410,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "4.5";
-const APP_VERSION = 45;
+const APP_NAME_VERSION = "4.6";
+const APP_VERSION = 46;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -885,6 +885,7 @@ function render(){
      rolagem — antes a tela "subia" a cada toque */
   const key = location.hash || "#/";
   const keepY = key === _lastScrollKey ? window.scrollY : 0;
+  if(r.name !== "gym") gymQuery = "";
   if(r.name === "gym"){ const g = gymById(r.gymId); if(!g){ location.hash = ""; return; } renderGym(g); }
   else if(r.name === "ex"){
     const e = exById(r.exId), g = gymById(r.gymId);
@@ -1373,7 +1374,7 @@ function unitsForm(gymId){
    por grupo. Aqui o app deduz pelo NOME (português ou inglês) só quando bate sem dúvida;
    o que não reconhecer fica "sem grupo" para você escolher. Nunca troca um grupo já definido. */
 const GRP_REGRAS = [
-  ["Ombro", /ombro|deltoid|lateral|face pull|reverse fly|voador inverso|crucifixo inverso|desenvolvimento|shoulder|militar|arnold|elevacao frontal|front raise|upright/],
+  ["Ombro", /reverse|inverso|invertid|rear delt|ombro|deltoid|lateral|face pull|reverse fly|voador inverso|crucifixo inverso|desenvolvimento|shoulder|militar|arnold|elevacao frontal|front raise|upright/],
   ["Panturrilha", /panturrilha|calf|gemeos|soleo/],
   ["Antebraço", /antebraco|wrist|forearm|reverse curl|rosca inversa/],
   ["Abdômen", /abdom|crunch|prancha|plank|sit up|situp|leg raise|infra/],
@@ -1524,8 +1525,9 @@ function mergeGyms(mainId, mainUnitName, itens){
    Tenta o compartilhar do Android com o arquivo; se não der, copia o texto. */
 async function exportBackup(semFotos){
   const o = JSON.parse(JSON.stringify(db));
-  if(semFotos){ (o.exercises || []).forEach(e => { if(e.photo && String(e.photo).slice(0,5) === "data:") e.photo = ""; }); delete o.settings.sync; }
-  const txt = JSON.stringify(o, null, semFotos ? 0 : 1);
+  const compartilhaArquivo = !semFotos && navigator.canShare && navigator.canShare({files:[new File(["{}"], "a.json", {type:"application/json"})]});
+  if(semFotos || !compartilhaArquivo){ (o.exercises || []).forEach(e => { if(e.photo && String(e.photo).slice(0,5) === "data:") e.photo = ""; }); delete o.settings.sync; }
+  const txt = JSON.stringify(o, null, (semFotos || !compartilhaArquivo) ? 0 : 1);
   const nome = "fitness-global-" + todayStr() + ".json";
   if(!semFotos){
     try{
@@ -1533,7 +1535,7 @@ async function exportBackup(semFotos){
       if(navigator.canShare && navigator.canShare({files:[f]})){ await navigator.share({files:[f], title:nome}); toast("Backup enviado ✓"); return; }
     }catch(e){ if(e && e.name === "AbortError") return; }
   }
-  if(!semFotos){
+  if(!semFotos && compartilhaArquivo){
     try{
       const u = URL.createObjectURL(new Blob([txt], {type:"application/json"}));
       const aEl = document.createElement("a"); aEl.href = u; aEl.download = nome; aEl.click(); URL.revokeObjectURL(u);
@@ -1662,7 +1664,22 @@ function workoutDoneForm(st){
     <button class="btn" data-action="close-modal">Boraa! 💪</button>`);
 }
 
+let gymQuery = "";
+/* busca por nome: só esconde/mostra os cartões já na tela (não redesenha, para o teclado não fechar) */
+function filterGymList(){
+  const q = norm(gymQuery);
+  const cards = [...document.querySelectorAll('#view [data-action="open-ex"]')];
+  cards.forEach(c => {
+    const e = exById(c.dataset.id);
+    const t = e ? norm([exName(e), e.name, e.namePt, e.nameEn, e.grp].filter(Boolean).join(" ")) : "";
+    c.style.display = (!q || q.split(" ").every(w => t.includes(w))) ? "" : "none";
+  });
+  document.querySelectorAll("#view .grp-title").forEach(h => { h.style.display = q ? "none" : ""; });
+  const vazio = document.getElementById("gq-vazio");
+  if(vazio) vazio.style.display = (q && cards.length && !cards.some(c => c.style.display !== "none")) ? "" : "none";
+}
 function renderGym(g){
+  setTimeout(filterGymList, 0);
   const rts = gymRoutines(g.id);
   if(gymRoutine && !routineById(gymRoutine)) gymRoutine = "";      // rotina apagada
   const rAtiva = gymRoutine ? routineById(gymRoutine) : null;
@@ -1709,7 +1726,7 @@ function renderGym(g){
     const porGrupo = {};
     exs.forEach((e, i) => { const k = grpOf(e) || "Sem grupo"; (porGrupo[k] = porGrupo[k] || []).push(items[i]); });
     const ordem = GRUPOS.filter(k => porGrupo[k]).concat(porGrupo["Sem grupo"] ? ["Sem grupo"] : []);
-    itemsHtml = ordem.map(k => `<div class="sub" style="margin:12px 0 6px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; font-size:.7rem">${esc(k)} · ${porGrupo[k].length}</div>${porGrupo[k].join("")}`).join("");
+    itemsHtml = ordem.map(k => `<div class="sub grp-title" style="margin:12px 0 6px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; font-size:.7rem">${esc(k)} · ${porGrupo[k].length}</div>${porGrupo[k].join("")}`).join("");
   }
   const canReorder = exs.length > 1;
   view.innerHTML = `
@@ -1730,6 +1747,7 @@ function renderGym(g){
       ${exLangPill()}
       <button class="pill${db.settings.groupView?" on":""}" data-action="group-view" style="cursor:pointer" title="Mostrar os exercícios separados por grupo muscular">🧩 por grupo</button>
     </div>`}
+    ${reorderMode ? "" : `<div class="field" style="margin:0 0 10px"><input id="gq" type="search" inputmode="search" placeholder="🔍 Buscar exercício pelo nome ou grupo…" value="${esc(gymQuery)}" autocomplete="off" aria-label="Buscar exercício"></div>`}
     ${reorderMode ? "" : focusBarHtml(g, rid)}
     ${(() => { if(reorderMode) return "";
       /* quantos ainda estão em aberto: é o que o botão de encerrar vai riscar de uma vez */
@@ -1741,6 +1759,7 @@ function renderGym(g){
     })()}
     ${(!reorderMode && exs.some(e=>e.photo && e.photo.slice(0,5) !== "data:")) ? `<button class="btn ghost sm" data-action="dl-photos" data-gym="${g.id}" data-rt="${rid}" style="margin-bottom:10px">📥 Salvar as fotos no app (funcionar sem internet)</button>` : ""}
     <div class="section"><h2>${(!reorderMode && canReorder) ? `<button class="xbtn" data-action="reorder-on" title="Mudar a ordem dos exercícios${rAtiva?" deste treino":""}" style="float:right; color:var(--accent)">⇅ ordem</button>` : ""}${rAtiva ? esc(rAtiva.name) : "Exercícios"}${rAtiva&&rAtiva.src?` <span class="pill">por ${esc(rAtiva.src)}</span>`:""}${rAtiva?` <button class="xbtn" data-action="rt-menu" data-id="${rAtiva.id}" aria-label="Opções do treino" style="vertical-align:middle">⋮</button>`:""}</h2>
+      <div id="gq-vazio" class="empty" style="display:none">Nenhum exercício com esse nome.</div>
       ${itemsHtml || `<div class="empty">${rAtiva
         ? "Este treino ainda não tem exercício.<br>Toque em <b>Escolher exercícios</b> abaixo."
         : "Nenhum exercício nesta academia ainda."}</div>`}
@@ -5226,6 +5245,9 @@ function aiPrefetch(q){
     try{ const r = await aiBest(q); aiExCacheSet(q, r); }catch(e){}
   }, 800);
 }
+document.addEventListener("input", ev => {
+  if(ev.target && ev.target.id === "gq"){ gymQuery = ev.target.value; filterGymList(); }
+});
 sheet.addEventListener("input", ev => {
   if(ev.target && ev.target.id === "f-name") aiPrefetch(ev.target.value);
 });
@@ -6729,6 +6751,10 @@ migratePlan12();
 migrateGroups40();
 migrateGroups42();
 migrateRedes42();
+if(!db.settings.migGrp46){
+  db.exercises.forEach(e => { if(e.grp === "Peito" && /reverse|inverso|invertid|rear delt/.test(norm([e.name,e.namePt,e.nameEn].filter(Boolean).join(" ")))) e.grp = "Ombro"; });
+  db.settings.migGrp46 = true; save(false);
+}
 migrateNotes30();
 migrateWalk19();
 if(macrosOn()) loadTaco().then(render);

@@ -1,10 +1,10 @@
 {
-  "version": 45,
-  "name": "4.5",
+  "version": 46,
+  "name": "4.6",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "UNIR ACADEMIAS: botao na tela inicial para unir as academias numa so (Smartfit), cada uma vira unidade; exercicios com nomes quase iguais (Supino Maquina / Supino na maquina) viram um so. Novo no menu do exercicio: Unir a outro exercicio. Nao precisa instalar APK.",
+  "notes": "BUSCA: campo de busca na tela da academia, por nome ou grupo. GRUPO: reverse fly e semelhantes passam para Ombro. EXPORTAR: quando o celular nao compartilha arquivo, o texto copiado vai sem as fotos (leve). Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
