@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v4.6</title>
+<title>Fitness Global v4.7</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -384,7 +384,7 @@ input[type=range]{accent-color:var(--accent);}
   <button data-action="tab" data-t="treino"><span class="ic">🏋️</span>Treino</button>
   <button data-action="tab" data-t="food"><span class="ic">🍽️</span>Alimentação</button>
   <button data-action="tab" data-t="progress"><span class="ic">📊</span>Evolução</button>
-  <button data-action="tab" data-t="ideas"><span class="ic">💡</span>Ideias</button>
+  <button data-action="tab" data-t="ideas"><span class="ic">💡</span>Melhorias</button>
 </nav>
 
 <div id="modal"><div class="sheet" id="sheet"></div></div>
@@ -410,8 +410,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "4.6";
-const APP_VERSION = 46;
+const APP_NAME_VERSION = "4.7";
+const APP_VERSION = 47;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1019,7 +1019,7 @@ function renderIdeas(){
   const mostra = ideasVerFeitas ? todas : abertas;
   view.innerHTML = `
     <div class="topbar">
-      <h1>💡 Ideias</h1>
+      <h1>💡 Melhorias</h1>
       <span class="pill">${abertas.length} em aberto</span>
       <button class="iconbtn" data-action="go" data-h="#/settings" aria-label="Ajustes">⚙️</button>
     </div>
@@ -1031,6 +1031,10 @@ function renderIdeas(){
           <div class="sub" style="margin-top:4px; font-size:.76rem">Uma ideia por linha — dá para colar várias de uma vez.</div>
         </div>
         <button class="btn" data-action="idea-add">＋ Anotar</button>
+        <div style="display:flex; gap:8px; margin-top:8px">
+          <button class="btn ghost sm" data-action="idea-flow" style="flex:1">📤 Enviar ao Flow</button>
+          <button class="btn ghost sm" data-action="idea-copy" style="flex:1">📋 Copiar tudo</button>
+        </div>
       </div>
     </div>
 
@@ -1374,15 +1378,15 @@ function unitsForm(gymId){
    por grupo. Aqui o app deduz pelo NOME (português ou inglês) só quando bate sem dúvida;
    o que não reconhecer fica "sem grupo" para você escolher. Nunca troca um grupo já definido. */
 const GRP_REGRAS = [
-  ["Ombro", /reverse|inverso|invertid|rear delt|ombro|deltoid|lateral|face pull|reverse fly|voador inverso|crucifixo inverso|desenvolvimento|shoulder|militar|arnold|elevacao frontal|front raise|upright/],
+  ["Ombro", /reverse|inverso|invertid|rear delt|ombro|deltoid|lateral|face pull|reverse fly|voador inverso|crucifixo inverso|desenvolvimento|shoulder|militar|arnold|elevacao frontal|front raise|upright|delt/],
   ["Panturrilha", /panturrilha|calf|gemeos|soleo/],
-  ["Antebraço", /antebraco|wrist|forearm|reverse curl|rosca inversa/],
-  ["Abdômen", /abdom|crunch|prancha|plank|sit up|situp|leg raise|infra/],
+  ["Antebraço", /antebraco|punho|wrist|forearm|reverse curl|rosca inversa/],
+  ["Abdômen", /abdom|crunch|prancha|plank|sit up|situp|leg raise|infra|core|obliquo|oblique|ab wheel|roda abdominal/],
   ["Posterior", /flexora|leg curl|stiff|romanian|romeno|hamstring|good morning|bom dia/],
   ["Glúteo", /glute|gluteo|hip thrust|pelvica|coice|kickback|abdutora/],
   ["Tríceps", /triceps|pushdown|frances|skull|tricep|mergulho|\bdip\b/],
   ["Bíceps", /biceps|rosca|curl|martelo|hammer|scott/],
-  ["Quadríceps", /extensora|leg press|hack|agachamento|squat|pendulum|afundo|lunge|passada|sissy|quadriceps/],
+  ["Quadríceps", /extensora|leg press|hack|agachamento|squat|pendulum|afundo|lunge|passada|sissy|quadriceps|leg extension|knee extension|cadeira extensora|step up|smith squat/],
   ["Costas", /puxada|pulldown|pull down|remada|\brow\b|barra fixa|pull up|pullup|chin up|serrote|costas|\blat\b/],
   ["Peito", /supino|bench|chest|peito|crucifixo|\bfly\b|pec deck|peck|flexao|push up|pushup|cross ?over|voador/]
 ];
@@ -1391,16 +1395,61 @@ function inferGrp(e){
   for(const [g, re] of GRP_REGRAS) if(re.test(t)) return g;
   return "";
 }
+/* Versão das regras. Exercícios cujo grupo foi DEDUZIDO pelo app (e.grpAuto) são reavaliados
+   sozinhos quando as regras melhoram; o que você escolheu na mão nunca é tocado. */
+const GRP_REGRAS_V = 2;
 function autoGroups(){
   let n = 0;
-  db.exercises.forEach(e => { if(e.grp) return; const g = inferGrp(e); if(g){ e.grp = g; n++; } });
+  db.exercises.forEach(e => {
+    if(e.grp && !e.grpAuto) return;                       // escolha sua: intocável
+    const g = inferGrp(e);
+    if(g && g !== e.grp){ e.grp = g; e.grpAuto = true; n++; }
+    else if(g && !e.grpAuto){ e.grpAuto = true; }
+  });
   if(n) save();
   return n;
 }
+/* IA (Gemini, se houver chave): só para o que as regras não reconheceram */
+async function aiGrupo(nome){
+  if(!geminiKey()) return "";
+  const model = db.settings.aiModel || (await aiConnect()).modelo;
+  const j = await geminiFetch("/models/" + encodeURIComponent(model) + ":generateContent", {
+    method:"POST",
+    body: JSON.stringify({
+      contents:[{parts:[{text:`Exercício de musculação: "${nome}". Qual é o grupo muscular PRINCIPAL trabalhado? Responda com um dos valores permitidos, ou "" se não for possível saber.`}]}],
+      generationConfig:{temperature:0, responseMimeType:"application/json",
+        responseSchema:{type:"OBJECT", properties:{grupo:{type:"STRING", enum:GRUPOS.concat([""])}}, required:["grupo"]}}
+    })
+  });
+  const parts = (((j.candidates||[])[0]||{}).content||{}).parts;
+  try{ const d = JSON.parse(parts[0].text); return GRUPOS.includes(d.grupo) ? d.grupo : ""; }catch(e){ return ""; }
+}
+let _grpBusy = false;
+async function classifyPending(){
+  if(_grpBusy || !geminiKey()) return;
+  const sem = db.exercises.filter(e => !e.grp && !e.grpTried);
+  if(!sem.length) return;
+  _grpBusy = true;
+  try{
+    let n = 0;
+    for(const e of sem.slice(0, 15)){
+      try{
+        const g = await aiGrupo([e.nameEn, e.namePt, e.name].filter(Boolean)[0]);
+        e.grpTried = true;
+        if(g){ e.grp = g; e.grpAuto = true; n++; }
+      }catch(x){ break; }
+    }
+    if(n){ save(); render(); }
+  } finally { _grpBusy = false; }
+}
 function migrateGroups42(){
-  if(db.settings.migGrp42) return;
+  if(db.settings.migGrp42 && db.settings.grpRulesV === GRP_REGRAS_V) return;
+  if(db.settings.grpRulesV === undefined){
+    /* o que já tem grupo e bate com as regras foi (muito provavelmente) deduzido: passa a ser reavaliável */
+    db.exercises.forEach(e => { if(e.grp && inferGrp(e) === e.grp) e.grpAuto = true; });
+  }
   autoGroups();
-  db.settings.migGrp42 = true; save(false);
+  db.settings.migGrp42 = true; db.settings.grpRulesV = GRP_REGRAS_V; save(false);
 }
 
 /* ---------- juntar academias numa rede com unidades ----------
@@ -3373,6 +3422,17 @@ document.addEventListener("click", ev => {
     toast(exLang() === "en" ? "Nomes em inglês 🌐" : "Nomes em português 🌐");
   }
   else if(a === "sessions-all"){ sessionsAll = !sessionsAll; render(); }
+  else if(a === "idea-flow" || a === "idea-copy"){
+    const lista = ideaList().filter(i => !i.done).map(i => "[Fitness Global] " + i.t);
+    if(!lista.length){ toast("Nenhuma melhoria em aberto."); return; }
+    const txt = lista.join("\n");
+    (async () => {
+      if(a === "idea-flow" && navigator.share){
+        try{ await navigator.share({text: txt}); toast("Enviado ✓ — escolha o Flow"); return; }catch(e){ if(e && e.name === "AbortError") return; }
+      }
+      toast(await copyText(txt) ? "📋 Copiado — cole no Flow" : "Não consegui copiar.");
+    })();
+  }
   else if(a === "idea-add"){
     const t = document.getElementById("idea-new");
     const q = addIdeas(t ? t.value : "");
@@ -3697,7 +3757,11 @@ O histórico passa para "${exName(para)}" e "${exName(de)}" é removido.`)) retu
     const sets = Math.max(1, parseInt(document.getElementById("f-sets").value, 10) || 3);
     const restS = Math.max(5, parseInt(document.getElementById("f-rest").value, 10) || 90);
     const reps = joinReps((document.getElementById("f-rmin")||{}).value, (document.getElementById("f-rmax")||{}).value);
-    const grp = (document.getElementById("f-grp")||{value:""}).value || undefined;
+    const grpSel = document.getElementById("f-grp") || {value:"", dataset:{}};
+    let grp = grpSel.value || undefined;
+    let grpAuto = !!grp && grpSel.dataset.manual !== "1" && (grpSel.dataset.auto === "1");
+    const nomeForm = (document.getElementById("f-name") || {value:""}).value.trim();
+    if(!grp){ const g0 = inferGrp({name:nomeForm}); if(g0){ grp = g0; grpAuto = true; } }
     const bw = !!(document.getElementById("f-bw") || {}).checked;
     const glob = document.getElementById("f-global").checked;
     const notes = document.getElementById("f-notes").value.trim();
@@ -3716,11 +3780,11 @@ O histórico passa para "${exName(para)}" e "${exName(de)}" é removido.`)) retu
     if(el.dataset.id){
       const e = exById(el.dataset.id);
       e.name = name; e.namePt = pt || undefined; e.nameEn = en || undefined;
-      e.step = step; e.perUnit = perUnit || undefined; e.grp = grp;
+      e.step = step; e.perUnit = perUnit || undefined; e.grp = grp; e.grpAuto = grpAuto || undefined; if(!grp) e.grpTried = undefined;
       e.targetSets = sets; e.restSec = restS; e.reps = reps; e.bw = bw; e.notes = notes; e.photo = photo; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
     } else {
       db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, namePt:pt||undefined, nameEn:en||undefined,
-        step, perUnit: perUnit || undefined, grp, targetSets:sets, restSec:restS, reps, bw, notes, photo, order: nextOrder()});
+        step, perUnit: perUnit || undefined, grp, grpAuto: grpAuto || undefined, targetSets:sets, restSec:restS, reps, bw, notes, photo, order: nextOrder()});
     }
     exFormCtx = null;
     save(); closeModal(); render();
@@ -5249,7 +5313,22 @@ document.addEventListener("input", ev => {
   if(ev.target && ev.target.id === "gq"){ gymQuery = ev.target.value; filterGymList(); }
 });
 sheet.addEventListener("input", ev => {
-  if(ev.target && ev.target.id === "f-name") aiPrefetch(ev.target.value);
+  if(ev.target && ev.target.id === "f-name"){
+    aiPrefetch(ev.target.value);
+    const nome = ev.target.value;
+    clearTimeout(window._grpT);
+    window._grpT = setTimeout(async () => {
+      const sel = document.getElementById("f-grp");
+      if(!sel || sel.dataset.manual === "1" || nome.trim().length < 3) return;
+      let g = inferGrp({name:nome});
+      if(!g && geminiKey()){ try{ g = await aiGrupo(nome); }catch(e){} }
+      const sel2 = document.getElementById("f-grp");
+      if(g && sel2 && sel2.dataset.manual !== "1" && (!sel2.value || sel2.dataset.auto === "1")){ sel2.value = g; sel2.dataset.auto = "1"; }
+    }, 600);
+  }
+});
+sheet.addEventListener("change", ev => {
+  if(ev.target && ev.target.id === "f-grp"){ ev.target.dataset.manual = "1"; ev.target.dataset.auto = ""; }
 });
 /* enquanto voce digita na ultima linha, ja aparece outra vazia embaixo */
 sheet.addEventListener("input", ev => {
@@ -6751,6 +6830,7 @@ migratePlan12();
 migrateGroups40();
 migrateGroups42();
 migrateRedes42();
+setTimeout(classifyPending, 2500);
 if(!db.settings.migGrp46){
   db.exercises.forEach(e => { if(e.grp === "Peito" && /reverse|inverso|invertid|rear delt/.test(norm([e.name,e.namePt,e.nameEn].filter(Boolean).join(" ")))) e.grp = "Ombro"; });
   db.settings.migGrp46 = true; save(false);
