@@ -1,10 +1,10 @@
 {
-  "version": 57,
-  "name": "5.7",
+  "version": 58,
+  "name": "5.8",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "NOVO: Cancelar este treino (faixa do treino de hoje na tela da academia): desfaz as series e marcas de hoje daquele treino, com Desfazer por 12 segundos. Nao precisa instalar APK.",
+  "notes": "BUSCA INTELIGENTE: a busca de exercicios (academia e Biblioteca) agora entende erro de digitacao, portugues e ingles (voador = peck deck, remada = row) e grupos (perna, braco, empurrar, puxar). Se nada for achado, o botao Buscar com IA usa o Gemini so com o que voce digitou e os nomes dos exercicios. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

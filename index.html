@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v5.7</title>
+<title>Fitness Global v5.8</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -470,8 +470,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "5.7";
-const APP_VERSION = 57;
+const APP_NAME_VERSION = "5.8";
+const APP_VERSION = 58;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1043,9 +1043,13 @@ function ultimasCargas(e){
 }
 function filterLibrary(){
   const q = norm(libQuery);
+  let vis = 0;
   document.querySelectorAll("#view .lr[data-q]").forEach(r => {
-    r.style.display = (!q || q.split(" ").every(w => r.dataset.q.includes(w))) ? "" : "none";
+    const e = exById(r.dataset.id);
+    const ok = !q || (e && visivelBusca(e, libQuery));
+    r.style.display = ok ? "" : "none"; if(ok) vis++;
   });
+  buscaCaixa(libQuery, vis);
   document.querySelectorAll("#view .gt").forEach(h => {
     let n = h.nextElementSibling, vis = false;
     while(n && n.classList.contains("lr")){ if(n.style.display !== "none") vis = true; n = n.nextElementSibling; }
@@ -1072,6 +1076,7 @@ function renderLibrary(){
       <button class="iconbtn" data-action="lib-add" aria-label="Novo exercício"><svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>
     <div class="sbox"><svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>
       <input id="lq" type="search" placeholder="Buscar entre ${todos.length} exercício${todos.length===1?"":"s"}" value="${esc(libQuery)}" autocomplete="off" aria-label="Buscar exercício"></div>
+    <div id="ai-busca"></div>
     <div class="chipbar"><button class="chipb${libGrp?"":" on"}" data-action="lib-grp" data-v="">Todos</button>
       ${ordem.map(k => `<button class="chipb${libGrp===k?" on":""}" data-action="lib-grp" data-v="${esc(k)}">${esc(k)}</button>`).join("")}</div>
     ${corpo || `<div class="empty">Nenhum exercício ainda. Toque em ＋ para criar o primeiro.</div>`}`;
@@ -1869,6 +1874,109 @@ function workoutDoneForm(st){
     <button class="btn" data-action="close-modal">Boraa! 💪</button>`);
 }
 
+/* ===================== busca inteligente de exercícios =====================
+   Camada 1 (local, instantânea, sem internet): ignora acento e maiúscula, tolera erro de
+   digitação, entende português e inglês (peck deck = voador, row = remada...) e grupos
+   ("perna", "braço"). Camada 2 (IA, só se você pedir e houver chave): o Gemini recebe SÓ o
+   que você digitou e os nomes dos exercícios, nunca cargas nem datas. */
+const SIN_BUSCA = [
+  ["peck deck","pec deck","voador","crucifixo maquina","butterfly","fly maquina"],
+  ["remada","row","rowing","serrote"],["rosca","curl"],
+  ["supino","bench press","chest press","press peito"],
+  ["desenvolvimento","shoulder press","overhead press","militar"],
+  ["agachamento","squat","leg press","hack"],["puxada","pulldown","pull down","lat pulldown","barra fixa","pull up"],
+  ["flexora","leg curl","hamstring curl","stiff","romeno"],["extensora","leg extension"],
+  ["panturrilha","calf","gemeos"],["triceps","tricep","pushdown","frances","testa"],["biceps","bicep"],
+  ["elevacao lateral","lateral raise"],["abdominal","abdomen","crunch","prancha","plank"],
+  ["gluteo","glute","hip thrust","pelvica","coice","kickback"],
+  ["halter","dumbbell","halteres"],["barra","barbell"],["polia","cabo","cable","crossover","pulley"],["maquina","machine"],
+  ["costas","dorsal","lats","dorsais"],["peito","peitoral","chest"],["ombro","ombros","deltoide","shoulder","delt"],
+  ["antebraco","forearm","punho","wrist"],
+  /* grupos grandes: uma palavra que vira vários grupos */
+  ["perna","pernas","legs","inferior","coxa","coxas"],["braco","bracos","arms"],
+  ["empurrar","push"],["puxar","pull"],["superior","upper"]
+];
+const GRUPO_AMPLO = {
+  perna:["quadriceps","posterior","gluteo","panturrilha"], pernas:["quadriceps","posterior","gluteo","panturrilha"],
+  legs:["quadriceps","posterior","gluteo","panturrilha"], inferior:["quadriceps","posterior","gluteo","panturrilha"],
+  coxa:["quadriceps","posterior"], coxas:["quadriceps","posterior"],
+  braco:["biceps","triceps","antebraco"], bracos:["biceps","triceps","antebraco"], arms:["biceps","triceps","antebraco"],
+  empurrar:["peito","ombro","triceps"], push:["peito","ombro","triceps"],
+  puxar:["costas","biceps","antebraco"], pull:["costas","biceps","antebraco"],
+  superior:["peito","costas","ombro","biceps","triceps"], upper:["peito","costas","ombro","biceps","triceps"]
+};
+function levBusca(a, b){
+  if(Math.abs(a.length - b.length) > 2) return 9;
+  const d = []; for(let i = 0; i <= a.length; i++){ d[i] = [i]; }
+  for(let j = 1; j <= b.length; j++) d[0][j] = j;
+  for(let i = 1; i <= a.length; i++) for(let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+function alternativasBusca(t){
+  const alt = new Set([t]);
+  SIN_BUSCA.forEach(g => { if(g.some(x => x === t || (t.length >= 3 && x.startsWith(t)))) g.forEach(x => alt.add(x)); });
+  (GRUPO_AMPLO[t] || []).forEach(x => alt.add(x));
+  return [...alt];
+}
+function textoBusca(e){ return norm([exName(e), e.name, e.namePt, e.nameEn, grpOf(e)].filter(Boolean).join(" ")); }
+function casaBusca(e, qn){
+  if(!qn) return true;
+  const hay = textoBusca(e), palavras = hay.split(" ").filter(Boolean);
+  return qn.split(" ").filter(Boolean).every(t => alternativasBusca(t).some(a => {
+    if(hay.includes(a)) return true;
+    if(a.length < 4) return false;
+    const tol = a.length >= 7 ? 2 : 1;
+    return palavras.some(w => levBusca(w, a) <= tol || (w.length > a.length && levBusca(w.slice(0, a.length), a) <= 1));
+  }));
+}
+const LS_BUSCA_IA = "fitglobal.buscaia";
+function buscaIaCache(){ try{ return JSON.parse(localStorage.getItem(LS_BUSCA_IA) || "{}"); }catch(e){ return {}; } }
+function buscaIaSalvar(q, ids){
+  const c = buscaIaCache(); c[q] = ids;
+  const ks = Object.keys(c); if(ks.length > 60) delete c[ks[0]];
+  try{ localStorage.setItem(LS_BUSCA_IA, JSON.stringify(c)); }catch(e){}
+}
+let buscaIaBusy = false, buscaIaErro = "";
+async function buscaIa(q){
+  const lista = db.exercises.slice(0, 500).map(e => `${e.id}|${exName(e)}|${grpOf(e) || "?"}`).join("\n");
+  const model = db.settings.aiModel || (await aiConnect()).modelo;
+  const j = await geminiFetch("/models/" + encodeURIComponent(model) + ":generateContent", {
+    method:"POST",
+    body: JSON.stringify({
+      contents:[{parts:[{text:`Você ajuda a achar exercícios de musculação numa lista do usuário. Lista (id|nome|grupo):\n${lista}\n\nO usuário procura: "${q}".\nDevolva os ids dos exercícios da lista que combinam com o que ele quer (por nome, outro nome em português ou inglês, grupo muscular, equipamento ou intenção), os mais relevantes primeiro. Use SÓ ids da lista. Se nada combina, devolva lista vazia.`}]}],
+      generationConfig:{temperature:0, responseMimeType:"application/json",
+        responseSchema:{type:"OBJECT", properties:{ids:{type:"ARRAY", items:{type:"STRING"}}}, required:["ids"]}}
+    })
+  });
+  const parts = (((j.candidates||[])[0]||{}).content||{}).parts;
+  const d = JSON.parse(parts[0].text);
+  const ok = new Set(db.exercises.map(e => e.id));
+  return (d.ids || []).filter(id => ok.has(id));
+}
+/* quem aparece: casa localmente OU foi apontado pela IA para esta mesma busca */
+function visivelBusca(e, q){
+  const qn = norm(q);
+  if(!qn) return true;
+  if(casaBusca(e, qn)) return true;
+  const ia = buscaIaCache()[qn];
+  return !!(ia && ia.includes(e.id));
+}
+/* caixinha abaixo da busca: oferece a IA quando o local não achou nada */
+function buscaCaixa(q, quantos){
+  const box = document.getElementById("ai-busca"); if(!box) return;
+  const qn = norm(q);
+  if(!qn || qn.length < 3){ box.innerHTML = ""; return; }
+  const ia = buscaIaCache()[qn];
+  if(ia && ia.length && quantos){ box.innerHTML = `<div class="sub" style="margin:-4px 0 10px">✨ Resultado com IA para “${esc(q)}”</div>`; return; }
+  if(quantos){ box.innerHTML = ""; return; }
+  if(buscaIaBusy){ box.innerHTML = `<div class="sub" style="margin:4px 0 10px">Pensando…</div>`; return; }
+  if(buscaIaErro){ box.innerHTML = `<div class="sub" style="margin:4px 0 10px">${esc(buscaIaErro)}</div>`; return; }
+  box.innerHTML = geminiKey()
+    ? `<button class="btn ghost sm" data-action="busca-ia" style="margin:4px 0 10px">✨ Nada achado. Buscar com IA</button>`
+    : `<div class="sub" style="margin:4px 0 10px">Nada achado. Para a busca com IA, ponha a chave do Gemini em Ajustes.</div>`;
+}
+
 let gymQuery = "";
 /* busca por nome: só esconde/mostra os cartões já na tela (não redesenha, para o teclado não fechar) */
 function filterGymList(){
@@ -1876,9 +1984,9 @@ function filterGymList(){
   const cards = [...document.querySelectorAll('#view [data-action="open-ex"]')];
   cards.forEach(c => {
     const e = exById(c.dataset.id);
-    const t = e ? norm([exName(e), e.name, e.namePt, e.nameEn, e.grp].filter(Boolean).join(" ")) : "";
-    c.style.display = (!q || q.split(" ").every(w => t.includes(w))) ? "" : "none";
+    c.style.display = (!q || (e && visivelBusca(e, gymQuery))) ? "" : "none";
   });
+  buscaCaixa(gymQuery, cards.filter(c => c.style.display !== "none").length);
   document.querySelectorAll("#view .grp-title").forEach(h => { h.style.display = q ? "none" : ""; });
   const vazio = document.getElementById("gq-vazio");
   if(vazio) vazio.style.display = (q && cards.length && !cards.some(c => c.style.display !== "none")) ? "" : "none";
@@ -1948,7 +2056,7 @@ function renderGym(g){
       <button class="pill${gymRoutine?"":" on"}" data-action="rt-sel" data-v="" style="cursor:pointer">Todos (${gymExercises(g.id).length})</button>
       ${rts.map(r=>`<button class="pill${gymRoutine===r.id?" on":""}" data-action="rt-sel" data-v="${r.id}" style="cursor:pointer">${esc(r.name)} (${routineExercises(r,g.id).length})</button>`).join("")}
     </div>`}
-    ${reorderMode ? "" : `<div class="field" style="margin:0 0 10px"><input id="gq" type="search" inputmode="search" placeholder="🔍 Buscar exercício pelo nome ou grupo…" value="${esc(gymQuery)}" autocomplete="off" aria-label="Buscar exercício"></div>`}
+    ${reorderMode ? "" : `<div class="field" style="margin:0 0 10px"><input id="gq" type="search" inputmode="search" placeholder="🔍 Buscar: nome, grupo, “perna”, “peck deck”…" value="${esc(gymQuery)}" autocomplete="off" aria-label="Buscar exercício"></div><div id="ai-busca"></div>`}
     ${reorderMode ? "" : focusBarHtml(g, rid)}
     ${(() => { if(reorderMode) return "";
       /* quantos ainda estão em aberto: é o que o botão de encerrar vai riscar de uma vez */
@@ -3933,6 +4041,14 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
       save(); render();
     }, 12000);
   }
+  else if(a === "busca-ia"){
+    const q = (route().name === "library" ? libQuery : gymQuery), qn = norm(q);
+    if(!qn || buscaIaBusy) return;
+    buscaIaBusy = true; buscaIaErro = ""; refiltra();
+    buscaIa(q).then(ids => { buscaIaSalvar(qn, ids); if(!ids.length) buscaIaErro = "A IA também não achou nada parecido."; })
+      .catch(e => { buscaIaErro = (e && e.message) || "Não deu para usar a IA agora."; })
+      .finally(() => { buscaIaBusy = false; refiltra(); });
+  }
   else if(a === "skip-set"){
     const e = exById(el.dataset.ex); if(!e) return;
     db.settings.skipSet = db.settings.skipSet || {};
@@ -4395,6 +4511,7 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
   }
 });
 
+function refiltra(){ if(route().name === "library") filterLibrary(); else filterGymList(); }
 /* foto da fachada de uma unidade */
 let unitPhotoCtx = null;
 document.addEventListener("change", ev => {
