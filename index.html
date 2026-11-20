@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v4.9</title>
+<title>Fitness Global v5.0</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -417,8 +417,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "4.9";
-const APP_VERSION = 49;
+const APP_NAME_VERSION = "5.0";
+const APP_VERSION = 50;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -899,7 +899,7 @@ function render(){
     if(!e || !g){ location.hash = ""; return; }
     renderEx(g, e);
   }
-  else if(r.name === "settings") renderSettings();
+  else if(r.name === "settings"){ renderSettings(); collapseSettings(); }
   else if(r.name === "food") renderFood();
   else if(r.name === "foodplan") renderFoodPlan();
   else if(r.name === "foodreport") renderFoodReport();
@@ -2091,6 +2091,23 @@ function star(cx, cy){
 }
 
 /* ---- ajustes ---- */
+/* Ajustes: cada seção vira uma linha que abre e fecha. O que estava aberto continua aberto
+   quando a tela se redesenha (ligar um interruptor, por exemplo). */
+let setOpen = {};
+function collapseSettings(){
+  [...document.querySelectorAll("#view > .section")].forEach(sec => {
+    const h = sec.querySelector(":scope > h2"); if(!h) return;
+    const titulo = h.textContent.trim();
+    const d = document.createElement("details");
+    d.className = "evo setsec"; d.open = !!setOpen[titulo];
+    const sm = document.createElement("summary"); sm.textContent = titulo;
+    h.remove();
+    d.appendChild(sm);
+    while(sec.firstChild) d.appendChild(sec.firstChild);
+    d.addEventListener("toggle", () => { setOpen[titulo] = d.open; });
+    sec.appendChild(d);
+  });
+}
 function renderSettings(){
   const s = db.settings;
   const notifState = ("Notification" in window) ? Notification.permission : "unsupported";
@@ -2571,6 +2588,7 @@ function exForm(gymId, e, pre){
       <button class="btn ghost sm" data-action="open-gallery">🖼 Galeria</button>
     </div>
     <div class="hint">Escreva como você chama (ex.: "supino maquina") e toque em 🔍, ou abra a 🖼 galeria para procurar por músculo e equipamento.</div></div>
+    <details class="evo"${v.photo ? " open" : ""}><summary>🖼 Foto do exercício${v.photo ? " ✓" : " (opcional)"}</summary>
     ${v.photo ? `<div class="photoprev"><img src="${esc(v.photo)}" alt="" onerror="this.style.visibility='hidden'">
       <div class="grow"><div class="t" style="font-size:.88rem">Foto do exercício</div>
       <div class="d" style="font-size:.76rem;color:var(--muted)">${v.photo.startsWith("data:") ? "Foto sua · " + Math.round(v.photo.length/1024) + " KB" : "Aparece na tela do exercício"}</div></div>
@@ -2582,6 +2600,7 @@ function exForm(gymId, e, pre){
       </div>
       <input type="file" id="f-file" accept="image/*" style="display:none">
       <div class="hint">A foto é reduzida para caber na sincronização — vale para qualquer exercício que você criou, mesmo sem nome oficial.</div></div>
+    </details>
     <input type="hidden" id="f-photo" value="${esc(v.photo)}">
     <div class="btnrow">
       <div class="field" style="flex:1"><label for="f-sets">Séries alvo</label>
@@ -2592,9 +2611,10 @@ function exForm(gymId, e, pre){
       <input id="f-rmax" type="number" inputmode="numeric" min="1" max="100" value="${(parseReps(v.reps)||{}).max||""}" placeholder="12"></div>
       <div class="field" style="flex:1"><label for="f-rest">Descanso (s)</label>
       <input id="f-rest" type="number" inputmode="numeric" min="5" max="900" step="5" value="${esc(v.rest)}"></div>
-      <div class="field" style="flex:1"><label for="f-step">Degrau (kg)</label>
-      <input id="f-step" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.step)}" placeholder="auto"></div>
     </div>
+    <details class="evo"${(v.notes || v.step !== "" || v.grp || v.bw || v.global || v.perUnit) ? " open" : ""}><summary>⚙️ Avançado: grupo, degrau, observações…</summary>
+    <div class="field" style="margin-top:10px"><label for="f-step">Degrau (kg)</label>
+      <input id="f-step" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.step)}" placeholder="auto"></div>
     <div class="field"><label for="f-grp">Grupo muscular</label>
       <select id="f-grp"><option value="">— sem grupo —</option>
         ${GRUPOS.map(x=>`<option value="${x}"${(v.grp||"")===x?" selected":""}>${x}</option>`).join("")}</select>
@@ -2617,7 +2637,8 @@ function exForm(gymId, e, pre){
       <div class="grow"><div class="t">🌐 Exercício global</div>
       <div class="d">Aparece em TODAS as academias que você registrar</div></div>
     </label>
-    <button class="btn" data-action="save-ex" data-gym="${gymId}" data-id="${e ? e.id : ""}">Salvar</button>`);
+    </details>
+    <button class="btn" data-action="save-ex" data-gym="${gymId}" data-id="${e ? e.id : ""}" style="margin-top:12px">Salvar</button>`);
   setTimeout(() => { const n = document.getElementById("f-name"); if(n) n.focus(); }, 50);
 }
 /* marcar quais exercícios da academia entram neste treino */

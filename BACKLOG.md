@@ -1,4 +1,4 @@
-# BACKLOG — Fitness Global (v4.9)
+# BACKLOG — Fitness Global (v5.0)
 ## Em andamento
 - Objetivo: Fitness instalável e com backup. Feito: backup copia os `fitness-global-*.json` exportados; código no GitHub (Pages).
 - Próximo passo: decidir a assinatura do APK (o APK atual usa outra chave que não a `pedro.keystore`) e publicar em `pedrohsml31/apks`.
