@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v4.3</title>
+<title>Fitness Global v4.4</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -410,8 +410,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "4.3";
-const APP_VERSION = 43;
+const APP_NAME_VERSION = "4.4";
+const APP_VERSION = 44;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1516,6 +1516,29 @@ function mergeGyms(mainId, mainUnitName, itens){
   return {juntos, movidos, grupos};
 }
 
+/* Exportar no celular: o download por link não funciona dentro do APK (o arquivo some).
+   Tenta o compartilhar do Android com o arquivo; se não der, copia o texto. */
+async function exportBackup(semFotos){
+  const o = JSON.parse(JSON.stringify(db));
+  if(semFotos){ (o.exercises || []).forEach(e => { if(e.photo && String(e.photo).slice(0,5) === "data:") e.photo = ""; }); delete o.settings.sync; }
+  const txt = JSON.stringify(o, null, semFotos ? 0 : 1);
+  const nome = "fitness-global-" + todayStr() + ".json";
+  if(!semFotos){
+    try{
+      const f = new File([txt], nome, {type:"application/json"});
+      if(navigator.canShare && navigator.canShare({files:[f]})){ await navigator.share({files:[f], title:nome}); toast("Backup enviado ✓"); return; }
+    }catch(e){ if(e && e.name === "AbortError") return; }
+  }
+  if(!semFotos){
+    try{
+      const u = URL.createObjectURL(new Blob([txt], {type:"application/json"}));
+      const aEl = document.createElement("a"); aEl.href = u; aEl.download = nome; aEl.click(); URL.revokeObjectURL(u);
+    }catch(e){}
+  }
+  const ok = await copyText(txt);
+  toast(ok ? `📋 Dados copiados (${Math.round(txt.length/1024)} KB) — cole numa conversa ou nota` : "Não consegui copiar nem salvar.");
+}
+
 function gymRoutines(gymId){
   return (db.routines||[]).filter(r=>r.gymId===gymId).sort((a,b)=>(a.order||0)-(b.order||0));
 }
@@ -2130,6 +2153,7 @@ function renderSettings(){
       <div class="setline">
         <div class="grow"><div class="t">Exportar arquivo</div><div class="d">Baixa um .json — bom para backup</div></div>
         <button class="btn ghost sm" style="width:auto" data-action="export">Exportar</button>
+        <button class="btn ghost sm" style="width:auto" data-action="export-lean" title="Copia os dados sem as fotos, leve o bastante para colar numa conversa">Copiar sem fotos</button>
       </div>
       <div class="setline">
         <div class="grow"><div class="t">Importar arquivo</div><div class="d">Substitui os dados deste aparelho</div></div>
@@ -3869,14 +3893,7 @@ document.addEventListener("click", ev => {
     Sync.state = "off"; render();
   }
 
-  else if(a === "export"){
-    const blob = new Blob([JSON.stringify(db, null, 1)], {type:"application/json"});
-    const u = URL.createObjectURL(blob);
-    const aEl = document.createElement("a");
-    aEl.href = u; aEl.download = "fitness-global-" + todayStr() + ".json";
-    aEl.click(); URL.revokeObjectURL(u);
-    toast("Backup exportado ✓");
-  }
+  else if(a === "export" || a === "export-lean"){ exportBackup(a === "export-lean"); }
   else if(a === "import"){
     const inp = document.createElement("input");
     inp.type = "file"; inp.accept = "application/json,.json";

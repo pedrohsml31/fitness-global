@@ -1,10 +1,10 @@
 {
-  "version": 43,
-  "name": "4.3",
+  "version": 44,
+  "name": "4.4",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "REDE COM UNIDADES: ao abrir, o app junta sozinho as academias de mesmo nome (Smart Fit, Smart Fit Centro...) numa so, com cada filial como unidade; os exercicios repetidos viram um so e o historico de cada unidade e mantido. Dentro de cada exercicio ha agora a barra para escolher em qual unidade voce esta e o botao para dizer se a carga muda de unidade para unidade. Desfazer: menu da academia. Nao precisa instalar APK.",
+  "notes": "EXPORTAR: o botao Exportar agora usa o compartilhar do Android (antes o arquivo sumia dentro do app) e ha o novo 'Copiar sem fotos'. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
