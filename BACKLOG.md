@@ -3,6 +3,9 @@
 - Objetivo: Fitness instalável e com backup. Feito: backup copia os `fitness-global-*.json` exportados; código no GitHub (Pages).
 - Próximo passo: decidir a assinatura do APK (o APK atual usa outra chave que não a `pedro.keystore`) e publicar em `pedrohsml31/apks`.
 ## Pendências
+- (20/11, pedido) Marcar que NÃO vou fazer uma série de um exercício (por série, não o exercício inteiro).
+- (20/11, pedido) Cancelar o treino em curso (descartar o que foi marcado hoje naquele treino).
+- (20/11, pedido) Histórico do exercício separado por unidade: na filial atual em destaque, outras unidades em bloco à parte e rotulado; foto da fachada de cada filial (decidir como obter a foto).
 - Redesign (aprovado 20/11): próximas etapas — tela da academia, Comida/Evolução, Ajustes e formulário; uma versão por etapa.
 - Trocar emojis restantes (🧩 📍 ✏️ nos menus) por ícones desenhados.
 - Recolorir o ícone do app (grafite + verde-limão); exige recompilar o APK no `fitdev`.
