@@ -1,0 +1,2 @@
+- 20/11, Claude Code: botão para juntar todas as academias de uma vez e escolher, exercício a exercício, em quais unidades ele existe.
+- 20/11, Claude Code: ao criar exercício novo, sugerir o grupo muscular pelo nome já no formulário.

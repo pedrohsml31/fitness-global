@@ -1,10 +1,10 @@
 {
-  "version": 41,
-  "name": "4.1",
+  "version": 42,
+  "name": "4.2",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "SOM DO DESCANSO: com fone, agora toca MESMO com o celular no silencioso ou no vibrar - pelo canal de midia, que o silencioso nao cala, direto no fone (e se tiver musica, ela abaixa um instante). Sem fone, so toca se \"tocar no alto-falante\" estiver ligado, e ai respeita o silencioso. O app decide na hora em que o descanso acaba, entao vale colocar ou tirar o fone no meio do descanso. O som de notificacao nao servia: o Android cala notificacao no silencioso e no vibrar, com ou sem fone. O diagnostico agora mostra o modo do celular, o volume de midia e o que aconteceria se o descanso acabasse agora. Esta versao mexe no app por dentro: o Android pede um toque em Instalar.",
+  "notes": "JUNTAR ACADEMIAS: no menu (tres pontinhos) da academia principal, 'Juntar outras academias aqui' transforma as academias antigas em unidades dela. Exercicios com o mesmo nome viram um so, cada unidade mantem o historico de carga, treinos iguais se unem; da para desfazer. GRUPO MUSCULAR: os exercicios cadastrados antes agora recebem o grupo sozinhos pelo nome (o que nao reconhecer fica sem grupo para voce escolher). NAO PERTURBE: o aviso saiu, porque o bipe do descanso toca mesmo assim. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

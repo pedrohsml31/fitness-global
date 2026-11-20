@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#141110">
-<title>Fitness Global v4.1</title>
+<title>Fitness Global v4.2</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -410,8 +410,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "4.1";
-const APP_VERSION = 41;
+const APP_NAME_VERSION = "4.2";
+const APP_VERSION = 42;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1367,6 +1367,123 @@ function unitsForm(gymId){
   setTimeout(()=>{ const i=document.getElementById("u-new"); if(i) i.focus(); }, 60);
 }
 
+/* ---------- grupo muscular dos exercícios antigos ----------
+   Exercícios cadastrados antes do campo "grupo" ficaram sem grupo e não aparecem na visão
+   por grupo. Aqui o app deduz pelo NOME (português ou inglês) só quando bate sem dúvida;
+   o que não reconhecer fica "sem grupo" para você escolher. Nunca troca um grupo já definido. */
+const GRP_REGRAS = [
+  ["Ombro", /ombro|deltoid|lateral|face pull|reverse fly|voador inverso|crucifixo inverso|desenvolvimento|shoulder|militar|arnold|elevacao frontal|front raise|upright/],
+  ["Panturrilha", /panturrilha|calf|gemeos|soleo/],
+  ["Antebraço", /antebraco|wrist|forearm|reverse curl|rosca inversa/],
+  ["Abdômen", /abdom|crunch|prancha|plank|sit up|situp|leg raise|infra/],
+  ["Posterior", /flexora|leg curl|stiff|romanian|romeno|hamstring|good morning|bom dia/],
+  ["Glúteo", /glute|gluteo|hip thrust|pelvica|coice|kickback|abdutora/],
+  ["Tríceps", /triceps|pushdown|frances|skull|tricep|mergulho|\bdip\b/],
+  ["Bíceps", /biceps|rosca|curl|martelo|hammer|scott/],
+  ["Quadríceps", /extensora|leg press|hack|agachamento|squat|pendulum|afundo|lunge|passada|sissy|quadriceps/],
+  ["Costas", /puxada|pulldown|pull down|remada|\brow\b|barra fixa|pull up|pullup|chin up|serrote|costas|\blat\b/],
+  ["Peito", /supino|bench|chest|peito|crucifixo|\bfly\b|pec deck|peck|flexao|push up|pushup|cross ?over|voador/]
+];
+function inferGrp(e){
+  const t = [e.name, e.namePt, e.nameEn].filter(Boolean).map(norm).join(" | ");
+  for(const [g, re] of GRP_REGRAS) if(re.test(t)) return g;
+  return "";
+}
+function autoGroups(){
+  let n = 0;
+  db.exercises.forEach(e => { if(e.grp) return; const g = inferGrp(e); if(g){ e.grp = g; n++; } });
+  if(n) save();
+  return n;
+}
+function migrateGroups42(){
+  if(db.settings.migGrp42) return;
+  autoGroups();
+  db.settings.migGrp42 = true; save(false);
+}
+
+/* ---------- juntar academias numa rede com unidades ----------
+   Antes das unidades (v3.8), cada filial era uma academia, com os mesmos exercícios
+   cadastrados de novo em cada uma. Aqui as academias escolhidas viram unidades de UMA só:
+   exercícios com o mesmo nome viram um só (o histórico de cada filial vai junto, carimbado
+   com a unidade), treinos com o mesmo nome se unem. Nada é apagado; antes de mexer o app
+   guarda uma cópia e dá para desfazer. */
+const LS_ANTES = "fitglobal.antes-juntar";
+function exKeys(e){ return [e.name, e.namePt, e.nameEn].filter(Boolean).map(norm); }
+/* "Smart Fit Centro" dentro de "Smart Fit" -> "Centro" */
+function sugereUnidade(mainName, nome){
+  const a = norm(mainName).split(" "), b = nome.trim().split(/\s+/);
+  let i = 0;
+  while(i < b.length - 1 && i < a.length && norm(b[i]) === a[i]) i++;
+  return b.slice(i).join(" ") || nome;
+}
+function mergeForm(mainId){
+  const main = gymById(mainId); if(!main) return;
+  const outras = db.gyms.filter(g => g.id !== mainId);
+  if(!outras.length){ toast("Não há outra academia para juntar."); return; }
+  const temUn = gymUnits(mainId).length > 0;
+  openModal(`<h2>🔀 Juntar academias em "${esc(main.name)}"</h2>
+    <p class="sub" style="margin-bottom:12px">As academias marcadas viram <b>unidades</b> de "${esc(main.name)}".
+      Exercícios com o mesmo nome viram um só (cada unidade mantém o seu histórico de carga) e treinos com o mesmo nome se unem.
+      Nada é apagado e dá para desfazer logo depois.</p>
+    ${temUn ? "" : `<div class="field"><label for="m-main">Nome da unidade que "${esc(main.name)}" já era</label>
+      <input id="m-main" value="Principal" maxlength="40"></div>`}
+    ${outras.map(g => `<div class="wkrow" style="align-items:center; gap:8px">
+      <input type="checkbox" class="m-on" data-g="${g.id}" checked style="flex:none">
+      <div class="grow"><div class="sub" style="font-size:.7rem">${esc(g.name)} · ${gymExercises(g.id).length} exercícios</div>
+      <input class="m-un" data-g="${g.id}" value="${esc(sugereUnidade(main.name, g.name))}" maxlength="40" aria-label="Nome da unidade"></div></div>`).join("")}
+    <button class="btn" data-action="merge-go" data-gym="${mainId}" style="margin-top:12px">🔀 Juntar</button>
+    ${localStorage.getItem(LS_ANTES) ? `<button class="btn ghost" data-action="merge-undo" style="margin-top:8px">↩ Desfazer a última junção</button>` : ""}
+    <button class="btn ghost" data-action="close-modal" style="margin-top:8px">Cancelar</button>`);
+}
+function mergeGyms(mainId, mainUnitName, itens){
+  const main = gymById(mainId);
+  try{ localStorage.setItem(LS_ANTES, JSON.stringify(db)); }catch(e){}
+  main.units = main.units || [];
+  let uMain = main.units[0];
+  if(!main.units.length){ uMain = {id:uid(), name:mainUnitName || "Principal"}; main.units.push(uMain); }
+  /* o que já foi feito na academia principal fica na unidade dela */
+  db.logs.forEach(l => { if(l.gymId === mainId && !l.u) l.u = uMain.id; });
+  db.settings.unitOf = db.settings.unitOf || {};
+  if(!db.settings.unitOf[mainId]) db.settings.unitOf[mainId] = uMain.id;
+  const rtMap = {}, exMap = {};
+  let juntos = 0, movidos = 0;
+  itens.forEach(({id, nome}) => {
+    const g = gymById(id); if(!g) return;
+    let un = main.units.find(u => norm(u.name) === norm(nome));
+    if(!un){ un = {id:uid(), name:nome}; main.units.push(un); }
+    db.logs.forEach(l => { if(l.gymId === id){ l.gymId = mainId; l.u = un.id; } });
+    db.exercises.filter(e => e.gymId === id).forEach(e => {
+      const ks = exKeys(e);
+      const gemeo = db.exercises.find(x => x.id !== e.id && x.gymId === mainId && exKeys(x).some(k => ks.includes(k)));
+      if(gemeo){
+        db.logs.forEach(l => { if(l.exerciseId === e.id) l.exerciseId = gemeo.id; });
+        gemeo.perUnit = true;
+        ["grp","photo","step","reps","namePt","nameEn"].forEach(k => { if(!gemeo[k] && e[k]) gemeo[k] = e[k]; });
+        if(!gemeo.notes && e.notes) gemeo.notes = e.notes;
+        exMap[e.id] = gemeo.id; juntos++;
+      } else { e.gymId = mainId; movidos++; }
+    });
+    db.exercises = db.exercises.filter(e => !exMap[e.id]);
+    (db.routines || []).filter(r => r.gymId === id).forEach(r => {
+      const igual = db.routines.find(x => x.id !== r.id && x.gymId === mainId && norm(x.name) === norm(r.name));
+      if(igual){
+        const ids = (igual.exIds || []).concat(r.exIds || []).map(x => exMap[x] || x);
+        igual.exIds = ids.filter((x, i) => ids.indexOf(x) === i);
+        rtMap[r.id] = igual.id;
+        db.routines = db.routines.filter(x => x.id !== r.id);
+      } else { r.gymId = mainId; r.order = gymRoutines(mainId).length; }
+    });
+    (db.sessions || []).forEach(x => { if(x.gym === id){ x.gym = mainId; x.gymName = main.name; if(x.rt && rtMap[x.rt]) x.rt = rtMap[x.rt]; } });
+    if(db.settings.focus && db.settings.focus.gym === id){ db.settings.focus.gym = mainId; if(rtMap[db.settings.focus.rt]) db.settings.focus.rt = rtMap[db.settings.focus.rt]; }
+    delete db.settings.unitOf[id];
+    db.gyms = db.gyms.filter(x => x.id !== id);
+  });
+  (db.routines || []).forEach(r => { r.exIds = (r.exIds || []).map(x => exMap[x] || x).filter((x, i, a) => a.indexOf(x) === i); });
+  const grupos = autoGroups();
+  save();
+  return {juntos, movidos, grupos};
+}
+
 function gymRoutines(gymId){
   return (db.routines||[]).filter(r=>r.gymId===gymId).sort((a,b)=>(a.order||0)-(b.order||0));
 }
@@ -1377,11 +1494,6 @@ function routineExercises(r, gymId){
   return (r.exIds||[]).map(id=>todos.find(e=>e.id===id)).filter(Boolean);
 }
 let gymRoutine = "";      // "" = Todos
-/* Estado do Não Perturbe. Declarado AQUI, e não lá embaixo junto do dndCheck(), porque o
-   render() do boot chama dndWarnHtml() antes de o fim do arquivo ter rodado: com `let`
-   depois disso, abrir o app direto numa tela de academia estourava
-   "Cannot access 'dndState' before initialization" e a tela saía em branco. */
-let dndState = null;
 
 /* ---- "hoje eu não vou fazer esse" ----
    Guardado com a DATA junto, então vira o dia e some sozinho: nada de limpar na mão. */
@@ -1568,7 +1680,6 @@ function renderGym(g){
       return `<button class="btn ghost sm" data-action="skip-rest-ex" data-gym="${g.id}" data-rt="${rid}" style="margin-bottom:10px">
         🏁 Encerrar o treino — não vou fazer os ${falta} que faltam</button>`;
     })()}
-    ${reorderMode ? "" : dndWarnHtml()}
     ${(!reorderMode && exs.some(e=>e.photo && e.photo.slice(0,5) !== "data:")) ? `<button class="btn ghost sm" data-action="dl-photos" data-gym="${g.id}" data-rt="${rid}" style="margin-bottom:10px">📥 Salvar as fotos no app (funcionar sem internet)</button>` : ""}
     <div class="section"><h2>${(!reorderMode && canReorder) ? `<button class="xbtn" data-action="reorder-on" title="Mudar a ordem dos exercícios${rAtiva?" deste treino":""}" style="float:right; color:var(--accent)">⇅ ordem</button>` : ""}${rAtiva ? esc(rAtiva.name) : "Exercícios"}${rAtiva&&rAtiva.src?` <span class="pill">por ${esc(rAtiva.src)}</span>`:""}${rAtiva?` <button class="xbtn" data-action="rt-menu" data-id="${rAtiva.id}" aria-label="Opções do treino" style="vertical-align:middle">⋮</button>`:""}</h2>
       ${itemsHtml || `<div class="empty">${rAtiva
@@ -3255,9 +3366,38 @@ document.addEventListener("click", ev => {
     const g = gymById(el.dataset.id);
     openModal(`<h2>${esc(g.name)}</h2>
       <button class="menuitem" data-action="rename-gym" data-id="${g.id}"><span class="mi">✏️</span> Renomear</button>
+      ${db.gyms.length > 1 ? `<button class="menuitem" data-action="merge-open" data-id="${g.id}"><span class="mi">🔀</span> Juntar outras academias aqui (viram unidades)</button>` : ""}
+      <button class="menuitem" data-action="auto-groups"><span class="mi">🧩</span> Preencher grupo muscular dos exercícios sem grupo</button>
       <button class="menuitem bad" data-action="delete-gym" data-id="${g.id}"><span class="mi">🗑</span> Excluir academia</button>`);
   }
   else if(a === "rename-gym") gymForm(gymById(el.dataset.id));
+  else if(a === "merge-open") mergeForm(el.dataset.id);
+  else if(a === "auto-groups"){
+    const n = autoGroups(); const sem = db.exercises.filter(e => !e.grp).length;
+    closeModal(); render();
+    toast(n ? `🧩 ${n} exercício${n===1?"":"s"} classificado${n===1?"":"s"}${sem ? ` · ${sem} sem grupo (escolha na edição)` : ""}` : (sem ? `Nenhum reconhecido · ${sem} sem grupo (escolha na edição)` : "Todos já têm grupo ✓"));
+  }
+  else if(a === "merge-go"){
+    const itens = [...document.querySelectorAll(".m-on")].filter(c => c.checked).map(c => ({id:c.dataset.g,
+      nome:(document.querySelector('.m-un[data-g="'+c.dataset.g+'"]').value || "").trim()}));
+    if(!itens.length){ toast("Marque ao menos uma academia."); return; }
+    if(itens.some(i => !i.nome)){ toast("Dê um nome a cada unidade."); return; }
+    const nomes = itens.map(i => norm(i.nome));
+    if(new Set(nomes).size !== nomes.length){ toast("Duas unidades com o mesmo nome."); return; }
+    const mn = document.getElementById("m-main");
+    const r = mergeGyms(el.dataset.gym, mn ? mn.value.trim() : "", itens);
+    closeModal(); render();
+    toast(`🔀 Junção feita: ${r.juntos} exercício${r.juntos===1?"":"s"} repetido${r.juntos===1?"":"s"} unido${r.juntos===1?"":"s"}, ${r.movidos} trazido${r.movidos===1?"":"s"}`);
+  }
+  else if(a === "merge-undo"){
+    if(!confirm("Desfazer a última junção de academias? Volta tudo como estava antes.")) return;
+    try{
+      const bak = JSON.parse(localStorage.getItem(LS_ANTES));
+      Object.keys(bak).forEach(k => { db[k] = bak[k]; });
+      localStorage.removeItem(LS_ANTES); save(); closeModal(); location.hash = ""; render(); toast("↩ Junção desfeita");
+    }catch(e){ toast("Não consegui desfazer."); }
+  }
+
   else if(a === "delete-gym"){
     const g = gymById(el.dataset.id);
     if(!confirm(`Excluir "${g.name}"?\n\nOs exercícios exclusivos dela e o histórico deles serão apagados. Exercícios globais NÃO são afetados.`)) return;
@@ -3284,7 +3424,6 @@ document.addEventListener("click", ev => {
   /* o ouvinte de cliques não é async: estas duas rodam numa função própria */
   else if(a === "sound-test-now"){ soundTestNow(); }
   else if(a === "sound-rebuild"){ soundRebuild(); }
-  else if(a === "dnd-recheck"){ dndCheck().then(r => toast(r && r.on ? "Ainda está no Não Perturbe" : "Não Perturbe desligado ✓")); }
   else if(a === "dl-photos"){
     const gymId = el.dataset.gym, rt = el.dataset.rt;
     const r = rt ? routineById(rt) : null;
@@ -6501,6 +6640,7 @@ normalizeOrders();
 migrateManualActs();
 migratePlan12();
 migrateGroups40();
+migrateGroups42();
 migrateNotes30();
 migrateWalk19();
 if(macrosOn()) loadTaco().then(render);
@@ -6511,10 +6651,9 @@ scheduleMealNotifs();
 Sync.start();
 otaConfirm();
 checkUpdate();
-dndCheck();
 autoHealthSync();
 document.addEventListener("visibilitychange", () => {
-  if(!document.hidden){ checkUpdate(); autoHealthSync(); Sync.check(); dndCheck(); }   // ao voltar pro app, confere a nuvem
+  if(!document.hidden){ checkUpdate(); autoHealthSync(); Sync.check(); }   // ao voltar pro app, confere a nuvem
 });
 
 /* ===================== botão voltar do Android =====================
@@ -6583,7 +6722,7 @@ async function soundDiagForm(){
   if(!native.hasNativeSound()) add("→ O descanso vai tocar?", comSom ? "SIM" : ("NÃO — vai só vibrar" + (mudoPorFone ? " (sem fone e alto-falante desligado)" : !db.settings.sound ? " (som desligado)" : "")), comSom);
   add("Notificações liberadas", d.notifLigada ? "sim" : "NÃO", !!d.notifLigada);
   const dnd = {1:"tudo passa", 2:"só prioridade", 3:"nada passa", 4:"só alarmes"}[d.filtroDnd] || d.filtroDnd;
-  add("Não Perturbe", dnd, d.filtroDnd === 1);
+  add("Não Perturbe (só informativo)", dnd + " — o bipe do descanso toca mesmo assim", true);
 
   if(typeof d.ringer === "number"){
     const modo = {0:"silencioso", 1:"vibrar", 2:"normal"}[d.ringer] || d.ringer;
@@ -6661,29 +6800,6 @@ async function soundRebuild(){
   soundDiagForm();
 }
 
-/* ===================== Não Perturbe =====================
-   No Não Perturbe o Android silencia a notificação do descanso: a vibração ainda vai,
-   mas o som não toca. Melhor avisar do que ele achar que o app quebrou.
-   (o `dndState` é declarado lá em cima, junto do resto do estado das telas) */
-async function dndCheck(){
-  const RC = native.plugin("RestChannel");
-  if(!native.isNative || !RC || !RC.dnd) return null;
-  try{
-    const r = await RC.dnd();
-    const antes = dndState && dndState.on;
-    dndState = r;
-    if(r.known && r.on !== antes) render();
-    return r;
-  }catch(e){ return null; }
-}
-function dndWarnHtml(){
-  if(!dndState || !dndState.known || !dndState.on || !db.settings.sound) return "";
-  return `<div class="updbanner" style="margin-bottom:10px">
-    <span style="font-size:1.2rem">🔕</span>
-    <div class="grow"><b>Celular no Não Perturbe</b>
-      <div class="sub">${dndState.silent ? "Nada passa: o aviso de descanso não vai tocar nem notificar." : "O som do aviso de descanso não vai tocar — a vibração continua."}</div></div>
-    <button class="btn ghost sm" style="width:auto" data-action="dnd-recheck">Já desliguei</button></div>`;
-}
 </script>
 </body>
 </html>
