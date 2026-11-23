@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v6.2</title>
+<title>Fitness Global v6.3</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -477,8 +477,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "6.2";
-const APP_VERSION = 62;
+const APP_NAME_VERSION = "6.3";
+const APP_VERSION = 63;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1749,6 +1749,48 @@ function mergeGyms(mainId, mainUnitName, itens){
   return {juntos, movidos, grupos};
 }
 
+/* Conexão cifrada com o PC: código nunca vai ao texto legível, URL, histórico ou log. */
+async function criarEnvioPC(codigo, config, conexao, agora = Date.now(), criptografia = crypto){
+  if(!codigo || conexao.formato !== 1 || !/^[a-f0-9]{32}$/.test(conexao.kid) ||
+     !Number.isFinite(Date.parse(conexao.expiraUtc)) || Date.parse(conexao.expiraUtc) <= agora ||
+     conexao.jwk?.kty !== "RSA" || conexao.jwk?.alg !== "RSA-OAEP-256" || conexao.jwk?.d){
+    throw new Error("Conexão do PC inválida ou expirada");
+  }
+  const publico = {kty:"RSA", n:conexao.jwk.n, e:conexao.jwk.e, alg:"RSA-OAEP-256", ext:true, key_ops:["encrypt"]};
+  const chave = await criptografia.subtle.importKey("jwk", publico, {name:"RSA-OAEP", hash:"SHA-256"}, false, ["encrypt"]);
+  if(chave.algorithm.modulusLength !== 4096) throw new Error("Chave do PC inválida");
+  const corpo = {kid:conexao.kid, code:codigo, config:config ? {projectId:config.projectId, apiKey:config.apiKey} : null};
+  const bytes = new TextEncoder().encode(JSON.stringify(corpo));
+  if(bytes.length > 446) throw new Error("Código maior que o limite da conexão segura");
+  const cifrado = new Uint8Array(await criptografia.subtle.encrypt({name:"RSA-OAEP"}, chave, bytes));
+  const texto = btoa(String.fromCharCode(...cifrado)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");
+  return "FGPC1." + conexao.kid + "." + texto;
+}
+let envioCifradoPC = null;
+async function prepararBackupPC(){
+  if(!Sync.enabled()){ toast("Ative a sincronização antes de conectar o PC"); return; }
+  try{
+    const r = await fetch(WEB_URL + "conexao-pc.json?v=" + Date.now(), {cache:"no-store"});
+    if(!r.ok) throw new Error("Conexão indisponível");
+    const conexao = await r.json();
+    envioCifradoPC = await criarEnvioPC(Sync.activeCode(), Sync.activeConfig(), conexao);
+    openModal(`<h2>Ativar backup no PC</h2><p class="sub">Este envio é cifrado: só o PC preparado consegue abrir. Compartilhe ou copie este texto curto para a IA no PC. O código não aparece aqui.</p>
+      <textarea readonly aria-label="Envio cifrado ao PC" style="width:100%;min-height:100px;margin:12px 0">${esc(envioCifradoPC)}</textarea>
+      <button class="btn" data-action="pc-share">Compartilhar envio cifrado</button>
+      <button class="btn ghost" data-action="pc-copy" style="margin-top:8px">Copiar envio cifrado</button>
+      <button class="btn ghost" data-action="close-modal" style="margin-top:8px">Fechar</button>`);
+  }catch{ envioCifradoPC = null; toast("Não foi possível conectar. Peça à IA para preparar este PC e tente novamente."); }
+}
+async function copiarBackupPC(){
+  if(envioCifradoPC && await copyText(envioCifradoPC)) toast("Envio cifrado copiado");
+}
+async function compartilharBackupPC(){
+  if(!envioCifradoPC) return;
+  if(navigator.share){ try{ await navigator.share({title:"Conectar Fitness ao PC", text:envioCifradoPC}); return; }catch(e){ if(e && e.name === "AbortError") return; } }
+  if(await copyText(envioCifradoPC)) toast("Envio cifrado copiado");
+  else toast("Não foi possível copiar; selecione o envio cifrado");
+}
+
 /* Exportar no celular: o download por link não funciona dentro do APK (o arquivo some).
    Tenta o compartilhar do Android com o arquivo; se não der, copia o texto. */
 async function exportBackup(semFotos){
@@ -2625,7 +2667,11 @@ function renderSettings(){
 
     <div class="section"><h2>Backup dos dados</h2><div class="card">
       <div class="setline">
-        <div class="grow"><div class="t">Exportar arquivo</div><div class="d">Baixa um .json — bom para backup</div></div>
+        <div class="grow"><div class="t">Backup automático no PC</div><div class="d">Conecte uma vez com envio cifrado; depois o PC copia da nuvem sozinho</div></div>
+        <button class="btn ghost sm" style="width:auto" data-action="pc-backup">Ativar no PC</button>
+      </div>
+      <div class="setline">
+        <div class="grow"><div class="t">Exportar dados</div><div class="d">Compartilha um .json quando disponível; senão copia texto</div></div>
         <button class="btn ghost sm" style="width:auto" data-action="export">Exportar</button>
         <button class="btn ghost sm" style="width:auto" data-action="export-lean" title="Copia os dados sem as fotos, leve o bastante para colar numa conversa">Copiar sem fotos</button>
       </div>
@@ -4569,6 +4615,9 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
     Sync.state = "off"; render();
   }
 
+  else if(a === "pc-backup"){ prepararBackupPC(); }
+  else if(a === "pc-share"){ compartilharBackupPC(); }
+  else if(a === "pc-copy"){ copiarBackupPC(); }
   else if(a === "export" || a === "export-lean"){ exportBackup(a === "export-lean"); }
   else if(a === "import"){
     const inp = document.createElement("input");

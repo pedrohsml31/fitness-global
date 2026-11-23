@@ -1,10 +1,10 @@
 {
-  "version": 62,
-  "name": "6.2",
+  "version": 63,
+  "name": "6.3",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "NOVO: selo de recorde (trofeu na lista e faixa na tela do exercicio quando a carga de hoje passa a maior de antes); Exercicios parecidos no menu da academia (acha o mesmo exercicio com dois nomes, une com um toque e desfaz); regras de grupo muscular melhoradas (remada unilateral, incline, elevacao de pernas). Nao precisa instalar APK.",
+  "notes": "Conexão cifrada com o Pedro Ambiente para guardar o código no Bitwarden e ativar backup automático Firebase/Chrome. Sem depuração USB, sem exportar os dados e sem trocar APK ou origem.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
