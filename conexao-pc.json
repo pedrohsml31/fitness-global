@@ -1,15 +1,4 @@
 {
-    "formato":  1,
-    "kid":  "ee199c8bc0234722b4aa92a9e0736776",
-    "expiraUtc":  "2026-11-25T12:09:13.4476085Z",
-    "jwk":  {
-                "ext":  true,
-                "key_ops":  [
-                                "encrypt"
-                            ],
-                "n":  "0iokgQo0hB94wg3x7zJXlVTmupVKk4oq7wbxBObCjI7-qA35x5W0U3HtSGeuc9ims5iJc3848ha1s6rNnDjkSFM76Ow1Qe4CeWR6MWMsx_6kpo-5SCXzQpp32NLZk4t4fGz9lPAqK8RqFCHnX0P2RZdFKd-Za9wYcTGMSIikEzc7vUEUtYYXyJc5TfOkVdai0qoB2P3aV2f7_sdfEX_3A0GBkWEVfeEaI-DVgOiriDVRvmQaPNbxr75qMlv_upzohVgnjzyA7mMWBbpWQxll8D65_yKRSL8Qd-_gpduiI_YKNLR3v-aOiQinVLmZDX7nlOHK3k0_iHz5wkZ77WQ2KCpZZEp7_YmPgrjI2Xd3am7WvsYbRsnJO5a0OiL45alnnUOc4zYd_BwBKLoyfP3_ROiEqgVGBEstrCrQ9trtQADAIuwRSHF9kYTxEivUDGTBBVdGqvIFyHjKtaop6bKnfCBP0QOwYoe0MlBlu2LiQkur-cxwdntbm1iJ3ra0c8HFfmyQmSyBUtLmMtvgHCun-wKx3O_IKK_N5i8pep-VCtRUwiz1oYwfS-2Zr5fetFaGt-896G5OBjgGimu9fnP9MxFG17SSdT_K1Mty4PFSDh_KbDmy6R903e_cjML3XpFvnTYICVRz1wroHEH95po-nIJg5VJ7F_o1EynMAKFFxOE",
-                "alg":  "RSA-OAEP-256",
-                "e":  "AQAB",
-                "kty":  "RSA"
-            }
+  "formato": 1,
+  "ativa": false
 }
