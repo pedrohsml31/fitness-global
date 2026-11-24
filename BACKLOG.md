@@ -2,7 +2,7 @@
 ## Em andamento
 Objetivo: conectar Fitness ao cofre/backup automático do Pedro Ambiente sem depuração USB.
 Feito: conexão cifrada curta RSA-OAEP no conteúdo web; preserva exportação/dados e assinatura do APK.
-Próximo: preparar a chave no cofre do PC, publicar a conexão pública e receber o envio cifrado do celular.
+Próximo: receber o envio cifrado do celular e confirmar cofre, snapshot Firebase e Chrome no Pedro Ambiente.
 ## Pendências
 - Decidir a assinatura do APK: o atual usa outra chave que não a pedro.keystore; publicação em pedrohsml31/apks continua pendente, sem gerar/trocar chave nesta entrega.
 - Recolorir o ícone do app (grafite + verde-limão); exige recompilar o APK no `fitdev`.
