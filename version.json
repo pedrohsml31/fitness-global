@@ -1,10 +1,10 @@
 {
-  "version": 63,
-  "name": "6.3",
+  "version": 64,
+  "name": "6.4",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "Conexão cifrada com o Pedro Ambiente para guardar o código no Bitwarden e ativar backup automático Firebase/Chrome. Sem depuração USB, sem exportar os dados e sem trocar APK ou origem.",
+  "notes": "LAYOUT: formulario de exercicio mais enxuto (grupo muscular e carga por unidade saem do Avancado; fotos juntas) e rotulos de Ajustes, Comida e Evolucao sem emojis. Exercicios parecidos ignora numeros soltos. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

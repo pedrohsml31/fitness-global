@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v6.3</title>
+<title>Fitness Global v6.4</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -477,8 +477,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "6.3";
-const APP_VERSION = 63;
+const APP_NAME_VERSION = "6.4";
+const APP_VERSION = 64;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -978,6 +978,7 @@ function render(){
   else if(r.name === "progress") renderProgress();
   else if(r.name === "ideas") renderIdeas();
   else renderHome();
+  if(["settings","food","foodplan","foodreport","progress","ideas"].includes(r.name)) stripEmoji(view);
   updateTabs(r.name);
   window.scrollTo(0, keepY);
   _lastScrollKey = key;
@@ -2069,7 +2070,7 @@ function chaveParecido(e){
     if(g[0] === "perna" || g[0] === "braco" || g[0] === "empurrar" || g[0] === "puxar" || g[0] === "superior") return;
     [...g].sort((x, y) => y.length - x.length).forEach(x => { t = t.split(" " + x + " ").join(" " + g[0] + " "); });
   });
-  return new Set(t.split(" ").filter(w => w && !PALAVRAS_NEUTRAS.has(w)));
+  return new Set(t.split(" ").filter(w => w && !PALAVRAS_NEUTRAS.has(w) && !/^\d+$/.test(w)));
 }
 function achaParecidos(gymId){
   const ign = db.settings.dupIgnore || {};
@@ -3000,7 +3001,18 @@ function icoMenu(root){
     if(d) m.innerHTML = `<svg class="ico" viewBox="0 0 24 24"><path d="${d}"/></svg>`;
   });
 }
-function openModal(html){ sheet.innerHTML = html; icoMenu(sheet); modal.classList.add("on"); }
+/* tira o emoji do COMEÇO dos rótulos (títulos, abas, botões de texto e linhas de ajuste). Botão que
+   é só um emoji fica como está, e emoji no meio do texto também. */
+const RE_EMOJI_INI = /^[\p{Extended_Pictographic}️‍]+\s*/u;
+function stripEmoji(root){
+  root.querySelectorAll("h2, summary, .t, button.btn, label.check .t, .menuitem").forEach(el => {
+    const n = [...el.childNodes].find(x => x.nodeType === 3 && x.textContent.trim());
+    if(!n || n !== el.firstChild && el.firstChild.nodeType === 1 && !el.firstChild.classList.contains("mi")) return;
+    const novo = n.textContent.replace(/^\s*/, "").replace(RE_EMOJI_INI, "");
+    if(novo.trim() && novo !== n.textContent.replace(/^\s*/, "")) n.textContent = " " + novo;
+  });
+}
+function openModal(html){ sheet.innerHTML = html; icoMenu(sheet); stripEmoji(sheet); modal.classList.add("on"); }
 function closeModal(){ modal.classList.remove("on"); sheet.innerHTML = ""; }
 modal.addEventListener("click", ev => { if(ev.target === modal) closeModal(); });
 
@@ -3042,22 +3054,22 @@ function exForm(gymId, e, pre){
     <div class="field"><label for="f-name">Nome</label>
     <input id="f-name" value="${esc(v.name)}" placeholder="Ex.: Supino reto" maxlength="60">
     <div class="btnrow" style="margin-top:8px">
-      <button class="btn ghost sm" data-action="suggest-name">🔍 Nome + foto</button>
-      <button class="btn ghost sm" data-action="open-gallery">🖼 Galeria</button>
+      <button class="btn ghost sm" data-action="suggest-name">Nome + foto</button>
+      <button class="btn ghost sm" data-action="open-gallery">Galeria</button>
     </div>
-    <div class="hint">Escreva como você chama (ex.: "supino maquina") e toque em 🔍, ou abra a 🖼 galeria para procurar por músculo e equipamento.</div></div>
-    <details class="evo"${v.photo ? " open" : ""}><summary>🖼 Foto do exercício${v.photo ? " ✓" : " (opcional)"}</summary>
+    <div class="hint">Escreva como você chama (ex.: "supino maquina") e toque em Nome + foto, ou procure na galeria por músculo e equipamento.</div></div>
+    <details class="evo"${v.photo ? " open" : ""}><summary>Foto${v.photo ? " ✓" : " (opcional)"}</summary>
     ${v.photo ? `<div class="photoprev"><img src="${esc(v.photo)}" alt="" onerror="this.style.visibility='hidden'">
       <div class="grow"><div class="t" style="font-size:.88rem">Foto do exercício</div>
       <div class="d" style="font-size:.76rem;color:var(--muted)">${v.photo.startsWith("data:") ? "Foto sua · " + Math.round(v.photo.length/1024) + " KB" : "Aparece na tela do exercício"}</div></div>
       <button class="xbtn" data-action="rm-photo" aria-label="Remover foto">✕</button></div>` : ""}
-    <div class="field"><label>Foto própria (para máquina que não está no catálogo)</label>
+    <div class="field"><label>Usar uma foto minha</label>
       <div class="btnrow">
-        <button class="btn ghost sm" data-action="pick-photo">📷 Tirar / escolher foto</button>
-        <button class="btn ghost sm" data-action="url-photo">🔗 Colar link</button>
+        <button class="btn ghost sm" data-action="pick-photo">Tirar / escolher foto</button>
+        <button class="btn ghost sm" data-action="url-photo">Colar link</button>
       </div>
       <input type="file" id="f-file" accept="image/*" style="display:none">
-      <div class="hint">A foto é reduzida para caber na sincronização — vale para qualquer exercício que você criou, mesmo sem nome oficial.</div></div>
+      <div class="hint">A foto é reduzida para caber na sincronização.</div></div>
     </details>
     <input type="hidden" id="f-photo" value="${esc(v.photo)}">
     <div class="btnrow">
@@ -3070,18 +3082,18 @@ function exForm(gymId, e, pre){
       <div class="field" style="flex:1"><label for="f-rest">Descanso (s)</label>
       <input id="f-rest" type="number" inputmode="numeric" min="5" max="900" step="5" value="${esc(v.rest)}"></div>
     </div>
-    <details class="evo"${(v.notes || v.step !== "" || v.grp || v.bw || v.global || v.perUnit) ? " open" : ""}><summary>⚙️ Avançado: grupo, degrau, observações…</summary>
-    <div class="field" style="margin-top:10px"><label for="f-step">Degrau (kg)</label>
-      <input id="f-step" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.step)}" placeholder="auto"></div>
     <div class="field"><label for="f-grp">Grupo muscular</label>
       <select id="f-grp"><option value="">— sem grupo —</option>
         ${GRUPOS.map(x=>`<option value="${x}"${(v.grp||"")===x?" selected":""}>${x}</option>`).join("")}</select>
       <div class="hint">Usado para agrupar o treino, para a regra "1 exercício por grupo" e nas medalhas.</div></div>
-    <div class="hint" style="margin:-6px 0 12px">De quanto em quanto a carga desta máquina sobe (2,5 · 5 · 10…). É o valor que o app soma quando você fecha a faixa de reps. Em branco = ele deduz do seu histórico.</div>
     ${gymUnits(gymId).length > 1 ? `<label class="check">
       <input type="checkbox" id="f-perunit" ${v.perUnit ? "checked" : ""}>
       <div class="grow"><div class="t">📍 A carga muda de unidade para unidade</div>
       <div class="d">Marque em <b>máquina</b>: cada filial tem a sua, e a carga não é comparável. O app passa a ler só as sessões da unidade onde você está. Deixe desmarcado em <b>halteres e barra</b>, que são iguais em todo lugar.</div></div></label>` : ""}
+    <details class="evo"${(v.notes || v.step !== "" || v.bw || v.global) ? " open" : ""}><summary>Mais opções: degrau, observações, peso do corpo</summary>
+    <div class="field" style="margin-top:10px"><label for="f-step">Degrau (kg)</label>
+      <input id="f-step" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.step)}" placeholder="auto"></div>
+    <div class="hint" style="margin:-6px 0 12px">De quanto em quanto a carga desta máquina sobe (2,5 · 5 · 10…). É o valor que o app soma quando você fecha a faixa de reps. Em branco = ele deduz do seu histórico.</div>
     <div class="field"><label for="f-notes">📝 Observações (opcional)</label>
     <textarea id="f-notes" maxlength="600" placeholder="Ex.: regulagem do banco no furo 4, pegada média, encosto 2 furos, cabo na polia baixa…">${esc(v.notes)}</textarea>
     <div class="hint">Aparece no topo da tela do exercício, na hora do treino.</div></div>
