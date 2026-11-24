@@ -1,10 +1,10 @@
 {
-  "version": 64,
-  "name": "6.4",
+  "version": 65,
+  "name": "6.5",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "LAYOUT: formulario de exercicio mais enxuto (grupo muscular e carga por unidade saem do Avancado; fotos juntas) e rotulos de Ajustes, Comida e Evolucao sem emojis. Exercicios parecidos ignora numeros soltos. Nao precisa instalar APK.",
+  "notes": "NOVO: barra de progresso do treino de hoje na tela da academia e reordenar exercicios arrastando (segure a alca de pontinhos no modo de ordem; as setas continuam). Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

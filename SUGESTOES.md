@@ -5,3 +5,4 @@
 - 20/11, Claude Code: selo de recorde no exercício quando bater a maior carga já registrada.
 - 20/11, Claude Code: teste automático de regras de grupo muscular com os nomes mais comuns.
 - 23/11, Codex: mostrar no modal a validade da conexão preparada pelo PC, para saber quando pedir uma nova conexão sem expor o código.
+- 24/11, Claude Code: barra de progresso do treino (feita, v6.5); reordenar arrastando (feita, v6.5); resumo da semana na aba Treino (Pedro recusou em 24/11, não implementar).

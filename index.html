@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v6.4</title>
+<title>Fitness Global v6.5</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -224,6 +224,10 @@ body:has(#restbar.on) #app{padding-bottom:260px;}
 .trofeu{width:1em; height:1em;}
 .recbanner{display:flex; gap:8px; align-items:center; background:color-mix(in srgb, var(--accent) 14%, var(--surface)); border:1px solid color-mix(in srgb, var(--accent) 50%, var(--border)); border-radius:14px; padding:10px 12px; font-size:.88rem; margin:0 0 12px;}
 .recbanner .trofeu{width:1.4em; height:1.4em; color:var(--accent); flex:none;}
+.pbar{height:6px; border-radius:99px; background:var(--surface2); overflow:hidden; margin-top:10px;}
+.pbar i{display:block; height:100%; background:var(--accent); border-radius:99px; transition:width .3s;}
+.draghandle{flex:none; width:36px; height:42px; display:grid; place-items:center; color:var(--faint); touch-action:none; cursor:grab;}
+.card.dragging{opacity:.85; outline:2px solid var(--accent); position:relative; z-index:2;}
 .okmark{color:var(--good); width:1em; height:1em; vertical-align:-.12em; margin-right:4px;}
 .setrow.skipd .skiptxt{grid-column:span 2; text-align:center; color:var(--faint); font-weight:600; text-decoration:line-through; padding:14px 6px; border:1px dashed var(--border); border-radius:14px;}
 .linkbtn{color:var(--muted); text-decoration:underline; font-weight:600; font-size:inherit; padding:2px 0;}
@@ -477,8 +481,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "6.4";
-const APP_VERSION = 64;
+const APP_NAME_VERSION = "6.5";
+const APP_VERSION = 65;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1133,6 +1137,7 @@ function focusBarHtml(g, rid){
           st.faltam ? ` · faltam ${st.faltam}` : ""} · ${st.series} série${st.series === 1 ? "" : "s"}</div></div>
       ${pronto ? `<button class="btn ghost sm" data-action="wk-resumo" style="width:auto; flex:none">Ver resumo</button>` : ""}
     </div>
+    <div class="pbar" role="progressbar" aria-valuemin="0" aria-valuemax="${st.total}" aria-valuenow="${st.feitos + st.pulados}" aria-label="Progresso do treino"><i style="width:${Math.round((st.feitos + st.pulados) / st.total * 100)}%"></i></div>
     <button type="button" class="linkbtn" data-action="wk-cancel" style="margin-top:8px; color:var(--bad)">Cancelar este treino</button></div>`;
 }
 
@@ -2140,7 +2145,8 @@ function renderGym(g){
   }
   const items = exs.map((e, idx) => {
     if(reorderMode){
-      return `<div class="card row">
+      return `<div class="card row" data-exid="${e.id}">
+        <span class="draghandle" aria-label="Segure e arraste para mudar a ordem" title="Segure e arraste"><svg class="ico" viewBox="0 0 24 24"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/></svg></span>
         <div class="grow"><h3>${esc(exName(e))}${e.gymId === null ? ' <span class="pill glob">🌐</span>' : ""}</h3></div>
         <div class="reord">
           <button class="ordbtn" data-action="move-ex" data-gym="${g.id}" data-id="${e.id}" data-dir="-1" ${idx===0?"disabled":""} aria-label="Mover para cima">↑</button>
@@ -3864,6 +3870,43 @@ function detectPR(exId, w, r){
 }
 
 /* ===================== ações ===================== */
+/* reordenar arrastando: segure a alça ⋮⋮ e leve o cartão; ao soltar a nova ordem é gravada
+   (dentro de um treino vale a ordem do treino; na academia, a ordem dos exercícios) */
+(function(){
+  let arr = null;
+  document.addEventListener("pointerdown", ev => {
+    const h = ev.target.closest && ev.target.closest(".draghandle"); if(!h) return;
+    const card = h.closest("[data-exid]"); if(!card) return;
+    arr = {card, box: card.parentElement};
+    card.classList.add("dragging");
+    try{ h.setPointerCapture(ev.pointerId); }catch(e){}
+    ev.preventDefault();
+  });
+  document.addEventListener("pointermove", ev => {
+    if(!arr) return;
+    const irmaos = [...arr.box.querySelectorAll(":scope > [data-exid]")].filter(c => c !== arr.card);
+    const alvo = irmaos.find(c => { const r = c.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; });
+    if(alvo) arr.box.insertBefore(arr.card, alvo);
+    else if(irmaos.length) irmaos[irmaos.length - 1].after(arr.card);
+  });
+  const solta = () => {
+    if(!arr) return;
+    const a = arr; arr = null;
+    a.card.classList.remove("dragging");
+    const nova = [...a.box.querySelectorAll(":scope > [data-exid]")].map(c => c.dataset.exid);
+    const rAt = gymRoutine ? routineById(gymRoutine) : null;
+    if(rAt){
+      rAt.exIds = nova.concat((rAt.exIds || []).filter(id => !nova.includes(id)));
+    } else {
+      const exs = nova.map(id => exById(id)).filter(Boolean);
+      const ordens = exs.map(e => e.order).sort((x, y) => x - y);
+      exs.forEach((e, i) => { e.order = ordens[i]; });
+    }
+    save(); render();
+  };
+  document.addEventListener("pointerup", solta);
+  document.addEventListener("pointercancel", solta);
+})();
 document.addEventListener("click", ev => {
   const el = ev.target.closest("[data-action]");
   if(!el) return;
