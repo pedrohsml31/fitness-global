@@ -1,82 +1,22 @@
-# Regras do projeto
+# Fitness Global
 
-Regras do Pedro para **qualquer app** (celular, PC ou navegador). Valem para este
-repositório e devem ser seguidas em toda release.
+App de celular (Android/Capacitor) e PWA. Vale o padrão das regras globais (versão, nome com versão, ícone, atalho, sincronização, nunca arredondar peso); abaixo, só o que é deste projeto.
 
-## Versionamento
-
-- Versão visível no formato **`X.Y`** — `1.0`, `1.1`, `1.2`…
-- **Mudança grande sobe o primeiro número**: `1.9` → `2.0`. Correção ou funcionalidade
-  pequena sobe o segundo: `2.0` → `2.1`.
-- A versão mora em **um lugar só** (`APP_NAME_VERSION` no `index.html`) e o script de
-  build a escreve nos outros. Nunca editar a versão em dois arquivos à mão.
-- Junto dela existe um **número de build inteiro e crescente** (`APP_VERSION`). Ele não
-  é para o usuário: serve para o Android (`versionCode`, que exige inteiro) e para o app
-  instalado comparar se há atualização. Trocar essa comparação por texto quebraria a
-  atualização de quem já tem a versão antiga instalada.
-
-## Nome com a versão
-
-O nome do app aparece **sempre com a versão junto**, no formato `Nome vX.Y`:
-
-- ícone na tela inicial do celular / área de trabalho do PC;
-- aba e título do navegador (`<title>`);
-- nome do app instalado (Android `app_name` e `title_activity_main`);
-- cabeçalho dentro do próprio app;
-- tela de Ajustes.
-
-Neste projeto o script `recompilar-apk.ps1` escreve isso automaticamente em
-`strings.xml` e `build.gradle`; `index.html` e `manifest.webmanifest` acompanham.
-
-## Ícone
-
-- Todo app tem **ícone próprio, com cara do que ele faz** — nada de ícone genérico.
-- **O mesmo ícone em todo lugar**: tela inicial do celular, área de trabalho, barra de
-  tarefas, aba do navegador, tela de instalação. Um único desenho de origem, exportado
-  nos tamanhos necessários.
-- Neste projeto: `icon.svg` é a origem; `icon-192.png` / `icon-512.png` para o PWA e os
-  `mipmap-*/ic_launcher*` do Android.
-
-## Instalação
-
-- App de celular precisa de **atalho na tela inicial**.
-- App de PC / executável precisa de **atalho na área de trabalho**.
-- Se for PWA, o site tem que ser instalável (manifest válido + ícones + `display:
-  standalone`).
+## Versão e build
+- A versão visível mora em um lugar só (`APP_NAME_VERSION` no `index.html`); `recompilar-apk.ps1` a escreve em `strings.xml`, `build.gradle`, `index.html` e `manifest.webmanifest`. Nunca edite a versão em dois arquivos à mão.
+- `APP_VERSION` é o número de build inteiro e crescente (`versionCode` do Android e comparação de atualização do app instalado). Trocar essa comparação por texto quebra a atualização de quem já tem o app.
+- Ícone: `icon.svg` é a origem; `icon-192.png`, `icon-512.png` e os `mipmap-*/ic_launcher*` saem dele.
+- Antes de compilar, extraia o `<script>` do `index.html` e valide com `new Function(src)` no node: um erro de sintaxe derruba o arquivo inteiro em silêncio.
 
 ## Dados e sincronização
-
-- **Nunca** depender de backup manual (exportar/importar) como forma de sincronizar.
-  Os dados sincronizam na nuvem e o app funciona em qualquer celular ou PC.
-- Peso **nunca é arredondado** — `71,38` não vira `71,4`.
-- Nunca apontar `server.url` do Capacitor para outro domínio: isso troca a origem do
-  WebView e apaga o `localStorage` (já causou perda de dados aqui).
-- Campo novo no `db` **tem** que entrar no `seed()` e no `Sync.data()`, senão ele nunca
-  chega nos outros aparelhos. O `Sync._adopt()` copia a lista de campos do próprio
-  `seed()` — não voltar a escrever os nomes à mão lá: campo esquecido nessa lista volta
-  **vazio** no aparelho que baixa da nuvem. O `Sync.dataCount()` também sai do `seed()`:
-  ele decide se o aparelho está "vazio" e pode ser sobrescrito pela nuvem.
+- Nunca aponte `server.url` do Capacitor para outro domínio: troca a origem do WebView e apaga o `localStorage` (já causou perda de dados).
+- Campo novo no `db` tem que entrar no `seed()` e no `Sync.data()`, senão nunca chega aos outros aparelhos. `Sync._adopt()` e `Sync.dataCount()` leem a lista de campos do próprio `seed()`: não volte a escrever os nomes à mão (campo esquecido volta vazio no aparelho que baixa da nuvem; `dataCount` decide se o aparelho está "vazio" e pode ser sobrescrito).
 
 ## Atualização do app
-
-- O app **se atualiza sozinho**. Toda release precisa do `version.json` correto, senão
-  quem já tem o app instalado não recebe nada.
-- `minNative` no `version.json` é o menor **build nativo** capaz de rodar aquele conteúdo
-  web. Mexeu em Java/Kotlin, manifesto, permissão ou plugin? `minNative` = o build desta
-  release. Só mudou HTML/CSS/JS? `minNative` continua o da última release nativa —
-  é o que faz a atualização acontecer sozinha, sem instalar APK.
-- `files` lista os arquivos que a atualização automática baixa. **Só texto** (o app grava
-  como UTF-8). Mudou o `taco.json`? Ele tem que entrar nessa lista.
-- Plugin nativo novo **tem** que ser registrado no `MainActivity.java` e copiado pelo
-  `recompilar-apk.ps1`. Sem isso ele simplesmente não existe no JS, sem erro nenhum.
-
-## Antes de compilar
-
-- Rodar a checagem de sintaxe do script do `index.html`. Um erro de sintaxe derruba o
-  arquivo **inteiro** em silêncio: nenhuma função é definida e o console não mostra nada.
-- Nunca inventar dado de referência (nutrição, tabela, medida). Ou vem de fonte citável,
-  ou o app mostra que não sabe e pede o valor.
+- Toda release precisa do `version.json` correto, senão quem já tem o app não recebe nada.
+- `minNative` é o menor build nativo capaz de rodar aquele conteúdo web. Mexeu em Java/Kotlin, manifesto, permissão ou plugin? `minNative` = build desta release. Só HTML/CSS/JS? Mantenha o da última release nativa.
+- `files` lista o que a atualização baixa; só texto (UTF-8). Mudou o `taco.json`? Inclua na lista.
+- Plugin nativo novo tem que ser registrado no `MainActivity.java` e copiado pelo `recompilar-apk.ps1`, senão não existe no JS, sem erro.
 
 ## Testes
-
-- `node tests/regras-grupo.js` confere as regras de grupo muscular (`GRP_REGRAS`) com ~110 nomes comuns de exercício. Rodar antes de publicar qualquer mudança nelas; ao achar um erro novo, acrescentar o nome na tabela do teste.
+- `node tests/regras-grupo.js` confere `GRP_REGRAS` (grupo muscular) com ~110 nomes de exercício. Rode só quando mexer nessas regras; ao achar erro novo, acrescente o nome na tabela do teste.
