@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v6.9</title>
+<title>Fitness Global v7.0</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -494,8 +494,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "6.9";
-const APP_VERSION = 69;
+const APP_NAME_VERSION = "7.0";
+const APP_VERSION = 70;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -4351,7 +4351,7 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
   else if(a === "plate-add" || a === "plate-undo"){
     const inp = document.querySelector(".setrow.cur input[type=number]");   // peso da série atual
     if(!inp){ toast("Nenhuma série aberta."); return; }
-    const LB = 0.45359237;                       // 1 lb em kg (exato); sem arredondar o que você digitou
+    const LB = 0.45359237;                       // 1 lb em kg; a placa é arredondada a 0,1 kg, o que você digitou fica como está
     const pilha = (window._placas = window._placas || {});
     const k = inp.id, ant = pilha[k] || [];
     const base = parseFloat(String(inp.value).replace(",", ".")) || 0;
@@ -4368,7 +4368,7 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
       lb = parseFloat(String(v || "").replace(",", "."));
       if(!lb || lb <= 0) return;
     }
-    const kg = Math.round(lb * LB * 1000) / 1000;
+    const kg = Math.round(lb * LB * 10) / 10;   // placa convertida em kg, redonda (1 casa): 2,5 lb = 1,1 kg
     ant.push(kg); pilha[k] = ant;
     inp.value = String(Math.round((base + kg) * 1000) / 1000);
     toast(`+${String(lb).replace(".", ",")} lb = +${fmt(kg)} kg → ${fmt(base + kg)} kg`);

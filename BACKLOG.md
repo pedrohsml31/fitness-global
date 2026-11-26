@@ -1,4 +1,4 @@
-# BACKLOG — Fitness Global (v6.9)
+# BACKLOG — Fitness Global (v7.0)
 ## Pendências
 - (24/11, decisão do Pedro) PRIORIDADE: primeiro funcionalidades e layout; a migração Firebase→Supabase e o APK ficam para depois.
 - Decidir a assinatura do APK: o atual usa outra chave que não a pedro.keystore; publicação em pedrohsml31/apks continua pendente, sem gerar/trocar chave nesta entrega.
