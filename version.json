@@ -1,10 +1,10 @@
 {
-  "version": 72,
-  "name": "7.2",
+  "version": 73,
+  "name": "7.3",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "PLACA EM LB SEPARADA DO PESO: a serie agora mostra o peso da maquina + a placa em lb (ex.: 40 kg + 5 lb), em vez de somar tudo em kg. Os botoes de placa nao mexem mais no campo do peso; a soma em kg so e usada por dentro para a progressao. Nao precisa instalar APK.",
+  "notes": "ESCONDER O GRUPO FEITO: ao fechar as series de um exercicio, os outros do mesmo grupo muscular somem da lista de hoje (agora tambem na visao Todos, nao so dentro de um treino A/B/C). Uma linha no fim mostra quantos estao escondidos e deixa mostrar de volta. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

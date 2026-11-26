@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v7.2</title>
+<title>Fitness Global v7.3</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -495,8 +495,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "7.2";
-const APP_VERSION = 72;
+const APP_NAME_VERSION = "7.3";
+const APP_VERSION = 73;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -2214,12 +2214,20 @@ function renderGym(g){
   });
   /* visão por grupo muscular: mesmos cartões, com um título por grupo. Dentro de cada
      grupo continua a ordem do dia (em andamento, a fazer, feito, pulado). */
-  let itemsHtml = items.join("");
+  /* "hoje não" (os que você pulou e os que o app pulou ao fechar um exercício do mesmo grupo)
+     saem da lista; uma linha no fim diz quantos estão escondidos e deixa mostrar de volta */
+  const escondido = exs.map(e => !reorderMode && !window._mostraPulados && exStateToday(e, rid) === "skip");
+  const nEsc = escondido.filter(Boolean).length;
+  let itemsHtml = items.filter((_, i) => !escondido[i]).join("");
   if(db.settings.groupView && !reorderMode && exs.length){
     const porGrupo = {};
-    exs.forEach((e, i) => { const k = grpOf(e) || "Sem grupo"; (porGrupo[k] = porGrupo[k] || []).push(items[i]); });
+    exs.forEach((e, i) => { if(escondido[i]) return; const k = grpOf(e) || "Sem grupo"; (porGrupo[k] = porGrupo[k] || []).push(items[i]); });
     const ordem = GRUPOS.filter(k => porGrupo[k]).concat(porGrupo["Sem grupo"] ? ["Sem grupo"] : []);
     itemsHtml = ordem.map(k => `<div class="sub grp-title" style="margin:12px 0 6px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; font-size:.7rem">${esc(k)} · ${porGrupo[k].length}</div>${porGrupo[k].join("")}`).join("");
+  }
+  if(!reorderMode && (nEsc || window._mostraPulados)){
+    const nPul = exs.filter(e => exStateToday(e, rid) === "skip").length;
+    if(nPul) itemsHtml += `<button type="button" class="linkbtn skipmore" data-action="toggle-skipped" style="display:block; margin:12px auto 0; padding:8px">${window._mostraPulados ? "Esconder os de “hoje não”" : `${nEsc} escondido${nEsc > 1 ? "s" : ""} hoje (“hoje não”) · mostrar`}</button>`;
   }
   const canReorder = exs.length > 1;
   view.innerHTML = `
@@ -4407,6 +4415,7 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
     ant.push(lb); pilha[k] = ant; mostra();
     toast(`Placa: +${fmtLb(soma(ant))} lb (soma ${fmtW(plKg(soma(ant)))} kg ao peso da máquina)`);
   }
+  else if(a === "toggle-skipped"){ window._mostraPulados = !window._mostraPulados; render(); }
   else if(a === "skip-set"){
     const e = exById(el.dataset.ex); if(!e) return;
     db.settings.skipSet = db.settings.skipSet || {};
@@ -4668,14 +4677,15 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
        exercício, os outros do mesmo grupo neste treino que você nem começou viram
        "hoje não" — dá para voltar no ↩. Só dentro de um treino (A/B/C): em "Todos" a
        academia inteira tem vários do mesmo grupo de treinos diferentes. */
-    if(dn === e.targetSets && db.settings.oneGroup !== false && gymRoutine && grpOf(e)){
-      const rr = routineById(gymRoutine);
-      const irmaos = rr ? routineExercises(rr, cur.gymId).filter(x => x.id !== e.id && grpOf(x) === grpOf(e) && exStateToday(x, gymRoutine) === "todo") : [];
+    if(dn === e.targetSets && db.settings.oneGroup !== false && grpOf(e)){
+      const rr = gymRoutine ? routineById(gymRoutine) : null;
+      const lista = rr ? routineExercises(rr, cur.gymId) : gymExercises(cur.gymId).filter(x => !globalBusyElsewhere(x, cur.gymId));
+      const irmaos = lista.filter(x => x.id !== e.id && grpOf(x) === grpOf(e) && exStateToday(x, gymRoutine || "") === "todo");
       if(irmaos.length){
         db.settings.skipToday = db.settings.skipToday || {};
-        irmaos.forEach(x => { db.settings.skipToday[skipKey(x, gymRoutine)] = todayStr(); });
+        irmaos.forEach(x => { db.settings.skipToday[skipKey(x, gymRoutine || "")] = todayStr(); });
         save();
-        setTimeout(() => toast(`${grpOf(e)} feito — pulei ${irmaos.map(exName).join(", ")} (1 por grupo)`), 300);
+        setTimeout(() => toast(`${grpOf(e)} feito — pulei ${irmaos.map(exName).join(", ")} (1 por grupo; ficam escondidos hoje)`), 300);
       }
     }
     render();
