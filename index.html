@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v6.5</title>
+<title>Fitness Global v6.6</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -228,6 +228,10 @@ body:has(#restbar.on) #app{padding-bottom:260px;}
 .pbar i{display:block; height:100%; background:var(--accent); border-radius:99px; transition:width .3s;}
 .draghandle{flex:none; width:36px; height:42px; display:grid; place-items:center; color:var(--faint); touch-action:none; cursor:grab;}
 .card.dragging{opacity:.85; outline:2px solid var(--accent); position:relative; z-index:2;}
+.plates{display:flex; gap:6px; align-items:center; overflow-x:auto; padding:0 0 10px; scrollbar-width:none;}
+.plates::-webkit-scrollbar{display:none;}
+.plates .pl{flex:none; font-size:.76rem; color:var(--faint); font-weight:600; margin-right:2px;}
+.plates .chipb{flex:none; padding:7px 10px;}
 .okmark{color:var(--good); width:1em; height:1em; vertical-align:-.12em; margin-right:4px;}
 .setrow.skipd .skiptxt{grid-column:span 2; text-align:center; color:var(--faint); font-weight:600; text-decoration:line-through; padding:14px 6px; border:1px dashed var(--border); border-radius:14px;}
 .linkbtn{color:var(--muted); text-decoration:underline; font-weight:600; font-size:inherit; padding:2px 0;}
@@ -481,8 +485,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "6.5";
-const APP_VERSION = 65;
+const APP_NAME_VERSION = "6.6";
+const APP_VERSION = 66;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -983,6 +987,7 @@ function render(){
   else if(r.name === "ideas") renderIdeas();
   else renderHome();
   if(["settings","food","foodplan","foodreport","progress","ideas"].includes(r.name)) stripEmoji(view);
+  window._placas = {};          // as placas somadas valem só até a tela redesenhar
   updateTabs(r.name);
   window.scrollTo(0, keepY);
   _lastScrollKey = key;
@@ -2372,6 +2377,12 @@ function renderEx(g, e){
       ${exGoalHtml(e, tlog)}
       <div class="card">
         <div class="sethead"><span>#</span><span>kg</span><span>reps</span><span></span></div>
+        ${(!e.bw && done.length + puladas < totalRows) ? `<div class="plates" aria-label="Somar placas em libras ao peso da série atual">
+          <span class="pl">Placa</span>
+          ${[2.5, 5, 7.5].map(lb => `<button type="button" class="chipb sec" data-action="plate-add" data-lb="${lb}">+${String(lb).replace(".", ",")} lb</button>`).join("")}
+          <button type="button" class="chipb sec" data-action="plate-add" data-lb="0">outra</button>
+          <button type="button" class="chipb sec" data-action="plate-undo" aria-label="Desfazer a última placa">desfazer</button>
+        </div>` : ""}
         ${rows}
         <div class="btnrow" style="margin-top:10px">
           <button class="btn ghost sm" data-action="extra-set">＋ Série extra</button>
@@ -4281,6 +4292,31 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
     buscaIa(q).then(ids => { buscaIaSalvar(qn, ids); if(!ids.length) buscaIaErro = "A IA também não achou nada parecido."; })
       .catch(e => { buscaIaErro = (e && e.message) || "Não deu para usar a IA agora."; })
       .finally(() => { buscaIaBusy = false; refiltra(); });
+  }
+  else if(a === "plate-add" || a === "plate-undo"){
+    const inp = document.querySelector(".setrow.cur input[type=number]");   // peso da série atual
+    if(!inp){ toast("Nenhuma série aberta."); return; }
+    const LB = 0.45359237;                       // 1 lb em kg (exato); sem arredondar o que você digitou
+    const pilha = (window._placas = window._placas || {});
+    const k = inp.id, ant = pilha[k] || [];
+    const base = parseFloat(String(inp.value).replace(",", ".")) || 0;
+    const fmt = n => String(Math.round(n * 1000) / 1000).replace(".", ",");
+    if(a === "plate-undo"){
+      if(!ant.length){ toast("Nenhuma placa para desfazer."); return; }
+      const kg = ant.pop(); pilha[k] = ant;
+      inp.value = String(Math.round((base - kg) * 1000) / 1000);
+      toast(`Tirei ${fmt(kg)} kg`); return;
+    }
+    let lb = parseFloat(el.dataset.lb);
+    if(!lb){
+      const v = prompt("Quantas libras (lb) tem a placa?", "");
+      lb = parseFloat(String(v || "").replace(",", "."));
+      if(!lb || lb <= 0) return;
+    }
+    const kg = Math.round(lb * LB * 1000) / 1000;
+    ant.push(kg); pilha[k] = ant;
+    inp.value = String(Math.round((base + kg) * 1000) / 1000);
+    toast(`+${String(lb).replace(".", ",")} lb = +${fmt(kg)} kg → ${fmt(base + kg)} kg`);
   }
   else if(a === "skip-set"){
     const e = exById(el.dataset.ex); if(!e) return;

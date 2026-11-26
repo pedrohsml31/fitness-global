@@ -1,10 +1,10 @@
 {
-  "version": 65,
-  "name": "6.5",
+  "version": 66,
+  "name": "6.6",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "NOVO: barra de progresso do treino de hoje na tela da academia e reordenar exercicios arrastando (segure a alca de pontinhos no modo de ordem; as setas continuam). Nao precisa instalar APK.",
+  "notes": "NOVO: placas em libras. Na serie atual, os botoes +2,5 lb, +5 lb, +7,5 lb (e outra) somam o peso da placa ja convertido em kg ao campo de peso, com desfazer. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }
