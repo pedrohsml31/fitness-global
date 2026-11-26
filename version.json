@@ -1,10 +1,10 @@
 {
-  "version": 70,
-  "name": "7.0",
+  "version": 71,
+  "name": "7.1",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "PLACAS EM LIBRAS REDONDAS: a conversao de lb para kg agora e arredondada a 0,1 kg (2,5 lb = 1,1 kg; 5 lb = 2,3 kg; 7,5 lb = 3,4 kg), sem numero quebrado. Nao precisa instalar APK.",
+  "notes": "DEGRAU = KG + PLACA EM LB: ao configurar o exercicio, o degrau pode ser o peso normal em kg mais uma placa adicional em libras (ex.: 5 kg + 2,5 lb = sobe 6,1 kg por vez). O proximo treino e a progressao usam a soma. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

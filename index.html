@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v7.0</title>
+<title>Fitness Global v7.1</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -494,8 +494,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "7.0";
-const APP_VERSION = 70;
+const APP_NAME_VERSION = "7.1";
+const APP_VERSION = 71;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1435,11 +1435,20 @@ function parseReps(s){
   const n = t.match(/(\d+)/);
   return n ? {min:+n[1], max:+n[1]} : null;
 }
+/* Degrau definido no exercício = kg normais + a placa adicional em libras já convertida (0,1 kg). */
+const LB_KG = 0.45359237;
+function degrauEx(e){
+  if(!e) return null;
+  const kg = (typeof e.step === "number" && e.step > 0) ? e.step : 0;
+  const pl = (typeof e.stepLb === "number" && e.stepLb > 0) ? Math.round(e.stepLb * LB_KG * 10) / 10 : 0;
+  const t = Math.round((kg + pl) * 1000) / 1000;
+  return t > 0 ? t : null;
+}
 function loadStep(exId){
   /* o degrau que VOCÊ definiu no exercício manda: é a anilha/pino que a máquina tem.
      Sem ele, o app continua deduzindo do histórico o menor salto já dado. */
   const ex = exById(exId);
-  if(ex && typeof ex.step === "number" && ex.step > 0) return ex.step;
+  if(degrauEx(ex)) return degrauEx(ex);
   const ws = [...new Set(logsOf(exId).flatMap(l => l.sets.map(s => s.weight)))].sort((a,b)=>a-b);
   let step = null;
   for(let i=1;i<ws.length;i++){
@@ -2257,7 +2266,7 @@ function proximoTreino(e, tlog){
   if(!dp || !dp.fechou) return null;
   const step = loadStep(e.id);
   const peso = step != null ? Math.round((dp.peso + step) * 1000) / 1000 : null;
-  return {dp, step, peso, definido: typeof e.step === "number" && e.step > 0,
+  return {dp, step, peso, definido: !!degrauEx(e),
     metaReps: dp.range.min, sets: dp.alvo, max: dp.range.max};
 }
 function proximoTreinoHtml(e, tlog){
@@ -2410,7 +2419,7 @@ function renderEx(g, e){
     <div class="exline">
       <b style="${done.length>=e.targetSets?"color:var(--good)":done.length?"color:var(--gold)":""}">${done.length}/${e.targetSets} séries</b>${puladas ? `<span>· ${puladas} pulada${puladas>1?"s":""}</span>` : ""}
       ${e.reps ? `<span>· meta ${esc(e.reps)} reps</span>` : ""}<span>· descanso ${e.restSec}s</span>
-      ${typeof e.step === "number" && e.step>0 ? `<span>· +${fmtW(e.step)} ${uW(e)}</span>` : ""}
+      ${degrauEx(e) ? `<span>· +${fmtW(degrauEx(e))} ${uW(e)}</span>` : ""}
       ${e.bw ? `<span>· 🧍 peso do corpo</span>` : ""}${e.gymId === null ? `<span>· 🌐 todas as academias</span>` : ""}
       ${e.reps ? "" : `<button class="pill" data-action="edit-ex" data-gym="${g.id}" data-id="${e.id}" style="cursor:pointer; color:var(--gold); border-color:var(--gold)" title="Sem faixa de reps o app não consegue sugerir a progressão">⚠️ defina a faixa de reps</button>`}
     </div>
@@ -3102,6 +3111,7 @@ function exFormSnapshot(){
   if(g("f-notes")) exFormCtx.notes = g("f-notes").value;
   if(g("f-global")) exFormCtx.global = g("f-global").checked;
   if(g("f-step")) exFormCtx.step = g("f-step").value;
+  if(g("f-steplb")) exFormCtx.stepLb = g("f-steplb").value;
   if(g("f-perunit")) exFormCtx.perUnit = g("f-perunit").checked;
   if(g("f-placas")) exFormCtx.medida = g("f-placas").checked ? "placas" : "";
   if(g("f-photo")) exFormCtx.photo = g("f-photo").value;
@@ -3112,10 +3122,10 @@ function exForm(gymId, e, pre){
     notes: (e && e.notes) || "", global: e ? e.gymId === null : false, photo: (e && e.photo) || "",
     reps: (e && e.reps) || "", bw: e ? !!e.bw : false,
     namePt: (e && e.namePt) || "", nameEn: (e && e.nameEn) || "",
-    step: (e && typeof e.step === "number") ? e.step : "", perUnit: e ? !!e.perUnit : false,
+    step: (e && typeof e.step === "number") ? e.step : "", stepLb: (e && typeof e.stepLb === "number") ? e.stepLb : "", perUnit: e ? !!e.perUnit : false,
     grp: (e && e.grp) || "", medida: (e && e.medida) || ""
   }, pre || {});
-  exFormCtx = {gymId, id: e ? e.id : "", name:v.name, sets:v.sets, rest:v.rest, notes:v.notes, global:v.global, photo:v.photo, reps:v.reps, bw:v.bw, namePt:v.namePt, nameEn:v.nameEn, step:v.step, perUnit:v.perUnit, grp:v.grp, medida:v.medida};
+  exFormCtx = {gymId, id: e ? e.id : "", name:v.name, sets:v.sets, rest:v.rest, notes:v.notes, global:v.global, photo:v.photo, reps:v.reps, bw:v.bw, namePt:v.namePt, nameEn:v.nameEn, step:v.step, stepLb:v.stepLb, perUnit:v.perUnit, grp:v.grp, medida:v.medida};
   openModal(`<h2>${e ? "Editar exercício" : "Novo exercício"}</h2>
     <div class="field"><label for="f-name">Nome</label>
     <input id="f-name" value="${esc(v.name)}" placeholder="Ex.: Supino reto" maxlength="60">
@@ -3161,9 +3171,12 @@ function exForm(gymId, e, pre){
       <div class="grow"><div class="t">Medir em placas (sem o peso)</div>
       <div class="d">Para máquina com o peso raspado: você anota <b>quantas placas</b> (ou o furo do pino) e o app trata igual ao peso, com progressão e recorde. O degrau passa a ser em placas (ex.: 1).</div></div>
     </label>
-    <details class="evo"${(v.notes || v.step !== "" || v.bw || v.global) ? " open" : ""}><summary>Mais opções: degrau, observações, peso do corpo</summary>
+    <details class="evo"${(v.notes || v.step !== "" || v.stepLb !== "" || v.bw || v.global) ? " open" : ""}><summary>Mais opções: degrau, observações, peso do corpo</summary>
     <div class="field" style="margin-top:10px"><label for="f-step">Degrau (kg, ou placas)</label>
       <input id="f-step" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.step)}" placeholder="auto"></div>
+    <div class="field"><label for="f-steplb">+ Placa adicional (lb)</label>
+      <input id="f-steplb" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.stepLb)}" placeholder="ex.: 2,5">
+      <div class="hint" id="f-stepsum" style="margin-top:4px; font-size:.82rem; color:var(--muted)"></div></div>
     <div class="hint" style="margin:-6px 0 12px">De quanto em quanto a carga desta máquina sobe (2,5 · 5 · 10…). É o valor que o app soma quando você fecha a faixa de reps. Em branco = ele deduz do seu histórico.</div>
     <div class="field"><label for="f-notes">📝 Observações (opcional)</label>
     <textarea id="f-notes" maxlength="600" placeholder="Ex.: regulagem do banco no furo 4, pegada média, encosto 2 furos, cabo na polia baixa…">${esc(v.notes)}</textarea>
@@ -3973,6 +3986,14 @@ function detectPR(exId, w, r){
   document.addEventListener("pointerup", solta);
   document.addEventListener("pointercancel", solta);
 })();
+document.addEventListener("input", ev => {
+  if(!ev.target || (ev.target.id !== "f-step" && ev.target.id !== "f-steplb")) return;
+  const num = id => parseFloat(String((document.getElementById(id) || {value:""}).value).replace(",", ".")) || 0;
+  const kg = num("f-step"), lb = num("f-steplb"), box = document.getElementById("f-stepsum");
+  if(!box) return;
+  const pl = Math.round(lb * LB_KG * 10) / 10, tot = Math.round((kg + pl) * 1000) / 1000;
+  box.textContent = lb > 0 ? `${fmtW(kg)} + ${String(lb).replace(".", ",")} lb (${fmtW(pl)} kg) = sobe ${fmtW(tot)} por vez` : "";
+});
 document.addEventListener("click", ev => {
   const el = ev.target.closest("[data-action]");
   if(!el) return;
@@ -4504,6 +4525,9 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
     const stepRaw = (document.getElementById("f-step") || {value:""}).value;
     const stepN = parseFloat(String(stepRaw).replace(",", "."));
     const step = (isFinite(stepN) && stepN > 0) ? stepN : undefined;
+    const lbRaw = (document.getElementById("f-steplb") || {value:""}).value;
+    const lbN = parseFloat(String(lbRaw).replace(",", "."));
+    const stepLb = (isFinite(lbN) && lbN > 0) ? lbN : undefined;
     const perUnit = !!(document.getElementById("f-perunit") || {}).checked;
     const medida = (document.getElementById("f-placas") || {}).checked ? "placas" : undefined;
     if(!name){ toast("Dê um nome ao exercício."); return; }
@@ -4516,11 +4540,11 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
     if(el.dataset.id){
       const e = exById(el.dataset.id);
       e.name = name; e.namePt = pt || undefined; e.nameEn = en || undefined;
-      e.step = step; e.medida = medida; e.perUnit = perUnit || undefined; e.grp = grp; e.grpAuto = grpAuto || undefined; if(!grp) e.grpTried = undefined;
+      e.step = step; e.stepLb = stepLb; e.medida = medida; e.perUnit = perUnit || undefined; e.grp = grp; e.grpAuto = grpAuto || undefined; if(!grp) e.grpTried = undefined;
       e.targetSets = sets; e.restSec = restS; e.reps = reps; e.bw = bw; e.notes = notes; e.photo = photo; e.gymId = glob ? null : (e.gymId === null ? el.dataset.gym : e.gymId);
     } else {
       db.exercises.push({id:uid(), gymId: glob ? null : el.dataset.gym, name, namePt:pt||undefined, nameEn:en||undefined,
-        step, medida, perUnit: perUnit || undefined, grp, grpAuto: grpAuto || undefined, targetSets:sets, restSec:restS, reps, bw, notes, photo, order: nextOrder()});
+        step, stepLb, medida, perUnit: perUnit || undefined, grp, grpAuto: grpAuto || undefined, targetSets:sets, restSec:restS, reps, bw, notes, photo, order: nextOrder()});
     }
     exFormCtx = null;
     save(); closeModal(); render();
