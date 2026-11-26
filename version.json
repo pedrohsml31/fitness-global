@@ -1,10 +1,10 @@
 {
-  "version": 68,
-  "name": "6.8",
+  "version": 69,
+  "name": "6.9",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "PROGRESSAO NA HORA: ao fechar a faixa de reps em todas as series de hoje, o app mostra na hora o peso do proximo treino (peso de hoje + o degrau que voce definiu no exercicio) e a meta de reps; sem degrau, pede para definir. Nao precisa instalar APK.",
+  "notes": "EXERCICIO EM PLACAS: para maquina com o peso raspado, marque \"Medir em placas (sem o peso)\" ao criar ou editar o exercicio. Voce anota quantas placas; progressao, degrau, recorde e proximo treino funcionam igual, em placas. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

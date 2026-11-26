@@ -6,3 +6,5 @@
 - 20/11, Claude Code: teste automático de regras de grupo muscular com os nomes mais comuns.
 - 23/11, Codex: mostrar no modal a validade da conexão preparada pelo PC, para saber quando pedir uma nova conexão sem expor o código.
 - 24/11, Claude Code: barra de progresso do treino (feita, v6.5); reordenar arrastando (feita, v6.5); resumo da semana na aba Treino (Pedro recusou em 24/11, não implementar).
+- 26/11, Claude Code: [nova] mostrar a conversão placas→kg quando você descobrir o peso real da máquina (campo opcional "kg por placa").
+- 26/11, Claude Code: [nova] avisar na tela do exercício quando o histórico misturar kg e placas (ao trocar a medida de um exercício que já tem séries).
