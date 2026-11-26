@@ -1,10 +1,10 @@
 {
-  "version": 67,
-  "name": "6.7",
+  "version": 68,
+  "name": "6.8",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "Melhorias mais visivel: botao de lampada com o numero de ideias em aberto no topo de Treino, Biblioteca, Comida e Evolucao, e uma linha Melhorias no fim da tela Treino. Nao precisa instalar APK.",
+  "notes": "PROGRESSAO NA HORA: ao fechar a faixa de reps em todas as series de hoje, o app mostra na hora o peso do proximo treino (peso de hoje + o degrau que voce definiu no exercicio) e a meta de reps; sem degrau, pede para definir. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

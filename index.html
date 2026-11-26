@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v6.7</title>
+<title>Fitness Global v6.8</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -237,6 +237,10 @@ body:has(#restbar.on) #app{padding-bottom:260px;}
 .ideasrow{display:flex; align-items:center; gap:12px; width:100%; text-align:left; margin-top:14px; padding:14px; border:1px solid var(--border); border-radius:16px; background:var(--surface);}
 .ideasrow > .ico:first-child{color:var(--accent); width:26px; height:26px; flex:none;}
 .ideasrow .t{flex:1;}
+.nextcard{background:color-mix(in srgb, var(--accent) 12%, var(--surface)); border:1px solid color-mix(in srgb, var(--accent) 50%, var(--border)); border-radius:16px; padding:12px 14px; margin:0 0 16px;}
+.nextcard .nk{font-size:.82rem; font-weight:700; color:var(--accent);}
+.nextcard .nn{font-family:var(--disp); font-size:2.2rem; line-height:1.1; font-weight:700; margin:2px 0;}
+.nextcard .nn small{font-family:"Instrument Sans",sans-serif; font-size:.9rem; font-weight:600; color:var(--muted); margin-left:6px;}
 .okmark{color:var(--good); width:1em; height:1em; vertical-align:-.12em; margin-right:4px;}
 .setrow.skipd .skiptxt{grid-column:span 2; text-align:center; color:var(--faint); font-weight:600; text-decoration:line-through; padding:14px 6px; border:1px dashed var(--border); border-radius:14px;}
 .linkbtn{color:var(--muted); text-decoration:underline; font-weight:600; font-size:inherit; padding:2px 0;}
@@ -490,8 +494,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "6.7";
-const APP_VERSION = 67;
+const APP_NAME_VERSION = "6.8";
+const APP_VERSION = 68;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -2241,6 +2245,29 @@ function renderGym(g){
 /* ---- tela do exercício ---- */
 let exUI = {metric:"forca"};
 
+/* Fechou a faixa de reps em todas as séries de hoje: já diz o peso do próximo treino
+   (somando o degrau que você definiu no exercício, ou o menor salto do histórico) e a meta de reps. */
+function proximoTreino(e, tlog){
+  const dp = tlog ? dpState(e, tlog) : null;
+  if(!dp || !dp.fechou) return null;
+  const step = loadStep(e.id);
+  const peso = step != null ? Math.round((dp.peso + step) * 1000) / 1000 : null;
+  return {dp, step, peso, definido: typeof e.step === "number" && e.step > 0,
+    metaReps: dp.range.min, sets: dp.alvo, max: dp.range.max};
+}
+function proximoTreinoHtml(e, tlog){
+  const t = proximoTreino(e, tlog); if(!t) return "";
+  const metas = Array(t.sets).fill(t.metaReps).join(" · ");
+  return `<div class="nextcard" role="status">
+    <div class="nk">Faixa fechada hoje ✓</div>
+    ${t.peso != null
+      ? `<div class="nn">Próximo treino: ${fmtW(t.peso)}<small>kg</small></div>
+         <div class="gh">${fmtW(t.dp.peso)} kg + ${fmtW(t.step)} kg${t.definido ? " (o degrau que você definiu)" : " (menor salto do seu histórico)"} · meta ${metas} reps, subindo até ${t.max}.</div>`
+      : `<div class="nn">Próximo treino: suba a carga</div>
+         <div class="gh">Ainda não sei de quanto em quanto esta máquina sobe. Defina o degrau para eu sugerir o peso certo.</div>
+         <button class="pill" data-action="edit-ex" data-gym="${esc(route().gymId)}" data-id="${e.id}" style="cursor:pointer; color:var(--accent); border-color:var(--accent)">Definir o degrau</button>`}
+  </div>`;
+}
 function exGoalHtml(e, tlog){
   const t = nextTarget(e);
   const meta = e.reps ? `${e.targetSets} × ${esc(e.reps)}` : "";
@@ -2248,7 +2275,7 @@ function exGoalHtml(e, tlog){
     <div class="gh">Defina a faixa de reps (ex.: 8–12) para o app sugerir a progressão.</div>
     <button class="pill" data-action="edit-ex" data-gym="${esc(route().gymId)}" data-id="${e.id}" style="cursor:pointer; color:var(--accent); border-color:var(--accent)">Definir a faixa</button></div>`;
   if(t.falta === "historico") return `<div class="goalx"><div class="gk">Meta de hoje${meta ? " · " + meta : ""}</div>
-    <div class="gh">Primeira vez: escolha um peso que você feche <b>${t.range.min} reps</b> com folga e vá subindo até <b>${t.range.max}</b>.</div></div>`;
+    <div class="gh">Primeira vez: escolha um peso que você feche <b>${t.range.min} reps</b> com folga e vá subindo até <b>${t.range.max}</b>.</div></div>${proximoTreinoHtml(e, tlog)}`;
   const serie = n => n+"ª";
   let big, sub, hint;
   if(t.tipo === "subir"){
@@ -2266,7 +2293,7 @@ function exGoalHtml(e, tlog){
   const dpH = tlog ? dpState(e, tlog) : null;
   const hoje = dpH ? `<div class="gh" style="margin-top:6px">Hoje: ${dpH.reps.join(" · ")} — ${dpH.fechou ? "fechou a faixa ✓" : dpH.seriesFaltando ? `faltam ${dpH.seriesFaltando} série${dpH.seriesFaltando>1?"s":""} e ${dpH.faltam} rep${dpH.faltam===1?"":"s"}` : `faltam ${dpH.faltam} rep${dpH.faltam===1?"":"s"}`}</div>` : "";
   return `<div class="goalx"><div class="gk">Meta de hoje${meta ? " · " + meta : ""}</div>
-    <div class="gn">${big}</div><div class="gs2">${sub}</div><div class="gh">${hint}</div>${hoje}</div>`;
+    <div class="gn">${big}</div><div class="gs2">${sub}</div><div class="gh">${hint}</div>${hoje}</div>${proximoTreinoHtml(e, tlog)}`;
 }
 function renderEx(g, e){
   const tlog = todayLog(e.id);
@@ -4534,6 +4561,7 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
     const melhorAntes = bestSession(exId, todayStr());
     const primeiraAqui = !simMode && primeiraNaUnidade(e, e.gymId || cur.gymId);
     let l = todayLog(exId);
+    const jaFechado = !!(l && (dpState(e, l) || {}).fechou);
     if(!l){ l = {id:uid(), exerciseId:exId, gymId:cur.gymId, date:todayStr(), sets:[]};
       const uAtual = unitNow(cur.gymId);
       if(uAtual) l.u = uAtual;                 // carimba em qual unidade foi feito
@@ -4543,6 +4571,10 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
     l.sets.push(gymRoutine ? {weight:w, reps:r, rt:gymRoutine} : {weight:w, reps:r});
     if(pendingExtra > 0 && l.sets.length > e.targetSets) pendingExtra--;
     save();
+    if(!simMode && !jaFechado){
+      const nx = proximoTreino(e, l);
+      if(nx) toast(nx.peso != null ? `Faixa fechada! Próximo treino: ${fmtW(nx.peso)} kg × ${nx.metaReps} reps` : "Faixa fechada! Próximo treino: suba a carga");
+    }
     if(primeiraAqui){
       const gId = e.gymId || cur.gymId;
       toastUndo(`Registrado em ${unitName(gId, primeiraAqui.u)} (1ª vez aqui)`, () => {
