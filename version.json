@@ -1,10 +1,10 @@
 {
-  "version": 71,
-  "name": "7.1",
+  "version": 72,
+  "name": "7.2",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "DEGRAU = KG + PLACA EM LB: ao configurar o exercicio, o degrau pode ser o peso normal em kg mais uma placa adicional em libras (ex.: 5 kg + 2,5 lb = sobe 6,1 kg por vez). O proximo treino e a progressao usam a soma. Nao precisa instalar APK.",
+  "notes": "PLACA EM LB SEPARADA DO PESO: a serie agora mostra o peso da maquina + a placa em lb (ex.: 40 kg + 5 lb), em vez de somar tudo em kg. Os botoes de placa nao mexem mais no campo do peso; a soma em kg so e usada por dentro para a progressao. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

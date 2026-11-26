@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v7.1</title>
+<title>Fitness Global v7.2</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -241,6 +241,7 @@ body:has(#restbar.on) #app{padding-bottom:260px;}
 .nextcard .nk{font-size:.82rem; font-weight:700; color:var(--accent);}
 .nextcard .nn{font-family:var(--disp); font-size:2.2rem; line-height:1.1; font-weight:700; margin:2px 0;}
 .nextcard .nn small{font-family:"Instrument Sans",sans-serif; font-size:.9rem; font-weight:600; color:var(--muted); margin-left:6px;}
+.plates .plsum{flex:none; font-size:.82rem; color:var(--accent); font-weight:800; margin-right:4px;}
 .okmark{color:var(--good); width:1em; height:1em; vertical-align:-.12em; margin-right:4px;}
 .setrow.skipd .skiptxt{grid-column:span 2; text-align:center; color:var(--faint); font-weight:600; text-decoration:line-through; padding:14px 6px; border:1px dashed var(--border); border-radius:14px;}
 .linkbtn{color:var(--muted); text-decoration:underline; font-weight:600; font-size:inherit; padding:2px 0;}
@@ -494,8 +495,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "7.1";
-const APP_VERSION = 71;
+const APP_NAME_VERSION = "7.2";
+const APP_VERSION = 72;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -1097,12 +1098,12 @@ function ultimasCargas(e){
   if(e.perUnit && us.length > 1){
     const partes = us.map(u => {
       const l = logs.filter(x => x.u === u.id).pop();
-      return l ? `${esc(u.name)} <b>${fmtW(Math.max(...l.sets.map(x => x.weight)))} ${uW(e)}</b>` : "";
+      return l ? `${esc(u.name)} <b>${fmtSet(l.sets.reduce((a, x) => x.weight > a.weight ? x : a, l.sets[0]), e)}</b>` : "";
     }).filter(Boolean);
     if(partes.length) return partes.join(" · ");
   }
   const l = logs[logs.length - 1];
-  return `última carga <b>${fmtW(Math.max(...l.sets.map(x => x.weight)))} ${uW(e)}</b>`;
+  return `última carga <b>${fmtSet(l.sets.reduce((a, x) => x.weight > a.weight ? x : a, l.sets[0]), e)}</b>`;
 }
 function filterLibrary(){
   const q = norm(libQuery);
@@ -1274,7 +1275,7 @@ function summaryLine(exId){
   if(!logs.length) return un ? `${esc(un)}: sem registros ainda` : "Sem registros ainda";
   const l = logs[logs.length-1];
   const best = l.sets.reduce((a,s) => s.weight > a.weight ? s : a, l.sets[0]);
-  return `${un ? `<b>${esc(un)}</b> · ` : ""}${fmtDate(l.date)} · ${fmtW(best.weight)} ${uW(e)} × ${best.reps}`;
+  return `${un ? `<b>${esc(un)}</b> · ` : ""}${fmtDate(l.date)} · ${fmtSet(best, e)} × ${best.reps}`;
 }
 
 /* ===================== TREINOS PRONTOS =====================
@@ -1437,6 +1438,11 @@ function parseReps(s){
 }
 /* Degrau definido no exercício = kg normais + a placa adicional em libras já convertida (0,1 kg). */
 const LB_KG = 0.45359237;
+const plKg = lb => Math.round(lb * LB_KG * 10) / 10;                     // placa em lb -> kg, redonda (0,1)
+const fmtLb = n => String(Math.round(n * 100) / 100).replace(".", ",");
+const baseW = s => (s && s.pl > 0) ? Math.round((s.weight - plKg(s.pl)) * 1000) / 1000 : (s ? s.weight : 0);   // peso da maquina
+/* como a serie aparece: peso da maquina + placa em lb ("40 kg + 5 lb"); sem placa, so o peso */
+const fmtSet = (s, e) => (s && s.pl > 0 && !emPlacas(e)) ? `${fmtW(baseW(s))} kg + ${fmtLb(s.pl)} lb` : `${fmtW(s.weight)} ${uW(e)}`;
 function degrauEx(e){
   if(!e) return null;
   const kg = (typeof e.step === "number" && e.step > 0) ? e.step : 0;
@@ -2319,16 +2325,16 @@ function renderEx(g, e){
   const gAtual = e.gymId || g.id;
   const prim = primeiraNaUnidade(e, gAtual);
 
-  let rows = "";
+  let rows = "", curPl = 0;
   for(let i = 0; i < totalRows; i++){
     if(i < done.length){
       const s = done[i];
       rows += `<div class="setrow done">
         <div class="num feito" title="Série ${i+1} registrada" aria-label="Série ${i+1} registrada"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></div>
-        <input class="val" type="number" inputmode="decimal" step="any" min="0" value="${s.weight}" data-edit="w" data-ex="${e.id}" data-i="${i}" aria-label="Editar peso da série ${i+1}">
+        <input class="val" type="number" inputmode="decimal" step="any" min="0" value="${baseW(s)}" data-edit="w" data-ex="${e.id}" data-i="${i}" aria-label="Editar peso da série ${i+1}">
         <input class="val" type="number" inputmode="numeric" step="1" min="1" value="${s.reps}" data-edit="r" data-ex="${e.id}" data-i="${i}" aria-label="Editar repetições da série ${i+1}">
         <button class="ok del" data-action="del-set" data-ex="${e.id}" data-i="${i}" aria-label="Apagar série ${i+1}" title="Apagar esta série"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg></button>
-      </div>`;
+      </div>${s.pl > 0 ? `<div class="setlast">+ ${fmtLb(s.pl)} lb de placa (${fmtW(s.weight)} kg no total)</div>` : ""}`;
     } else if(i < done.length + puladas){
       rows += `<div class="setrow skipd">
         <div class="num">${i+1}</div>
@@ -2343,7 +2349,8 @@ function renderEx(g, e){
          (8 nas três), que é a sua regra de progressão dupla. */
       const refPos = (prev && prev.sets[i]) || null;                 // mesma posição de série
       const ref = refPos || (prev && prev.sets[prev.sets.length-1]) || done[done.length-1] || null;
-      let pw = ref ? String(ref.weight) : "", pr = ref ? String(ref.reps) : "";
+      let pw = ref ? String(baseW(ref)) : "", pr = ref ? String(ref.reps) : "";
+      let plNow = ref && ref.pl > 0 ? ref.pl : 0;                   // placa em lb que segue da série de referência
       let dica = "";
       if(alvoHoje && alvoHoje.tipo === "subir"){
         /* fechou a faixa: recomeça no piso com a carga maior. Quando o app ainda não
@@ -2356,25 +2363,34 @@ function renderEx(g, e){
           : `fechou ${fmtW(alvoHoje.de)} × ${refPos ? refPos.reps : alvoHoje.range.max} → <span class="meta">suba o pino e faça ${alvoHoje.metaReps}</span>`;
       } else if(alvoHoje && alvoHoje.tipo === "manter"){
         pw = String(alvoHoje.peso);
+        {
+          /* subiu: peso da máquina + o degrau em kg; a placa em lb soma o "placa adicional" do degrau */
+          const rb = refPos || ref, plPrev = rb && rb.pl > 0 ? rb.pl : 0, add = e.stepLb > 0 ? e.stepLb : 0;
+          if(plPrev || add){
+            plNow = plPrev + add;
+            pw = (e.step > 0 || add) ? String(Math.round(((rb ? baseW(rb) : 0) + (e.step > 0 ? e.step : 0)) * 1000) / 1000) : String(Math.round((alvoHoje.peso - plKg(plPrev)) * 1000) / 1000);
+          }
+        }
         if(refPos){
           pr = String(refPos.reps);
           const falta = Math.max(0, alvoHoje.range.max - refPos.reps);
-          dica = `última: <b>${fmtW(refPos.weight)} × ${refPos.reps}</b> → <span class="meta">meta ${alvoHoje.range.max}${falta ? ` (falta ${falta})` : " ✓"}</span>`;
+          dica = `última: <b>${fmtSet(refPos, e)} × ${refPos.reps}</b> → <span class="meta">meta ${alvoHoje.range.max}${falta ? ` (falta ${falta})` : " ✓"}</span>`;
         } else {
           pr = String(alvoHoje.range.min);
           dica = `série nova → <span class="meta">meta ${alvoHoje.range.max}</span>`;
         }
       } else if(refPos){
-        dica = `última: <b>${fmtW(refPos.weight)} × ${refPos.reps}</b>`;
+        dica = `última: <b>${fmtSet(refPos, e)} × ${refPos.reps}</b>`;
       }
-      if(done.length) pw = String(done[done.length-1].weight);       // já começou: segue o peso do dia
+      if(done.length){ pw = String(baseW(done[done.length-1])); plNow = done[done.length-1].pl > 0 ? done[done.length-1].pl : 0; }       // já começou: segue o peso do dia
       /* peso do corpo: o kg vem do seu último peso registrado (dá para escrever por cima) */
       if(e.bw && !done.length){ const b = lastBodyWeight(); if(b) pw = String(b.kg); }
       else if(e.bw && done.length) pw = String(done[done.length-1].weight);
       const eAtual = i === done.length + puladas;
+      if(eAtual) curPl = plNow;
       rows += `<div class="setrow${eAtual ? " cur" : ""}">
         <div class="num">${i+1}</div>
-        <input type="number" inputmode="decimal" step="any" min="0" id="w${i}" value="${pw}" placeholder="${uWl(e)}" aria-label="${emPlacas(e) ? "Placas" : "Peso"} da série ${i+1}">
+        <input type="number" inputmode="decimal" step="any" min="0" id="w${i}" value="${pw}" data-pl="${plNow || ""}" placeholder="${uWl(e)}" aria-label="${emPlacas(e) ? "Placas" : "Peso"} da série ${i+1}">
         <input type="number" inputmode="numeric" step="1" min="1" id="r${i}" value="${pr}" placeholder="reps" aria-label="Repetições da série ${i+1}">
         <button class="ok" data-action="log-set" data-ex="${e.id}" data-i="${i}" aria-label="Confirmar série ${i+1}"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></button>
       </div>${(dica || eAtual) ? `<div class="setlast">${dica}${eAtual ? `${dica ? " · " : ""}<button type="button" class="linkbtn" data-action="skip-set" data-ex="${e.id}">pular esta série</button>` : ""}</div>` : ""}`;
@@ -2391,7 +2407,7 @@ function renderEx(g, e){
   const histLinha = (l, pill) => `
     <div class="hist" data-action="hist-edit" data-id="${l.id}" style="cursor:pointer" title="Toque para corrigir ou apagar"><div class="d">${fmtDate(l.date)}${pill || ""}${
       prDates.has(l.date) ? ' <span class="pill pr">🏆 recorde</span>' : ""}</div>
-    <div class="s">${l.sets.map(s => `${fmtW(s.weight)} ${uW(e)} × ${s.reps}`).join("&ensp;·&ensp;")}</div></div>`;
+    <div class="s">${l.sets.map(s => `${fmtSet(s, e)} × ${s.reps}`).join("&ensp;·&ensp;")}</div></div>`;
   let hist;
   if(temUnidades && exPerUnit(e)){
     /* a unidade onde você está vem primeiro e aberta; as outras ficam recolhidas e com o nome */
@@ -2414,7 +2430,7 @@ function renderEx(g, e){
     ${temUnidades ? unitBarHtml(gymById(e.gymId || g.id) || g) : ""}
     ${temUnidades ? unitStripHtml(gAtual) : ""}
     ${prim ? `<div class="firstun" role="status"><b>Primeira vez em ${esc(unitName(gAtual, prim.u))}.</b>
-      ${prim.ult.u ? `Em ${esc(unitName(gAtual, prim.ult.u))} você` : "Antes você"} fez ${prim.ult.sets.map(x => fmtW(x.weight) + " " + uW(e) + " × " + x.reps).join(" · ")}.
+      ${prim.ult.u ? `Em ${esc(unitName(gAtual, prim.ult.u))} você` : "Antes você"} fez ${prim.ult.sets.map(x => fmtSet(x, e) + " × " + x.reps).join(" · ")}.
       Confira se a unidade está certa antes de registrar.</div>` : ""}
     <div class="exline">
       <b style="${done.length>=e.targetSets?"color:var(--good)":done.length?"color:var(--gold)":""}">${done.length}/${e.targetSets} séries</b>${puladas ? `<span>· ${puladas} pulada${puladas>1?"s":""}</span>` : ""}
@@ -2433,8 +2449,8 @@ function renderEx(g, e){
       ${exGoalHtml(e, tlog)}
       <div class="card">
         <div class="sethead"><span>#</span><span>${uWl(e)}</span><span>reps</span><span></span></div>
-        ${(!e.bw && !emPlacas(e) && done.length + puladas < totalRows) ? `<div class="plates" aria-label="Somar placas em libras ao peso da série atual">
-          <span class="pl">Placa</span>
+        ${(!e.bw && !emPlacas(e) && done.length + puladas < totalRows) ? `<div class="plates" aria-label="Placa em libras, somada ao peso da máquina na série atual">
+          <span class="pl">Placa</span><b class="plsum" id="plsum">${curPl > 0 ? "+" + fmtLb(curPl) + " lb" : ""}</b>
           ${[2.5, 5, 7.5].map(lb => `<button type="button" class="chipb sec" data-action="plate-add" data-lb="${lb}">+${String(lb).replace(".", ",")} lb</button>`).join("")}
           <button type="button" class="chipb sec" data-action="plate-add" data-lb="0">outra</button>
           <button type="button" class="chipb sec" data-action="plate-undo" aria-label="Desfazer a última placa">desfazer</button>
@@ -4372,16 +4388,15 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
   else if(a === "plate-add" || a === "plate-undo"){
     const inp = document.querySelector(".setrow.cur input[type=number]");   // peso da série atual
     if(!inp){ toast("Nenhuma série aberta."); return; }
-    const LB = 0.45359237;                       // 1 lb em kg; a placa é arredondada a 0,1 kg, o que você digitou fica como está
     const pilha = (window._placas = window._placas || {});
-    const k = inp.id, ant = pilha[k] || [];
-    const base = parseFloat(String(inp.value).replace(",", ".")) || 0;
-    const fmt = n => String(Math.round(n * 1000) / 1000).replace(".", ",");
+    const k = inp.id;
+    const ant = pilha[k] || (parseFloat(inp.dataset.pl) > 0 ? [parseFloat(inp.dataset.pl)] : []);
+    const soma = arr => Math.round(arr.reduce((x, y) => x + y, 0) * 100) / 100;
+    const mostra = () => { const b = document.getElementById("plsum"); if(b) b.textContent = soma(pilha[k]) > 0 ? "+" + fmtLb(soma(pilha[k])) + " lb" : ""; };
     if(a === "plate-undo"){
       if(!ant.length){ toast("Nenhuma placa para desfazer."); return; }
-      const kg = ant.pop(); pilha[k] = ant;
-      inp.value = String(Math.round((base - kg) * 1000) / 1000);
-      toast(`Tirei ${fmt(kg)} kg`); return;
+      const lb = ant.pop(); pilha[k] = ant; mostra();
+      toast(`Tirei ${fmtLb(lb)} lb`); return;
     }
     let lb = parseFloat(el.dataset.lb);
     if(!lb){
@@ -4389,10 +4404,8 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
       lb = parseFloat(String(v || "").replace(",", "."));
       if(!lb || lb <= 0) return;
     }
-    const kg = Math.round(lb * LB * 10) / 10;   // placa convertida em kg, redonda (1 casa): 2,5 lb = 1,1 kg
-    ant.push(kg); pilha[k] = ant;
-    inp.value = String(Math.round((base + kg) * 1000) / 1000);
-    toast(`+${String(lb).replace(".", ",")} lb = +${fmt(kg)} kg → ${fmt(base + kg)} kg`);
+    ant.push(lb); pilha[k] = ant; mostra();
+    toast(`Placa: +${fmtLb(soma(ant))} lb (soma ${fmtW(plKg(soma(ant)))} kg ao peso da máquina)`);
   }
   else if(a === "skip-set"){
     const e = exById(el.dataset.ex); if(!e) return;
@@ -4590,7 +4603,11 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
 
   else if(a === "log-set"){
     const i = +el.dataset.i, exId = el.dataset.ex;
-    const w = parseFloat(String(document.getElementById("w"+i).value).replace(",", "."));
+    const wInp = document.getElementById("w"+i);
+    const wMaq = parseFloat(String(wInp.value).replace(",", "."));
+    const plArr = (window._placas || {})[wInp.id] || (parseFloat(wInp.dataset.pl) > 0 ? [parseFloat(wInp.dataset.pl)] : []);
+    const plLb = Math.round(plArr.reduce((x, y) => x + y, 0) * 100) / 100;
+    const w = isNaN(wMaq) ? wMaq : Math.round((wMaq + (plLb > 0 ? plKg(plLb) : 0)) * 1000) / 1000;
     const r = parseInt(document.getElementById("r"+i).value, 10);
     if(isNaN(w) || w < 0){ toast("Informe o peso (kg)."); return; }
     if(!r || r < 1){ toast("Informe as repetições."); return; }
@@ -4606,7 +4623,10 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
       if(simMode) simLogs.push(l); else db.logs.push(l); }
     /* carimba em qual treino a série foi feita: sem isso um exercício global aparecia
        como "já fiz" em todas as rotinas ao mesmo tempo */
-    l.sets.push(gymRoutine ? {weight:w, reps:r, rt:gymRoutine} : {weight:w, reps:r});
+    const nova = {weight:w, reps:r};
+    if(plLb > 0 && !emPlacas(e)) nova.pl = plLb;                  // placa adicional em lb (o peso acima já a inclui)
+    if(gymRoutine) nova.rt = gymRoutine;
+    l.sets.push(nova);
     if(pendingExtra > 0 && l.sets.length > e.targetSets) pendingExtra--;
     save();
     if(!simMode && !jaFechado){
@@ -4678,7 +4698,7 @@ As séries marcadas hoje nele e as marcas de "hoje não" são desfeitas. Dá par
       else db.logs = db.logs.filter(x => x.id !== l.id);
     }
     save(); render();
-    toastUndo(`Série ${idx+1} apagada (${fmtW(tirada.weight)} ${uW(exById(el.dataset.ex))} × ${tirada.reps})`, () => {
+    toastUndo(`Série ${idx+1} apagada (${fmtSet(tirada, exById(el.dataset.ex))} × ${tirada.reps})`, () => {
       if(logTirado){ if(simMode) simLogs.push(l); else db.logs.push(l); }
       l.sets.splice(idx, 0, tirada);
       save(); render();
@@ -4933,8 +4953,8 @@ document.addEventListener("change", ev => {
   const s = l.sets[+el.dataset.i]; if(!s) return;
   if(el.dataset.edit === "w"){
     const v = parseFloat(String(el.value).replace(",", "."));
-    if(isNaN(v) || v < 0){ el.value = s.weight; return; }
-    s.weight = v;
+    if(isNaN(v) || v < 0){ el.value = baseW(s); return; }
+    s.weight = Math.round((v + (s.pl > 0 ? plKg(s.pl) : 0)) * 1000) / 1000;
   } else {
     const v = parseInt(el.value, 10);
     if(!v || v < 1){ el.value = s.reps; return; }
