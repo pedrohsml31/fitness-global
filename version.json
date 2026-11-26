@@ -1,10 +1,10 @@
 {
-  "version": 73,
-  "name": "7.3",
+  "version": 74,
+  "name": "7.4",
   "minNative": 41,
   "files": [
     "index.html"
   ],
-  "notes": "ESCONDER O GRUPO FEITO: ao fechar as series de um exercicio, os outros do mesmo grupo muscular somem da lista de hoje (agora tambem na visao Todos, nao so dentro de um treino A/B/C). Uma linha no fim mostra quantos estao escondidos e deixa mostrar de volta. Nao precisa instalar APK.",
+  "notes": "GRUPOS FEITOS HOJE: no topo da lista da academia aparece \"Hoje: Biceps\" com um selo para cada grupo muscular que voce ja fechou, mesmo com os exercicios escondidos. Nao precisa instalar APK.",
   "apk": "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk"
 }

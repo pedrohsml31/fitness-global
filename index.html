@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0E1311">
-<title>Fitness Global v7.3</title>
+<title>Fitness Global v7.4</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./icon.svg">
@@ -495,8 +495,8 @@ const FIREBASE_CONFIG = {
    porque o app instalado compara com Number() — trocar por "2.1" faria a versão antiga
    achar que 2.1 < 21 e nunca mais oferecer atualização. Mesma ideia do
    versionName/versionCode do Android. Regra: mudança grande sobe o primeiro número. */
-const APP_NAME_VERSION = "7.3";
-const APP_VERSION = 73;
+const APP_NAME_VERSION = "7.4";
+const APP_VERSION = 74;
 const VERSION_URL = "https://pedrohsml31.github.io/fitness-global/version.json";
 const APK_URL = "https://pedrohsml31.github.io/fitness-global/dist/fitness-global.apk";
 /* mesmo app pelo navegador do PC — instalavel como aplicativo (PWA) */
@@ -2240,6 +2240,14 @@ function renderGym(g){
     </div>
     ${reorderMode ? "" : simBannerHtml()}
     ${reorderMode ? "" : unitBarHtml(g)}
+    ${(() => {
+      /* grupos musculares já feitos hoje (algum exercício do grupo com as séries fechadas) */
+      if(reorderMode) return "";
+      const feitos = [];
+      exs.forEach(e => { const k = grpOf(e); if(k && exStateToday(e, rid) === "done" && !feitos.includes(k)) feitos.push(k); });
+      if(!feitos.length) return "";
+      return `<div class="pills grpfeitos" style="margin:0 0 10px; flex-wrap:wrap" aria-label="Grupos musculares feitos hoje"><span class="sub" style="align-self:center">Hoje:</span>${feitos.map(k => `<span class="pill pr"><svg class="ico okmark" viewBox="0 0 24 24" style="width:12px;height:12px;vertical-align:-1px"><path d="M5 12l5 5 9-10"/></svg> ${esc(k)}</span>`).join("")}</div>`;
+    })()}
     ${reorderMode ? "" : `<div class="pills" style="margin:-2px 0 10px">
       <button class="pill${gymRoutine?"":" on"}" data-action="rt-sel" data-v="" style="cursor:pointer">Todos (${gymExercises(g.id).length})</button>
       ${rts.map(r=>`<button class="pill${gymRoutine===r.id?" on":""}" data-action="rt-sel" data-v="${r.id}" style="cursor:pointer">${esc(r.name)} (${routineExercises(r,g.id).length})</button>`).join("")}
